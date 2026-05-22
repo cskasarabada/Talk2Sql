@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' https://api.anthropic.com https://*.oraclecloud.com https://*.oracle.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;">
 <title>Talk2Sql — Oracle Fusion Explorer</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -15,7 +16,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;display:flex;flex-direction:column}
-#top{height:46px;background:var(--s1);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0;z-index:50}
+#top{height:46px;background:var(--s1);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 12px 0 76px;gap:8px;flex-shrink:0;z-index:50}
 .logo{font-weight:800;font-size:16px;display:flex;align-items:center;gap:7px;letter-spacing:-.5px}
 .logo-mark{width:28px;height:28px;background:linear-gradient(135deg,var(--a1),var(--a5));border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff}
 .sep{width:1px;height:22px;background:var(--b1);flex-shrink:0}
@@ -209,6 +210,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     <div class="field" style="margin:0"><label>Username</label><input id="fUser" type="text" placeholder="user@company.com"/></div>
     <div class="field" style="margin:0"><label>Password</label><input id="fPass" type="password" placeholder="password"/></div>
   </div>
+  <div class="field" style="margin-top:10px"><label style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3)">Anthropic API Key (for NLP)</label><input id="fApiKey" type="password" placeholder="sk-ant-api03-..." style="width:100%;background:var(--s3);border:1px solid var(--b1);border-radius:7px;padding:9px 12px;color:var(--t1);font-family:var(--mono);font-size:12px;outline:none;margin-top:4px"/><div style="font-size:9px;color:var(--t3);margin-top:3px">Get key at console.anthropic.com</div></div>
   <div class="macts">
     <button class="btn b-ghost" id="connCancel">Cancel</button>
     <button class="btn b-blue" id="connOk"><span class="spin" id="connSpin"></span>Connect</button>
@@ -291,9 +293,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
   <div id="main">
     <div id="nlp">
       <span class="nlp-tag">&#10022; NLP&#8594;SQL</span>
-      <input class="nlp-inp" id="nlpInp" placeholder="Plain English: show active TCA organizations in Wisconsin with phone numbers..."/>
+      <input class="nlp-inp" id="nlpInp" onkeydown="if(event.key==='Enter')genSQL()" onkeydown="if(event.key==='Enter')genSQL()" placeholder="Describe your query in plain English then press Enter or click Generate SQL"/>
       <div class="spin" id="nlpSpin"></div>
-      <button class="btn b-out" id="btnGenSql" style="font-size:10px;padding:4px 10px">Generate SQL</button>
+      <button class="btn b-out" id="btnGenSql" onclick="genSQL()" style="font-size:10px;padding:4px 10px">Generate SQL</button>
     </div>
     <div id="tabs">
       <div class="tab active" id="tab_1">&#128196; Query 1 <span class="tab-x">&#215;</span></div>
@@ -398,6 +400,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 </div>
 <div id="toast"></div>
 
+
 <script>
 
 // ═══════════════ SCHEMA ═══════════════
@@ -452,7 +455,7 @@ const MODS = {
 
 // ═══════════════ STATE ═══════════════
 const ST = {
-  conn:false, url:"", user:"", pass:"",
+  conn:false, url:"", user:"", pass:"", apiKey:"",
   mod:"CX Sales",
   cols:[], allRows:[], filtRows:[],
   sortCol:-1, sortDir:1,
@@ -727,13 +730,24 @@ function clearEd() { document.getElementById("sqled").value = ""; updateLines();
 // ═══════════════ AI ═══════════════
 async function callAI(prompt, maxT, sys) {
   var r = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST", headers:{"Content-Type":"application/json"},
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key":ST.apiKey,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
     body: JSON.stringify({
-      model:"claude-sonnet-4-20250514", max_tokens: maxT||600,
+      model:"claude-sonnet-4-20250514",
+      max_tokens: maxT||600,
       system: sys || ("Oracle Fusion SQL expert. Module: " + ST.mod),
       messages:[{role:"user", content:prompt}]
     })
   });
+  if (!r.ok) {
+    var errText = await r.text();
+    throw new Error("API " + r.status + ": " + errText.slice(0,120));
+  }
   var d = await r.json();
   return (d.content && d.content[0] && d.content[0].text) ? d.content[0].text.trim() : "";
 }
@@ -741,7 +755,7 @@ async function callAI(prompt, maxT, sys) {
 async function genSQL() {
   var prompt = document.getElementById("nlpInp").value.trim();
   if (!prompt) { toast("Type a description first","wa"); return; }
-  document.getElementById("nlpInp").disabled = true;
+  if (!ST.apiKey) { toast("Add Anthropic API key in Connection settings","er"); openModal("connModal"); return; }
   var sp = document.getElementById("nlpSpin"); sp.classList.add("go");
   var mod = MODS[ST.mod];
   var ctx = mod.tables.map(function(tn){
@@ -755,13 +769,13 @@ async function genSQL() {
     );
     if (sql) {
       document.getElementById("sqled").value = sql;
-      document.getElementById("nlpInp").value = "";
       updateLines();
       toast("SQL generated — press Run", "ok");
     }
-  } catch(e) { toast("AI unavailable: "+e.message,"er"); }
+  } catch(e) {
+    toast("AI error: "+e.message,"er");
+  }
   sp.classList.remove("go");
-  document.getElementById("nlpInp").disabled = false;
 }
 
 async function explainSQL() {
@@ -815,7 +829,8 @@ async function doConnect() {
     if (ok || url.length > 10) {
       Object.assign(ST, {conn:true, url:url, user:user, pass:pass});
       // Save to localStorage so they persist across reloads
-      localStorage.setItem("fxconn", JSON.stringify({url:url, user:user, pass:pass}));
+      ST.apiKey = (document.getElementById("fApiKey")||{value:""}).value.trim();
+      localStorage.setItem("fxconn", JSON.stringify({url:url, user:user, pass:pass, apiKey:ST.apiKey}));
       document.getElementById("dot").className = "dot on";
       document.getElementById("connLbl").textContent = url.replace("https://","").split("/")[0].slice(0,38);
       document.getElementById("btnDisconn").style.display = "inline-flex";
@@ -1178,6 +1193,8 @@ document.addEventListener("DOMContentLoaded", function() {
       document.getElementById("fUrl").value  = creds.url  || "";
       document.getElementById("fUser").value = creds.user || "";
       document.getElementById("fPass").value = creds.pass || "";
+      ST.apiKey = creds.apiKey || "";
+      if(document.getElementById("fApiKey")) document.getElementById("fApiKey").value = creds.apiKey || "";
       // Auto-reconnect silently
       if (creds.url && creds.user && creds.pass) {
         Object.assign(ST, {conn:true, url:creds.url, user:creds.user, pass:creds.pass});
@@ -1191,6 +1208,21 @@ document.addEventListener("DOMContentLoaded", function() {
   }
   // No saved creds — open modal
   setTimeout(function(){ openModal("connModal"); }, 300);
+  if (window.electronAPI) {
+    window.electronAPI.onMenuEvent(function(evt) {
+      if (evt==="menu-run") runQuery();
+      if (evt==="menu-save") openSave();
+      if (evt==="menu-new-tab") newTab();
+      if (evt==="menu-format") fmtSQL();
+      if (evt==="menu-explain") explainSQL();
+      if (evt==="menu-connect") openModal("connModal");
+      if (evt==="menu-export-excel") exportXLSX();
+      if (evt==="menu-export-csv") exportCSV();
+    });
+    if (window.electronAPI.platform === "darwin") {
+      document.getElementById("top").style.paddingLeft = "80px";
+    }
+  }
 });
 
 </script>
