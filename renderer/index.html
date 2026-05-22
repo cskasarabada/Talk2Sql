@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Talk2Sql — Oracle Fusion Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+
+:root{--bg:#0f1117;--s1:#161b27;--s2:#1c2333;--s3:#232f45;--b1:#1e2d45;--b2:#2a3f5f;--t1:#e8edf5;--t2:#8fa3be;--t3:#4a6585;--a1:#4dabf7;--a2:#ff6b35;--a3:#51cf66;--a4:#fcc419;--a5:#cc5de8;--err:#ff4757;--ok:#2ed573;--warn:#ffa502;--mono:'JetBrains Mono',monospace;--ui:'Plus Jakarta Sans',sans-serif}
+[data-theme=light]{--bg:#f0f4f8;--s1:#fff;--s2:#f7f9fc;--s3:#edf2f7;--b1:#d0dae8;--b2:#b8c9dc;--t1:#1a2332;--t2:#4a6585;--t3:#8fa3be;--a1:#1971c2;--a2:#e85d04;--a3:#2f9e44;--a4:#e67700;--a5:#862e9c}
+[data-theme=ocean]{--bg:#0d1b2a;--s1:#112236;--s2:#162d45;--s3:#1c3854;--b1:#1e3a54;--b2:#2a4e70;--t1:#cce8ff;--t2:#6aabda;--t3:#3a7aaa;--a1:#38b6ff;--a2:#ff7c43;--a3:#44d177;--a4:#ffd166;--a5:#c77dff}
+[data-theme=solarized]{--bg:#002b36;--s1:#073642;--s2:#083b47;--s3:#0d4455;--b1:#1a5468;--b2:#256475;--t1:#fdf6e3;--t2:#93a1a1;--t3:#586e75;--a1:#268bd2;--a2:#cb4b16;--a3:#859900;--a4:#b58900;--a5:#6c71c4}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;display:flex;flex-direction:column}
+#top{height:46px;background:var(--s1);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0;z-index:50}
+.logo{font-weight:800;font-size:16px;display:flex;align-items:center;gap:7px;letter-spacing:-.5px}
+.logo-mark{width:28px;height:28px;background:linear-gradient(135deg,var(--a1),var(--a5));border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff}
+.sep{width:1px;height:22px;background:var(--b1);flex-shrink:0}
+.conn-pill{display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;background:var(--s3);border:1px solid var(--b1);font-size:11px;color:var(--t2);cursor:pointer;font-family:var(--mono)}
+.conn-pill:hover{border-color:var(--a1);color:var(--t1)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0}
+.dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.spacer{flex:1}
+.themes{display:flex;gap:4px}
+.th{width:18px;height:18px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.th:hover,.th.on{transform:scale(1.2);border-color:var(--t1)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:none;cursor:pointer;font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap}
+.btn:disabled{opacity:.3;pointer-events:none}
+.b-blue{background:var(--a1);color:#fff}.b-blue:hover{filter:brightness(1.15)}
+.b-out{background:transparent;color:var(--t2);border:1px solid var(--b2)}.b-out:hover{border-color:var(--a1);color:var(--a1)}
+.b-ghost{background:transparent;color:var(--t2)}.b-ghost:hover{color:var(--t1);background:var(--s3)}
+.kbd{padding:1px 4px;border-radius:3px;background:var(--s3);color:var(--t3);font-size:9px;font-family:var(--mono)}
+.overlay{position:fixed;inset:0;background:#00000090;backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:26px;width:500px;box-shadow:0 24px 80px #0008;transform:translateY(12px);transition:transform .25s}
+.overlay.open .modal{transform:none}
+.modal h2{font-size:17px;font-weight:800;margin-bottom:5px}
+.modal p{font-size:11px;color:var(--t2);margin-bottom:20px;line-height:1.6}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:13px}
+.field label{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3)}
+.field input{background:var(--s3);border:1px solid var(--b1);border-radius:7px;padding:9px 12px;color:var(--t1);font-family:var(--mono);font-size:12px;outline:none}
+.field input:focus{border-color:var(--a1)}
+.field input::placeholder{color:var(--t3)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.macts{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+#ws{display:flex;flex:1;overflow:hidden;min-height:0}
+#sb{width:250px;min-width:250px;background:var(--s1);border-right:1px solid var(--b1);display:flex;flex-direction:column;overflow:hidden;position:relative}
+#sb.closed{width:44px;min-width:44px}
+#sb.closed .sb-body{display:none}
+#sb.closed .sb-icons{display:flex}
+.sb-tog{position:absolute;right:-11px;top:50%;transform:translateY(-50%);width:22px;height:22px;background:var(--s2);border:1px solid var(--b2);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;color:var(--t2);z-index:10}
+.sb-tog:hover{background:var(--a1);color:#fff;border-color:var(--a1)}
+.sb-icons{display:none;flex-direction:column;align-items:center;padding:8px 0;gap:4px}
+.sb-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--t2)}
+.sb-icon:hover{background:var(--s3);color:var(--a1)}
+.sb-body{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.sb-sec{border-bottom:1px solid var(--b1);flex-shrink:0}
+.sb-hd{padding:8px 12px;font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;justify-content:space-between}
+.sb-badge{background:var(--a1)22;color:var(--a1);padding:1px 6px;border-radius:10px;font-size:9px;font-weight:700}
+.mod-tabs{display:flex;flex-wrap:wrap;gap:3px;padding:6px 10px}
+.mod-tab{padding:3px 9px;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;color:var(--t3);border:1px solid transparent;user-select:none}
+.mod-tab:hover{color:var(--t1);background:var(--s3)}
+.tbl-area{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.tbl-search{padding:6px 10px;flex-shrink:0}
+.tbl-search input{width:100%;background:var(--s3);border:1px solid var(--b1);border-radius:5px;padding:5px 9px;color:var(--t1);font-family:var(--mono);font-size:11px;outline:none}
+.tbl-search input:focus{border-color:var(--a1)}
+.tbl-search input::placeholder{color:var(--t3)}
+.tbl-list{flex:1;overflow-y:auto;padding:2px 0}
+.tbl-row{padding:5px 12px;font-size:11px;font-family:var(--mono);color:var(--t2);cursor:pointer;display:flex;align-items:center;gap:5px;border-left:2px solid transparent;user-select:none}
+.tbl-row:hover{background:var(--s3);color:var(--t1)}
+.tbl-row.active{background:var(--s3);color:var(--a1);border-left-color:var(--a1)}
+.tbl-desc{font-size:9px;color:var(--t3);padding:0 12px 5px 20px;line-height:1.5;font-style:italic}
+.schema-panel{background:var(--s2);border-top:1px solid var(--b1);display:none;flex-direction:column;max-height:200px;flex-shrink:0}
+.schema-panel.open{display:flex}
+.schema-hd{padding:5px 10px;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--b1);flex-shrink:0}
+.schema-scroll{overflow-y:auto;flex:1}
+.col-row{padding:4px 10px;display:grid;grid-template-columns:1fr auto;gap:4px;border-bottom:1px solid var(--b1)33;cursor:pointer}
+.col-row:hover{background:var(--s3)}
+.col-nm{font-family:var(--mono);font-size:11px;color:var(--t1);display:flex;align-items:center;gap:4px}
+.col-tp{font-family:var(--mono);font-size:9px;color:var(--a4);white-space:nowrap}
+.col-ds{font-size:9px;color:var(--t3);grid-column:1/-1;margin-top:1px;line-height:1.4}
+.badge{padding:1px 4px;border-radius:3px;font-size:8px;font-weight:700}
+.b-pk{background:var(--a1)22;color:var(--a1)}
+.b-nn{background:var(--a3)22;color:var(--a3)}
+.hist-area{flex-shrink:0;max-height:130px;overflow-y:auto}
+.hist-row{padding:5px 12px;font-size:10px;color:var(--t2);cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--b1)33}
+.hist-row:hover{background:var(--s3)}
+.hist-nm{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600}
+.hist-del{color:var(--err);opacity:0;font-size:12px;padding:0 2px}
+.hist-row:hover .hist-del{opacity:.6}
+.hist-empty{padding:12px;font-size:10px;color:var(--t3);text-align:center;font-style:italic}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#nlp{background:linear-gradient(90deg,#cc5de811,#4dabf708);border-bottom:1px solid #cc5de833;padding:7px 14px;display:flex;align-items:center;gap:9px;flex-shrink:0}
+.nlp-tag{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--a5);white-space:nowrap}
+.nlp-inp{flex:1;background:transparent;border:none;outline:none;font-family:var(--mono);font-size:12px;color:var(--t1)}
+.nlp-inp::placeholder{color:var(--t3)}
+.spin{width:14px;height:14px;border:2px solid var(--b2);border-top-color:var(--a1);border-radius:50%;animation:spin .65s linear infinite;display:none;flex-shrink:0}
+.spin.go{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+#tabs{display:flex;align-items:center;background:var(--s1);border-bottom:1px solid var(--b1);height:36px;flex-shrink:0;overflow-x:auto;padding:0 8px;gap:1px}
+.tab{padding:4px 12px;font-size:11px;cursor:pointer;color:var(--t2);border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px;border-radius:4px 4px 0 0;user-select:none}
+.tab:hover{color:var(--t1)}
+.tab.active{color:var(--a1);border-bottom-color:var(--a1);background:var(--s3)66}
+.tab-x{color:var(--t3);font-size:13px;padding:1px 2px}
+.tab-x:hover{color:var(--err)}
+.tab-add{padding:3px 7px;color:var(--t3);cursor:pointer;font-size:17px}
+.tab-add:hover{color:var(--a1)}
+#tbar{display:flex;align-items:center;padding:5px 12px;background:var(--s2);border-bottom:1px solid var(--b1);flex-shrink:0;gap:6px;flex-wrap:wrap}
+.tbar-l{display:flex;align-items:center;gap:5px;flex:1}
+.tbar-r{display:flex;align-items:center;gap:5px}
+.mod-ind{padding:3px 9px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap}
+.lim-sel{background:var(--s3);border:1px solid var(--b1);border-radius:5px;padding:3px 8px;color:var(--t1);font-family:var(--mono);font-size:11px;outline:none}
+#split{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#ed-pane{height:200px;min-height:80px;display:flex;flex-direction:column;border-bottom:1px solid var(--b1);flex-shrink:0}
+.ed-inner{flex:1;position:relative;overflow:hidden}
+.lnums{position:absolute;left:0;top:0;bottom:0;width:44px;background:var(--s1);border-right:1px solid var(--b1);padding:13px 8px;font-size:11px;color:var(--t3);line-height:1.7;text-align:right;pointer-events:none;user-select:none;font-family:var(--mono);overflow:hidden}
+.sql-ed{position:absolute;inset:0;background:var(--bg);border:none;color:var(--t1);font-family:var(--mono);font-size:12.5px;line-height:1.7;padding:13px 12px 13px 56px;resize:none;outline:none;tab-size:2;white-space:pre;overflow:auto}
+.sql-ed::placeholder{color:var(--t3);font-style:italic}
+.dragger{height:6px;background:var(--s2);border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);cursor:ns-resize;flex-shrink:0;display:flex;align-items:center;justify-content:center;user-select:none}
+.dragger:hover,.dragger.drag{background:var(--a1)22}
+.dragger::after{content:'...';color:var(--t3);font-size:12px;letter-spacing:3px}
+.prog{height:2px;background:transparent;flex-shrink:0}
+.prog.run{background:linear-gradient(90deg,transparent,var(--a1),var(--a5),transparent);background-size:300%;animation:sw .9s linear infinite}
+@keyframes sw{0%{background-position:100%}100%{background-position:-100%}}
+#res-pane{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.res-bar{display:flex;align-items:center;justify-content:space-between;padding:5px 12px;background:var(--s2);border-bottom:1px solid var(--b1);flex-shrink:0;gap:8px}
+.res-meta{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--t2);flex-wrap:wrap}
+.res-cnt{color:var(--ok);font-weight:700}
+.res-tm{color:var(--a1);font-family:var(--mono)}
+.filt-bar{display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--s1);border-bottom:1px solid var(--b1);flex-shrink:0}
+.filt-bar input{flex:1;background:var(--s3);border:1px solid var(--b1);border-radius:5px;padding:4px 10px;color:var(--t1);font-family:var(--mono);font-size:11px;outline:none}
+.filt-bar input:focus{border-color:var(--a1)}
+.filt-bar input::placeholder{color:var(--t3)}
+.filt-cnt{font-size:10px;color:var(--t3);white-space:nowrap}
+.res-scroll{flex:1;overflow:auto;min-height:0;overflow-x:auto}
+.res-tbl{width:100%;min-width:max-content;border-collapse:collapse;font-size:11.5px;font-family:var(--mono)}
+.res-tbl th{background:var(--s1);padding:6px 13px;text-align:left;font-size:9px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--t3);border-bottom:2px solid var(--b1);white-space:nowrap;position:sticky;top:0;z-index:2;cursor:pointer;user-select:none;font-family:var(--ui)}
+.res-tbl th:hover{color:var(--a1)}
+.res-tbl th.asc::after{content:' ↑';color:var(--a1)}
+.res-tbl th.desc::after{content:' ↓';color:var(--a1)}
+.res-tbl td{padding:5px 13px;border-bottom:1px solid var(--b1)44;color:var(--t2);white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+.res-tbl tr:hover td{background:var(--s3);color:var(--t1)}
+.res-tbl td.num{color:var(--a1);text-align:right}
+.res-tbl td.act{color:var(--ok)}
+.res-tbl td.ina{color:var(--t3)}
+.res-tbl td.dt{color:var(--a4)}
+.res-tbl td.nul{color:var(--t3);font-style:italic}
+.rn{color:var(--t3)!important;font-size:10px!important;text-align:right!important;width:36px;padding-right:8px!important}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px}
+.empty-ico{font-size:44px;opacity:.2}
+.empty-t{font-size:16px;font-weight:700;color:var(--t2)}
+.empty-s{font-size:11px;color:var(--t3);text-align:center;max-width:320px;line-height:1.7}
+#kb-panel{position:fixed;right:0;top:0;bottom:0;width:280px;background:var(--s1);border-left:1px solid var(--b1);z-index:80;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column}
+#kb-panel.open{transform:none}
+.kb-hd{padding:16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;font-weight:800;font-size:14px}
+.kb-list{flex:1;overflow-y:auto;padding:8px 0}
+.kb-g{padding:8px 16px 4px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3)}
+.kb-r{display:flex;align-items:center;justify-content:space-between;padding:6px 16px;font-size:11px;color:var(--t2);border-bottom:1px solid var(--b1)33}
+.kb-r:hover{background:var(--s3)}
+.kb-keys{display:flex;gap:4px}
+.kb-keys span{padding:2px 6px;border-radius:4px;background:var(--s3);border:1px solid var(--b2);font-family:var(--mono);font-size:10px}
+#toast{position:fixed;bottom:18px;right:18px;padding:9px 15px;border-radius:7px;font-size:11px;display:flex;align-items:center;gap:8px;transform:translateY(50px);opacity:0;transition:all .25s;z-index:200;pointer-events:none;max-width:320px}
+#toast.show{transform:none;opacity:1}
+#toast.ok{background:var(--ok)1a;border:1px solid var(--ok)44;color:var(--ok)}
+#toast.er{background:var(--err)1a;border:1px solid var(--err)44;color:var(--err)}
+#toast.inf{background:var(--a1)1a;border:1px solid var(--a1)44;color:var(--a1)}
+#toast.wa{background:var(--warn)1a;border:1px solid var(--warn)44;color:var(--warn)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b1);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--b2)}
+
+
+/* Row detail panel */
+.row-detail-overlay{position:fixed;inset:0;background:#00000070;z-index:200;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .2s}
+.row-detail-overlay.open{opacity:1;pointer-events:all}
+.row-detail-panel{width:100%;max-height:75vh;background:var(--s2);border-top:1px solid var(--b2);border-radius:12px 12px 0 0;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .25s cubic-bezier(.34,1.2,.64,1)}
+.row-detail-overlay.open .row-detail-panel{transform:none}
+.rd-header{padding:14px 20px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.rd-title{font-weight:800;font-size:14px;font-family:var(--ui)}
+.rd-subtitle{font-size:11px;color:var(--t2);margin-top:2px}
+.rd-body{overflow-y:auto;flex:1;padding:16px 20px}
+.rd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.rd-field{background:var(--s3);border-radius:8px;padding:10px 14px}
+.rd-label{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--t3);margin-bottom:4px}
+.rd-value{font-family:var(--mono);font-size:12px;color:var(--t1);word-break:break-all;line-height:1.5}
+.rd-value.null-val{color:var(--t3);font-style:italic}
+.rd-value.num-val{color:var(--a1)}
+.rd-value.date-val{color:var(--a4)}
+.rd-value.ok-val{color:var(--ok)}
+.rd-value.ina-val{color:var(--t3)}
+.res-tbl tbody tr{cursor:pointer}
+.res-tbl tbody tr:hover td{background:var(--s3) !important}
+</style>
+</head>
+<body>
+
+<!-- CONN MODAL -->
+<div class="overlay" id="connModal">
+<div class="modal">
+  <h2>Connect to Oracle Fusion</h2>
+  <p>Enter your instance URL and credentials. Nothing is stored externally.</p>
+  <div class="field"><label>Instance URL</label><input id="fUrl" type="text" placeholder="https://your-instance.fa.us2.oraclecloud.com"/></div>
+  <div class="grid2">
+    <div class="field" style="margin:0"><label>Username</label><input id="fUser" type="text" placeholder="user@company.com"/></div>
+    <div class="field" style="margin:0"><label>Password</label><input id="fPass" type="password" placeholder="password"/></div>
+  </div>
+  <div class="macts">
+    <button class="btn b-ghost" id="connCancel">Cancel</button>
+    <button class="btn b-blue" id="connOk"><span class="spin" id="connSpin"></span>Connect</button>
+  </div>
+</div>
+</div>
+
+<!-- SAVE MODAL -->
+<div class="overlay" id="saveModal">
+<div class="modal" style="width:380px">
+  <h2>Save Query</h2>
+  <p>Give this query a name to find it later.</p>
+  <div class="field"><label>Name</label><input id="saveName" type="text" placeholder="e.g. Active TCA Accounts Wisconsin"/></div>
+  <div class="macts">
+    <button class="btn b-ghost" id="saveCancel">Cancel</button>
+    <button class="btn b-blue" id="saveOk">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- TOPBAR -->
+<div id="top">
+  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v1.0</span></div>
+  <div class="sep"></div>
+  <div class="conn-pill" id="connPill"><div class="dot" id="dot"></div><span id="connLbl">Click to connect</span></div>
+  <button class="btn b-ghost" id="btnDisconn" style="font-size:10px;padding:3px 8px;display:none" title="Disconnect and forget credentials">&#10006;</button>
+  <div class="sep"></div>
+  <div class="themes">
+    <div class="th on" data-t="" style="background:linear-gradient(135deg,#0f1117,#4dabf7)" title="Dark"></div>
+    <div class="th" data-t="light" style="background:linear-gradient(135deg,#f0f4f8,#1971c2)" title="Light"></div>
+    <div class="th" data-t="ocean" style="background:linear-gradient(135deg,#0d1b2a,#38b6ff)" title="Ocean"></div>
+    <div class="th" data-t="solarized" style="background:linear-gradient(135deg,#002b36,#268bd2)" title="Solarized"></div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn b-ghost" id="btnSave">&#128190; Save</button>
+  <button class="btn b-ghost" id="btnKb">&#9000;</button>
+  <button class="btn b-out" id="btnXls" disabled>&#8595; Excel</button>
+  <button class="btn b-out" id="btnCsv" disabled>&#8595; CSV</button>
+  <button class="btn b-out" id="btnJson" disabled>&#8595; JSON</button>
+  <div class="sep"></div>
+  <button class="btn b-blue" id="btnRun">&#9654; Run <span class="kbd">&#8984;&#8629;</span></button>
+</div>
+
+<!-- WORKSPACE -->
+<div id="ws">
+  <!-- SIDEBAR -->
+  <div id="sb">
+    <div class="sb-tog" id="sbTog">&#8249;</div>
+    <div class="sb-icons">
+      <div class="sb-icon" id="sbOpenBtn">&#8859;</div>
+    </div>
+    <div class="sb-body">
+      <div class="sb-sec">
+        <div class="sb-hd">Module</div>
+        <div class="mod-tabs" id="modTabs"></div>
+      </div>
+      <div class="tbl-area">
+        <div class="sb-hd">Tables <span class="sb-badge" id="tblBadge">0</span></div>
+        <div class="tbl-search"><input type="text" id="tblSearch" placeholder="filter tables..."/></div>
+        <div class="tbl-list" id="tblList"></div>
+      </div>
+      <div class="schema-panel" id="schemaPanel">
+        <div class="schema-hd">
+          <span>COLUMNS &mdash; <span id="schemaTblNm" style="color:var(--a1);font-family:var(--mono)"></span></span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <a id="schemaDocsLink" href="#" target="_blank" class="btn b-ghost" style="font-size:9px;padding:2px 6px;display:none">&#128216; Docs</a>
+            <button class="btn b-ghost" id="schemaClose" style="font-size:10px;padding:2px 6px">&#10005;</button>
+          </div>
+        </div>
+        <div class="schema-scroll" id="schemaCols"></div>
+      </div>
+      <div class="sb-sec">
+        <div class="sb-hd">Saved Queries <span class="sb-badge" id="histBadge">0</span></div>
+        <div class="hist-area" id="histArea"><div class="hist-empty">No saved queries</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+    <div id="nlp">
+      <span class="nlp-tag">&#10022; NLP&#8594;SQL</span>
+      <input class="nlp-inp" id="nlpInp" placeholder="Plain English: show active TCA organizations in Wisconsin with phone numbers..."/>
+      <div class="spin" id="nlpSpin"></div>
+      <button class="btn b-out" id="btnGenSql" style="font-size:10px;padding:4px 10px">Generate SQL</button>
+    </div>
+    <div id="tabs">
+      <div class="tab active" id="tab_1">&#128196; Query 1 <span class="tab-x">&#215;</span></div>
+      <div class="tab-add" id="tabAdd">+</div>
+    </div>
+    <div id="tbar">
+      <div class="tbar-l">
+        <span class="mod-ind" id="modInd" style="background:var(--a1)18;color:var(--a1)">&#129309; CX Sales</span>
+        <button class="btn b-ghost" id="btnFmt" style="font-size:10px">&#8635; Format</button>
+        <button class="btn b-ghost" id="btnClr" style="font-size:10px">&#10005; Clear</button>
+        <button class="btn b-ghost" id="btnExplain" style="font-size:10px">&#128161; Explain</button>
+        <button class="btn b-ghost" id="btnJoin" style="font-size:10px">&#128279; Join</button>
+      </div>
+      <div class="tbar-r">
+        <span style="font-size:10px;color:var(--t3)">Limit:</span>
+        <select class="lim-sel" id="rowLim">
+          <option>25</option><option>50</option><option selected>100</option>
+          <option>250</option><option>500</option><option>1000</option>
+        </select>
+        <span style="font-size:10px;color:var(--t3)" id="edStat"></span>
+      </div>
+    </div>
+    <div id="split">
+      <div id="ed-pane">
+        <div class="ed-inner">
+          <div class="lnums" id="lnums">1</div>
+          <textarea class="sql-ed" id="sqled" spellcheck="false" placeholder="-- Write SQL or use NLP above  .  Cmd+Enter to run  .  Click table to load  .  Click column to insert"></textarea>
+        </div>
+      </div>
+      <div class="dragger" id="dragger"></div>
+      <div class="prog" id="prog"></div>
+      <div id="res-pane">
+        <div class="res-bar">
+          <div class="res-meta">
+            <span id="resCnt">&#8212; rows</span>
+            <span id="resTm" class="res-tm"></span>
+            <span id="resSt"></span>
+            <span id="resEp" style="color:var(--t3);font-size:10px;font-family:var(--mono)"></span>
+          </div>
+          <div style="display:flex;gap:5px">
+            <button class="btn b-ghost" id="resCsv" style="font-size:10px">CSV</button>
+            <button class="btn b-ghost" id="resJson" style="font-size:10px">JSON</button>
+            <button class="btn b-ghost" id="resXls" style="font-size:10px">Excel</button>
+          </div>
+        </div>
+        <div class="filt-bar">
+          <input type="text" id="filtInp" placeholder="filter results..."/>
+          <span class="filt-cnt" id="filtCnt"></span>
+        </div>
+        <div class="res-scroll" id="resScroll">
+          <div class="empty" id="emptyState">
+            <div class="empty-ico">&#11041;</div>
+            <div class="empty-t">Talk2Sql Ready</div>
+            <div class="empty-s">Connect to Oracle Fusion, pick a module, click a table or write SQL, then Run.<br><br>35 tables with real schema from docs.oracle.com<br><br>Press ? for keyboard shortcuts</div>
+          </div>
+          <table class="res-tbl" id="resTbl" style="display:none"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KB PANEL -->
+<div id="kb-panel">
+  <div class="kb-hd">&#9000; Shortcuts <button class="btn b-ghost" id="kbClose" style="font-size:10px">&#10005;</button></div>
+  <div class="kb-list">
+    <div class="kb-g">Query</div>
+    <div class="kb-r"><span>Run query</span><div class="kb-keys"><span>Cmd</span><span>Enter</span></div></div>
+    <div class="kb-r"><span>Format SQL</span><div class="kb-keys"><span>Cmd</span><span>Shift</span><span>F</span></div></div>
+    <div class="kb-r"><span>Save query</span><div class="kb-keys"><span>Cmd</span><span>S</span></div></div>
+    <div class="kb-r"><span>Comment line</span><div class="kb-keys"><span>Cmd</span><span>/</span></div></div>
+    <div class="kb-g">Navigation</div>
+    <div class="kb-r"><span>New tab</span><div class="kb-keys"><span>Cmd</span><span>T</span></div></div>
+    <div class="kb-r"><span>Toggle sidebar</span><div class="kb-keys"><span>Cmd</span><span>B</span></div></div>
+    <div class="kb-r"><span>Focus NLP</span><div class="kb-keys"><span>Cmd</span><span>L</span></div></div>
+    <div class="kb-r"><span>Filter results</span><div class="kb-keys"><span>Cmd</span><span>F</span></div></div>
+    <div class="kb-r"><span>Shortcuts</span><div class="kb-keys"><span>?</span></div></div>
+    <div class="kb-g">Resize Pane</div>
+    <div class="kb-r"><span>Bigger editor</span><div class="kb-keys"><span>Cmd</span><span>&uarr;</span></div></div>
+    <div class="kb-r"><span>Smaller editor</span><div class="kb-keys"><span>Cmd</span><span>&darr;</span></div></div>
+    <div class="kb-g">Export</div>
+    <div class="kb-r"><span>Export Excel</span><div class="kb-keys"><span>Cmd</span><span>E</span></div></div>
+    <div class="kb-r"><span>Export CSV</span><div class="kb-keys"><span>Cmd</span><span>Shift</span><span>E</span></div></div>
+  </div>
+</div>
+
+
+<!-- ROW DETAIL -->
+<div class="row-detail-overlay" id="rdOverlay">
+  <div class="row-detail-panel">
+    <div class="rd-header">
+      <div>
+        <div class="rd-title" id="rdTitle">Record Detail</div>
+        <div class="rd-subtitle" id="rdSubtitle"></div>
+      </div>
+      <button class="btn b-ghost" id="rdClose" style="font-size:14px">&#10005;</button>
+    </div>
+    <div class="rd-body">
+      <div class="rd-grid" id="rdGrid"></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+
+// ═══════════════ SCHEMA ═══════════════
+const SCH = {};
+
+// CX Sales / TCA
+SCH.HZ_PARTIES={desc:"Root TCA entity. Stores Organizations, Persons, Groups. Denormalized from HZ_LOCATIONS, HZ_CONTACT_POINTS.",pk:"PARTY_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/hzparties-18816.html",cols:[{n:"PARTY_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Party identifier. Primary Key."},{n:"PARTY_NUMBER",t:"VARCHAR2(30)",nn:1,d:"Unique identification number"},{n:"PARTY_NAME",t:"VARCHAR2(360)",nn:1,d:"Name of this party"},{n:"PARTY_TYPE",t:"VARCHAR2(30)",nn:1,d:"ORGANIZATION, PERSON, or GROUP"},{n:"STATUS",t:"VARCHAR2(1)",nn:1,d:"A=Active, I=Inactive, M=Merged"},{n:"EMAIL_ADDRESS",t:"VARCHAR2(320)",d:"Email (denorm from HZ_CONTACT_POINTS)"},{n:"PRIMARY_PHONE_NUMBER",t:"VARCHAR2(40)",d:"Phone number (denorm from HZ_CONTACT_POINTS)"},{n:"PRIMARY_PHONE_AREA_CODE",t:"VARCHAR2(20)",d:"Phone area code"},{n:"PRIMARY_PHONE_COUNTRY_CODE",t:"VARCHAR2(10)",d:"International country code"},{n:"ADDRESS1",t:"VARCHAR2(240)",d:"First line of identifying address (denorm)"},{n:"ADDRESS2",t:"VARCHAR2(240)",d:"Second line of identifying address"},{n:"CITY",t:"VARCHAR2(60)",d:"City of identifying address"},{n:"STATE",t:"VARCHAR2(60)",d:"State of identifying address"},{n:"POSTAL_CODE",t:"VARCHAR2(60)",d:"Postal code of identifying address"},{n:"COUNTRY",t:"VARCHAR2(2)",d:"Country code FK to FND_TERRITORIES"},{n:"DUNS_NUMBER_C",t:"VARCHAR2(30)",d:"D-U-N-S Number"},{n:"SIC_CODE",t:"VARCHAR2(30)",d:"Standard Industry Classification code"},{n:"EMPLOYEES_TOTAL",t:"NUMBER",d:"Total number of employees"},{n:"ANNUAL_REVENUE",t:"NUMBER",d:"Annual revenue"},{n:"CATEGORY_CODE",t:"VARCHAR2(30)",d:"Customer category lookup"},{n:"SALUTATION",t:"VARCHAR2(60)",d:"Phrase used to address party"},{n:"PERSON_FIRST_NAME",t:"VARCHAR2(150)",d:"First name (PERSON type)"},{n:"PERSON_LAST_NAME",t:"VARCHAR2(150)",d:"Last name (PERSON type)"},{n:"PERSON_MIDDLE_NAME",t:"VARCHAR2(60)",d:"Middle name (PERSON type)"},{n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",nn:1,d:"Legacy system identifier"},{n:"CREATION_DATE",t:"TIMESTAMP",nn:1,d:"Row creation timestamp"},{n:"CREATED_BY",t:"VARCHAR2(64)",nn:1,d:"User who created row"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"},{n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",nn:1,d:"User who last updated row"},{n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",nn:1,d:"Optimistic locking version number"}]};
+SCH.HZ_CUST_ACCOUNTS={desc:"Customer accounts — business relationships with parties. One party can have multiple accounts.",pk:"CUST_ACCOUNT_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/hzcustaccounts-24578.html",cols:[{n:"CUST_ACCOUNT_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"PARTY_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_PARTIES"},{n:"ACCOUNT_NUMBER",t:"VARCHAR2(30)",nn:1,d:"Account number"},{n:"ACCOUNT_NAME",t:"VARCHAR2(240)",d:"Account name/description"},{n:"STATUS",t:"VARCHAR2(1)",nn:1,d:"A=Active, I=Inactive"},{n:"CUSTOMER_TYPE",t:"VARCHAR2(30)",d:"I=Internal R=External revenue"},{n:"CUSTOMER_CLASS_CODE",t:"VARCHAR2(30)",d:"e.g. RESELLER EDUCATION"},{n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",nn:1,d:"Legacy identifier"},{n:"SOURCE_CODE",t:"VARCHAR2(150)",d:"Promotion source code"},{n:"AUTOPAY_FLAG",t:"VARCHAR2(1)",d:"Y=Autopay enabled"},{n:"SELLING_PARTY_ID",t:"NUMBER(18)",d:"FK to HZ_PARTIES selling party"},{n:"CREATION_DATE",t:"TIMESTAMP",nn:1,d:"Row creation timestamp"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.HZ_PARTY_SITES={desc:"Links parties to locations. One party can have multiple sites.",pk:"PARTY_SITE_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/hzpartysites-24426.html",cols:[{n:"PARTY_SITE_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"PARTY_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_PARTIES"},{n:"LOCATION_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_LOCATIONS"},{n:"PARTY_SITE_NUMBER",t:"VARCHAR2(30)",nn:1,d:"Party site number"},{n:"STATUS",t:"VARCHAR2(1)",d:"A=Active I=Inactive"},{n:"IDENTIFYING_ADDRESS_FLAG",t:"VARCHAR2(1)",nn:1,d:"Y=Primary identifying address"},{n:"MAILSTOP",t:"VARCHAR2(60)",d:"Delivery point within org"},{n:"ADDRESSEE",t:"VARCHAR2(150)",d:"Name at the address"},{n:"PARTY_SITE_NAME",t:"VARCHAR2(240)",d:"User-defined site name"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.HZ_LOCATIONS={desc:"Postal addresses and physical locations. Referenced by HZ_PARTY_SITES.",pk:"LOCATION_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/hzlocations-22182.html",cols:[{n:"LOCATION_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"ADDRESS1",t:"VARCHAR2(240)",nn:1,d:"First line of address"},{n:"ADDRESS2",t:"VARCHAR2(240)",d:"Second line of address"},{n:"ADDRESS3",t:"VARCHAR2(240)",d:"Third line of address"},{n:"CITY",t:"VARCHAR2(60)",d:"City"},{n:"STATE",t:"VARCHAR2(60)",d:"State or province"},{n:"POSTAL_CODE",t:"VARCHAR2(60)",d:"Postal code"},{n:"COUNTY",t:"VARCHAR2(60)",d:"County"},{n:"COUNTRY",t:"VARCHAR2(60)",nn:1,d:"Country code FK to FND_TERRITORIES"},{n:"CREATION_DATE",t:"TIMESTAMP",nn:1,d:"Row creation timestamp"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.HZ_CONTACT_POINTS={desc:"Electronic communication methods: PHONE, EMAIL, WEB, FAX per party.",pk:"CONTACT_POINT_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/hzcontactpoints-14655.html",cols:[{n:"CONTACT_POINT_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"CONTACT_POINT_TYPE",t:"VARCHAR2(30)",nn:1,d:"PHONE EMAIL WEB FAX EFT EDI"},{n:"OWNER_TABLE_NAME",t:"VARCHAR2(30)",nn:1,d:"HZ_PARTIES or HZ_PARTY_SITES"},{n:"OWNER_TABLE_ID",t:"NUMBER(18)",nn:1,d:"FK to owner table record"},{n:"STATUS",t:"VARCHAR2(30)",nn:1,d:"A=Active I=Inactive D=Do Not Use"},{n:"PRIMARY_FLAG",t:"VARCHAR2(1)",d:"Y=Primary of this type"},{n:"EMAIL_ADDRESS",t:"VARCHAR2(2000)",d:"Email address"},{n:"PHONE_NUMBER",t:"VARCHAR2(40)",d:"Phone number in local format"},{n:"PHONE_AREA_CODE",t:"VARCHAR2(10)",d:"Area code"},{n:"PHONE_COUNTRY_CODE",t:"VARCHAR2(10)",d:"International country code"},{n:"URL",t:"VARCHAR2(2000)",d:"URL for WEB type"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.HZ_RELATIONSHIPS={desc:"Relationships between parties: CONTACT_OF, SUBSIDIARY_OF, PARTNER_OF etc.",pk:"RELATIONSHIP_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/hzrelationships-4751.html",cols:[{n:"RELATIONSHIP_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"SUBJECT_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_PARTIES subject"},{n:"SUBJECT_TYPE",t:"VARCHAR2(30)",nn:1,d:"ORGANIZATION PERSON GROUP"},{n:"OBJECT_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_PARTIES object"},{n:"OBJECT_TYPE",t:"VARCHAR2(30)",nn:1,d:"ORGANIZATION PERSON GROUP"},{n:"RELATIONSHIP_CODE",t:"VARCHAR2(30)",nn:1,d:"CONTACT_OF SUBSIDIARY_OF PARTNER_OF EMPLOYEE_OF"},{n:"RELATIONSHIP_TYPE",t:"VARCHAR2(30)",nn:1,d:"Relationship type classification"},{n:"STATUS",t:"VARCHAR2(1)",nn:1,d:"A=Active I=Inactive"},{n:"START_DATE",t:"DATE",nn:1,d:"Start date"},{n:"END_DATE",t:"DATE",d:"End date"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.HZ_ORG_CONTACTS={desc:"Contact role info for persons who are contacts for organizations.",pk:"ORG_CONTACT_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/",cols:[{n:"ORG_CONTACT_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"PARTY_RELATIONSHIP_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_RELATIONSHIPS"},{n:"PARTY_ID",t:"NUMBER(18)",d:"FK to HZ_PARTIES org"},{n:"JOB_TITLE",t:"VARCHAR2(100)",d:"Job title at organization"},{n:"DEPARTMENT",t:"VARCHAR2(60)",d:"Department"},{n:"STATUS",t:"VARCHAR2(1)",d:"A=Active I=Inactive"},{n:"DECISION_MAKER_FLAG",t:"VARCHAR2(1)",d:"Y=Is decision maker"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.HZ_CUST_ACCT_SITES_ALL={desc:"Customer account sites — links accounts to party sites per Operating Unit.",pk:"CUST_ACCT_SITE_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/",cols:[{n:"CUST_ACCT_SITE_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"CUST_ACCOUNT_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_CUST_ACCOUNTS"},{n:"PARTY_SITE_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_PARTY_SITES"},{n:"ORG_ID",t:"NUMBER(18)",d:"Operating Unit"},{n:"STATUS",t:"VARCHAR2(1)",nn:1,d:"A=Active I=Inactive"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.HZ_ORG_PROFILES={desc:"Organization-specific profile data: employees, revenue, DUNS, SIC.",pk:"ORG_PROFILE_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/hzorganizationprofiles-24106.html",cols:[{n:"ORG_PROFILE_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"PARTY_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_PARTIES"},{n:"ORGANIZATION_NAME",t:"VARCHAR2(360)",nn:1,d:"Organization name"},{n:"DUNS_NUMBER_C",t:"VARCHAR2(30)",d:"D-U-N-S Number"},{n:"EMPLOYEES_TOTAL",t:"NUMBER",d:"Total employees"},{n:"ANNUAL_REVENUE",t:"NUMBER",d:"Annual revenue"},{n:"SIC_CODE",t:"VARCHAR2(30)",d:"SIC code"},{n:"YEAR_ESTABLISHED",t:"NUMBER(4)",d:"Year founded"},{n:"HQ_BRANCH_IND",t:"VARCHAR2(30)",d:"HQ Branch or Single location"},{n:"EFFECTIVE_START_DATE",t:"DATE",nn:1,d:"Profile effective from"},{n:"EFFECTIVE_END_DATE",t:"DATE",nn:1,d:"Profile effective to"}]};
+SCH.HZ_PERSON_PROFILES={desc:"Person-specific profile data: name, DOB, gender, job title.",pk:"PERSON_PROFILE_ID",url:"https://docs.oracle.com/en/cloud/saas/sales/oedms/",cols:[{n:"PERSON_PROFILE_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"PARTY_ID",t:"NUMBER(18)",nn:1,d:"FK to HZ_PARTIES"},{n:"PERSON_LAST_NAME",t:"VARCHAR2(150)",nn:1,d:"Last name"},{n:"PERSON_FIRST_NAME",t:"VARCHAR2(150)",d:"First name"},{n:"PERSON_MIDDLE_NAME",t:"VARCHAR2(60)",d:"Middle name"},{n:"GENDER",t:"VARCHAR2(30)",d:"Gender lookup"},{n:"DATE_OF_BIRTH",t:"DATE",d:"Date of birth"},{n:"JOB_TITLE",t:"VARCHAR2(100)",d:"Job title"},{n:"EFFECTIVE_START_DATE",t:"DATE",nn:1,d:"Profile effective from"},{n:"EFFECTIVE_END_DATE",t:"DATE",nn:1,d:"Profile effective to"}]};
+
+// Finance
+SCH.GL_LEDGERS={desc:"Ledger definitions — primary, secondary, reporting. Each has currency, calendar, COA.",pk:"LEDGER_ID",url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/",cols:[{n:"LEDGER_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"NAME",t:"VARCHAR2(30)",nn:1,d:"Ledger name"},{n:"SHORT_NAME",t:"VARCHAR2(20)",nn:1,d:"Short name"},{n:"LEDGER_CATEGORY_CODE",t:"VARCHAR2(30)",nn:1,d:"PRIMARY SECONDARY ALC NONE"},{n:"CURRENCY_CODE",t:"VARCHAR2(15)",nn:1,d:"Functional currency"},{n:"PERIOD_SET_NAME",t:"VARCHAR2(15)",nn:1,d:"Accounting calendar"},{n:"CHART_OF_ACCOUNTS_ID",t:"NUMBER(18)",nn:1,d:"FK to chart of accounts structure"},{n:"DESCRIPTION",t:"VARCHAR2(240)",d:"Ledger description"}]};
+SCH.GL_JE_HEADERS={desc:"Journal entry headers. STATUS: U=Unposted, P=Posted. 1:many with GL_JE_LINES.",pk:"JE_HEADER_ID",url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/gljeheaders-6523.html",cols:[{n:"JE_HEADER_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"LEDGER_ID",t:"NUMBER(18)",nn:1,d:"FK to GL_LEDGERS"},{n:"JE_BATCH_ID",t:"NUMBER(18)",nn:1,d:"FK to GL_JE_BATCHES"},{n:"JE_CATEGORY",t:"VARCHAR2(25)",nn:1,d:"Journal category FK to GL_JE_CATEGORIES_B"},{n:"JE_SOURCE",t:"VARCHAR2(25)",nn:1,d:"Source: Manual Payables Receivables etc"},{n:"PERIOD_NAME",t:"VARCHAR2(15)",nn:1,d:"Accounting period e.g. JAN-24"},{n:"NAME",t:"VARCHAR2(100)",nn:1,d:"Journal header name"},{n:"STATUS",t:"VARCHAR2(1)",nn:1,d:"U=Unposted P=Posted error codes A-Z"},{n:"ACTUAL_FLAG",t:"VARCHAR2(1)",nn:1,d:"A=Actual B=Budget E=Encumbrance"},{n:"DEFAULT_EFFECTIVE_DATE",t:"DATE",nn:1,d:"Journal effective date"},{n:"CURRENCY_CODE",t:"VARCHAR2(15)",d:"Journal currency"},{n:"POSTED_DATE",t:"DATE",d:"Date posted"},{n:"DESCRIPTION",t:"VARCHAR2(240)",d:"Journal description"},{n:"RUNNING_TOTAL_DR",t:"NUMBER",d:"Running total debits entered currency"},{n:"RUNNING_TOTAL_CR",t:"NUMBER",d:"Running total credits entered currency"},{n:"REVERSED_JE_HEADER_ID",t:"NUMBER(18)",d:"FK to reversed journal"},{n:"LEGAL_ENTITY_ID",t:"NUMBER(18)",d:"FK to XLE_ENTITY_PROFILES"},{n:"CREATION_DATE",t:"TIMESTAMP",nn:1,d:"Row creation timestamp"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.GL_JE_LINES={desc:"Journal entry lines — individual debit and credit entries. Child of GL_JE_HEADERS.",pk:"JE_HEADER_ID+JE_LINE_NUM",url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/",cols:[{n:"JE_HEADER_ID",t:"NUMBER(18)",pk:1,nn:1,d:"FK to GL_JE_HEADERS"},{n:"JE_LINE_NUM",t:"NUMBER(18)",pk:1,nn:1,d:"Line number within journal"},{n:"LEDGER_ID",t:"NUMBER(18)",nn:1,d:"FK to GL_LEDGERS"},{n:"CODE_COMBINATION_ID",t:"NUMBER(18)",nn:1,d:"FK to GL_CODE_COMBINATIONS accounting CCID"},{n:"PERIOD_NAME",t:"VARCHAR2(15)",nn:1,d:"Accounting period"},{n:"EFFECTIVE_DATE",t:"DATE",nn:1,d:"Effective accounting date"},{n:"ENTERED_DR",t:"NUMBER",d:"Debit in entered currency"},{n:"ENTERED_CR",t:"NUMBER",d:"Credit in entered currency"},{n:"ACCOUNTED_DR",t:"NUMBER",d:"Debit in functional currency"},{n:"ACCOUNTED_CR",t:"NUMBER",d:"Credit in functional currency"},{n:"CURRENCY_CODE",t:"VARCHAR2(15)",nn:1,d:"Transaction currency"},{n:"DESCRIPTION",t:"VARCHAR2(240)",d:"Line description"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.GL_CODE_COMBINATIONS={desc:"Chart of accounts — all valid segment combinations. The Accounting Flexfield (CCID).",pk:"CODE_COMBINATION_ID",url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/",cols:[{n:"CODE_COMBINATION_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"CHART_OF_ACCOUNTS_ID",t:"NUMBER(18)",nn:1,d:"FK chart of accounts structure"},{n:"SEGMENT1",t:"VARCHAR2(25)",d:"Segment 1 typically Company/Entity"},{n:"SEGMENT2",t:"VARCHAR2(25)",d:"Segment 2 typically Dept/Cost Center"},{n:"SEGMENT3",t:"VARCHAR2(25)",d:"Segment 3 typically Account"},{n:"SEGMENT4",t:"VARCHAR2(25)",d:"Segment 4 typically Sub-Account"},{n:"SEGMENT5",t:"VARCHAR2(25)",d:"Segment 5"},{n:"ENABLED_FLAG",t:"VARCHAR2(1)",nn:1,d:"Y=Enabled for use"},{n:"ACCOUNT_TYPE",t:"VARCHAR2(1)",d:"A=Asset L=Liability O=OwnersEq R=Revenue E=Expense"},{n:"START_DATE_ACTIVE",t:"DATE",d:"Date became valid"},{n:"END_DATE_ACTIVE",t:"DATE",d:"Date became invalid"}]};
+SCH.AP_INVOICES_ALL={desc:"Payables invoices — one row per invoice. STANDARD CREDIT DEBIT PREPAYMENT EXPENSE REPORT.",pk:"INVOICE_ID",url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/apinvoicesall-26236.html",cols:[{n:"INVOICE_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"INVOICE_NUM",t:"VARCHAR2(50)",nn:1,d:"Supplier invoice number"},{n:"INVOICE_TYPE_LOOKUP_CODE",t:"VARCHAR2(25)",d:"STANDARD CREDIT DEBIT PREPAYMENT EXPENSE REPORT"},{n:"VENDOR_ID",t:"NUMBER(18)",d:"FK to AP_SUPPLIERS"},{n:"VENDOR_SITE_ID",t:"NUMBER(18)",d:"FK to AP_SUPPLIER_SITES_ALL"},{n:"INVOICE_DATE",t:"DATE",d:"Date on the invoice"},{n:"INVOICE_AMOUNT",t:"NUMBER",d:"Total invoice amount"},{n:"INVOICE_CURRENCY_CODE",t:"VARCHAR2(15)",nn:1,d:"Invoice currency"},{n:"AMOUNT_PAID",t:"NUMBER",d:"Amount paid"},{n:"PAYMENT_STATUS_FLAG",t:"VARCHAR2(1)",d:"Y=Paid P=Partial N=Unpaid"},{n:"SOURCE",t:"VARCHAR2(25)",d:"MANUAL EDI XML GATEWAY etc"},{n:"DESCRIPTION",t:"VARCHAR2(240)",d:"Invoice description"},{n:"TERMS_ID",t:"NUMBER(18)",d:"FK to AP_TERMS payment terms"},{n:"PAYMENT_METHOD_LOOKUP_CODE",t:"VARCHAR2(25)",d:"CHECK EFT WIRE etc"},{n:"PO_HEADER_ID",t:"NUMBER(18)",d:"FK to PO_HEADERS_ALL matched PO"},{n:"CANCELLED_DATE",t:"DATE",d:"Date cancelled if applicable"},{n:"ORG_ID",t:"NUMBER(18)",nn:1,d:"Operating Unit"},{n:"PROJECT_ID",t:"NUMBER(18)",d:"FK to PA_PROJECTS_ALL"},{n:"CREATION_DATE",t:"TIMESTAMP",nn:1,d:"Row creation timestamp"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.AR_PAYMENT_SCHEDULES_ALL={desc:"AR payment schedules — all transactions. CLASS: INV DM CM CB PMT BR. STATUS: OP CL.",pk:"PAYMENT_SCHEDULE_ID",url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/arpaymentschedulesall-27543.html",cols:[{n:"PAYMENT_SCHEDULE_ID",t:"NUMBER(18)",pk:1,nn:1,d:"Primary Key"},{n:"CUSTOMER_ID",t:"NUMBER(18)",d:"FK to HZ_CUST_ACCOUNTS"},{n:"CUSTOMER_SITE_USE_ID",t:"NUMBER(18)",d:"FK to HZ_CUST_SITE_USES_ALL bill-to"},{n:"CUSTOMER_TRX_ID",t:"NUMBER(18)",d:"FK to RA_CUSTOMER_TRX_ALL transaction"},{n:"CLASS",t:"VARCHAR2(20)",nn:1,d:"INV=Invoice DM=Debit CM=Credit CB=Chargeback PMT=Receipt"},{n:"STATUS",t:"VARCHAR2(30)",nn:1,d:"OP=Open CL=Closed"},{n:"DUE_DATE",t:"DATE",nn:1,d:"Payment due date"},{n:"AMOUNT_DUE_ORIGINAL",t:"NUMBER",nn:1,d:"Original amount due"},{n:"AMOUNT_DUE_REMAINING",t:"NUMBER",nn:1,d:"Current amount remaining"},{n:"AMOUNT_APPLIED",t:"NUMBER",d:"Amount applied via receipts"},{n:"AMOUNT_CREDITED",t:"NUMBER",d:"Amount credited"},{n:"AMOUNT_IN_DISPUTE",t:"NUMBER",d:"Amount in dispute"},{n:"TRX_NUMBER",t:"VARCHAR2(30)",d:"Transaction number"},{n:"TRX_DATE",t:"DATE",d:"Transaction date"},{n:"INVOICE_CURRENCY_CODE",t:"VARCHAR2(15)",nn:1,d:"Invoice currency"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+
+// HCM
+SCH.PER_ALL_PEOPLE_F={desc:"Date-tracked person data. Employees, contingent workers, contacts. Source: oedmh",pk:"PERSON_ID",url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/perallpeoplef-18166.html",cols:[{n:"PERSON_ID",t:"NUMBER(10)",pk:1,nn:1,d:"Primary Key"},{n:"EFFECTIVE_START_DATE",t:"DATE",pk:1,nn:1,d:"DateTrack start"},{n:"EFFECTIVE_END_DATE",t:"DATE",nn:1,d:"DateTrack end (31-DEC-4712 if current)"},{n:"EMPLOYEE_NUMBER",t:"VARCHAR2(30)",d:"Employee number"},{n:"FULL_NAME",t:"VARCHAR2(240)",d:"Concatenated full name"},{n:"FIRST_NAME",t:"VARCHAR2(150)",d:"First name"},{n:"LAST_NAME",t:"VARCHAR2(150)",nn:1,d:"Last name"},{n:"MIDDLE_NAMES",t:"VARCHAR2(60)",d:"Middle names"},{n:"EMAIL_ADDRESS",t:"VARCHAR2(240)",d:"Primary email"},{n:"DATE_OF_BIRTH",t:"DATE",d:"Date of birth"},{n:"SEX",t:"VARCHAR2(30)",d:"Gender lookup SEX"},{n:"NATIONALITY",t:"VARCHAR2(30)",d:"Nationality FK to FND_TERRITORIES"},{n:"NATIONAL_IDENTIFIER",t:"VARCHAR2(30)",d:"SSN NI or national ID"},{n:"ORIGINAL_DATE_OF_HIRE",t:"DATE",d:"Original hire date"},{n:"START_DATE",t:"DATE",nn:1,d:"Person record active from"},{n:"CURRENT_EMPLOYEE_FLAG",t:"VARCHAR2(30)",d:"Y=Active employee"},{n:"CREATION_DATE",t:"TIMESTAMP",nn:1,d:"Row creation timestamp"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.PER_ALL_ASSIGNMENTS_F={desc:"Date-tracked assignments — links people to jobs, grades, orgs, payroll.",pk:"ASSIGNMENT_ID",url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/",cols:[{n:"ASSIGNMENT_ID",t:"NUMBER(10)",pk:1,nn:1,d:"Primary Key"},{n:"EFFECTIVE_START_DATE",t:"DATE",pk:1,nn:1,d:"DateTrack start"},{n:"EFFECTIVE_END_DATE",t:"DATE",nn:1,d:"DateTrack end"},{n:"PERSON_ID",t:"NUMBER(10)",nn:1,d:"FK to PER_ALL_PEOPLE_F"},{n:"ASSIGNMENT_TYPE",t:"VARCHAR2(1)",nn:1,d:"E=Employee C=Contingent A=Applicant"},{n:"ASSIGNMENT_STATUS_TYPE_ID",t:"NUMBER(9)",nn:1,d:"FK to PER_ASSIGNMENT_STATUS_TYPES"},{n:"ORGANIZATION_ID",t:"NUMBER(15)",nn:1,d:"FK to HR_ALL_ORGANIZATION_UNITS department"},{n:"JOB_ID",t:"NUMBER(15)",d:"FK to PER_JOBS"},{n:"GRADE_ID",t:"NUMBER(15)",d:"FK to PER_GRADES"},{n:"POSITION_ID",t:"NUMBER(15)",d:"FK to HR_ALL_POSITIONS_F"},{n:"LOCATION_ID",t:"NUMBER(15)",d:"FK to HR_LOCATIONS_ALL work location"},{n:"PAYROLL_ID",t:"NUMBER(9)",d:"FK to PAY_PAYROLLS_F"},{n:"MANAGER_FLAG",t:"VARCHAR2(30)",d:"Y=Manager"},{n:"PRIMARY_FLAG",t:"VARCHAR2(30)",nn:1,d:"Y=Primary assignment"},{n:"SUPERVISOR_ID",t:"NUMBER(10)",d:"FK to PER_ALL_PEOPLE_F manager"},{n:"NORMAL_HOURS",t:"NUMBER(22)",d:"Normal working hours"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.HR_ALL_ORGANIZATION_UNITS={desc:"Organizations — departments, business groups, legal entities, operating units.",pk:"ORGANIZATION_ID",url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/",cols:[{n:"ORGANIZATION_ID",t:"NUMBER(15)",pk:1,nn:1,d:"Primary Key"},{n:"NAME",t:"VARCHAR2(240)",nn:1,d:"Organization name"},{n:"DATE_FROM",t:"DATE",nn:1,d:"Active from"},{n:"DATE_TO",t:"DATE",d:"Active to (NULL=current)"},{n:"BUSINESS_GROUP_ID",t:"NUMBER(15)",d:"FK to business group"},{n:"LOCATION_ID",t:"NUMBER(15)",d:"FK to HR_LOCATIONS_ALL"},{n:"INTERNAL_EXTERNAL_FLAG",t:"VARCHAR2(30)",d:"INT=Internal EXT=External"},{n:"PARENT_ORGANIZATION_ID",t:"NUMBER(15)",d:"FK parent in hierarchy"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+SCH.PAY_PAYROLL_ACTIONS={desc:"Payroll processing actions — runs, prepayments, costing.",pk:"PAYROLL_ACTION_ID",url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/",cols:[{n:"PAYROLL_ACTION_ID",t:"NUMBER(9)",pk:1,nn:1,d:"Primary Key"},{n:"ACTION_TYPE",t:"VARCHAR2(30)",nn:1,d:"R=Run P=Prepayment C=Costing U=Payment A=Archive"},{n:"PAYROLL_ID",t:"NUMBER(9)",d:"FK to PAY_PAYROLLS_F"},{n:"DATE_EARNED",t:"DATE",d:"Date earnings were earned"},{n:"EFFECTIVE_DATE",t:"DATE",nn:1,d:"Effective date of action"},{n:"ACTION_STATUS",t:"VARCHAR2(30)",nn:1,d:"U=Unprocessed C=Complete E=Error"},{n:"BUSINESS_GROUP_ID",t:"NUMBER(15)",nn:1,d:"Business group"},{n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:1,d:"Last update timestamp"}]};
+
+// SCM
+SCH.PO_HEADERS_ALL={desc:"Purchase order headers — STANDARD BLANKET CONTRACT PLANNED across all OUs.",pk:"PO_HEADER_ID",url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/poheadersall-4243.html",cols:[{n:"PO_HEADER_ID",t:"NUMBER",pk:1,nn:1,d:"Primary Key"},{n:"SEGMENT1",t:"VARCHAR2(20)",nn:1,d:"PO number user-visible"},{n:"TYPE_LOOKUP_CODE",t:"VARCHAR2(25)",nn:1,d:"STANDARD BLANKET CONTRACT PLANNED"},{n:"STATUS_LOOKUP_CODE",t:"VARCHAR2(25)",d:"INCOMPLETE OPEN CLOSED CANCELLED FROZEN"},{n:"VENDOR_ID",t:"NUMBER",d:"FK to AP_SUPPLIERS"},{n:"VENDOR_SITE_ID",t:"NUMBER",d:"FK to AP_SUPPLIER_SITES_ALL"},{n:"AGENT_ID",t:"NUMBER",nn:1,d:"FK to PER_ALL_PEOPLE_F buyer"},{n:"CURRENCY_CODE",t:"VARCHAR2(15)",d:"PO currency"},{n:"APPROVED_FLAG",t:"VARCHAR2(1)",d:"Y=Approved"},{n:"APPROVED_DATE",t:"DATE",d:"Date approved"},{n:"AUTHORIZATION_STATUS",t:"VARCHAR2(25)",d:"APPROVED IN-PROCESS INCOMPLETE REJECTED"},{n:"SHIP_TO_LOCATION_ID",t:"NUMBER",d:"FK to HR_LOCATIONS_ALL"},{n:"TERMS_ID",t:"NUMBER",d:"FK to AP_TERMS"},{n:"AMOUNT_LIMIT",t:"NUMBER",d:"Max amount for blanket releases"},{n:"ORG_ID",t:"NUMBER",d:"Operating Unit"},{n:"LAST_UPDATE_DATE",t:"DATE",nn:1,d:"Last update date"}]};
+SCH.PO_LINES_ALL={desc:"Purchase order line items — goods and services ordered.",pk:"PO_LINE_ID",url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/",cols:[{n:"PO_LINE_ID",t:"NUMBER",pk:1,nn:1,d:"Primary Key"},{n:"PO_HEADER_ID",t:"NUMBER",nn:1,d:"FK to PO_HEADERS_ALL"},{n:"LINE_NUM",t:"NUMBER",nn:1,d:"Line number on PO"},{n:"LINE_TYPE_ID",t:"NUMBER",nn:1,d:"FK to PO_LINE_TYPES Goods Services etc"},{n:"ITEM_ID",t:"NUMBER",d:"FK to EGP_SYSTEM_ITEMS_B inventory item"},{n:"ITEM_DESCRIPTION",t:"VARCHAR2(240)",d:"Item description"},{n:"UNIT_MEAS_LOOKUP_CODE",t:"VARCHAR2(25)",d:"Unit of measure"},{n:"QUANTITY",t:"NUMBER",d:"Quantity ordered"},{n:"UNIT_PRICE",t:"NUMBER",d:"Price per unit"},{n:"AMOUNT",t:"NUMBER",d:"Line amount for services"},{n:"CANCEL_FLAG",t:"VARCHAR2(1)",d:"Y=Cancelled"},{n:"VENDOR_PRODUCT_NUM",t:"VARCHAR2(25)",d:"Supplier product number"},{n:"LAST_UPDATE_DATE",t:"DATE",nn:1,d:"Last update date"}]};
+SCH.PO_LINE_LOCATIONS_ALL={desc:"PO shipments — delivery schedule: when, where, how much per line.",pk:"LINE_LOCATION_ID",url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/",cols:[{n:"LINE_LOCATION_ID",t:"NUMBER",pk:1,nn:1,d:"Primary Key"},{n:"PO_HEADER_ID",t:"NUMBER",nn:1,d:"FK to PO_HEADERS_ALL"},{n:"PO_LINE_ID",t:"NUMBER",nn:1,d:"FK to PO_LINES_ALL"},{n:"SHIPMENT_NUM",t:"NUMBER",nn:1,d:"Shipment number within line"},{n:"SHIP_TO_LOCATION_ID",t:"NUMBER",d:"FK to HR_LOCATIONS_ALL"},{n:"QUANTITY",t:"NUMBER",d:"Quantity for this shipment"},{n:"QUANTITY_RECEIVED",t:"NUMBER",d:"Quantity received"},{n:"QUANTITY_BILLED",t:"NUMBER",d:"Quantity billed"},{n:"NEED_BY_DATE",t:"DATE",d:"Date goods needed"},{n:"PROMISED_DATE",t:"DATE",d:"Supplier promised delivery"},{n:"CLOSED_CODE",t:"VARCHAR2(25)",d:"OPEN CLOSED FINALLY-CLOSED"},{n:"CANCEL_FLAG",t:"VARCHAR2(1)",d:"Y=Cancelled"},{n:"LAST_UPDATE_DATE",t:"DATE",nn:1,d:"Last update date"}]};
+SCH.PO_DISTRIBUTIONS_ALL={desc:"PO distributions — accounting and budget info per shipment.",pk:"PO_DISTRIBUTION_ID",url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/",cols:[{n:"PO_DISTRIBUTION_ID",t:"NUMBER",pk:1,nn:1,d:"Primary Key"},{n:"PO_HEADER_ID",t:"NUMBER",nn:1,d:"FK to PO_HEADERS_ALL"},{n:"PO_LINE_ID",t:"NUMBER",nn:1,d:"FK to PO_LINES_ALL"},{n:"LINE_LOCATION_ID",t:"NUMBER",nn:1,d:"FK to PO_LINE_LOCATIONS_ALL"},{n:"CODE_COMBINATION_ID",t:"NUMBER",d:"FK to GL_CODE_COMBINATIONS charge account"},{n:"QUANTITY_ORDERED",t:"NUMBER",d:"Quantity ordered"},{n:"QUANTITY_DELIVERED",t:"NUMBER",d:"Quantity delivered"},{n:"QUANTITY_BILLED",t:"NUMBER",d:"Quantity billed"},{n:"PROJECT_ID",t:"NUMBER",d:"FK to PA_PROJECTS_ALL"},{n:"TASK_ID",t:"NUMBER",d:"FK to PA_TASKS"},{n:"LAST_UPDATE_DATE",t:"DATE",nn:1,d:"Last update date"}]};
+
+// ERP / Projects
+SCH.PA_PROJECTS_ALL={desc:"Project definitions — INDIRECT CONTRACT CAPITAL types across all OUs.",pk:"PROJECT_ID",url:"https://docs.oracle.com/en/cloud/saas/project-management/oedmp/",cols:[{n:"PROJECT_ID",t:"NUMBER(15)",pk:1,nn:1,d:"Primary Key"},{n:"SEGMENT1",t:"VARCHAR2(25)",nn:1,d:"Project number user-visible"},{n:"NAME",t:"VARCHAR2(30)",nn:1,d:"Project name"},{n:"PROJECT_TYPE",t:"VARCHAR2(20)",nn:1,d:"INDIRECT CONTRACT CAPITAL"},{n:"PROJECT_STATUS_CODE",t:"VARCHAR2(30)",nn:1,d:"APPROVED SUBMITTED CLOSED DRAFT"},{n:"CARRYING_OUT_ORGANIZATION_ID",t:"NUMBER(15)",nn:1,d:"FK to HR_ALL_ORGANIZATION_UNITS"},{n:"START_DATE",t:"DATE",d:"Planned start date"},{n:"COMPLETION_DATE",t:"DATE",d:"Planned completion date"},{n:"ACTUAL_START_DATE",t:"DATE",d:"Actual start date"},{n:"ACTUAL_FINISH_DATE",t:"DATE",d:"Actual finish date"},{n:"BILL_TO_CUSTOMER_ID",t:"NUMBER(15)",d:"FK to HZ_CUST_ACCOUNTS billing customer"},{n:"DESCRIPTION",t:"VARCHAR2(250)",d:"Project description"},{n:"CLOSED_DATE",t:"DATE",d:"Date closed"},{n:"ORG_ID",t:"NUMBER(15)",d:"Operating Unit"},{n:"LAST_UPDATE_DATE",t:"DATE",nn:1,d:"Last update date"}]};
+SCH.PA_TASKS={desc:"Work breakdown structure tasks within projects.",pk:"TASK_ID",url:"https://docs.oracle.com/en/cloud/saas/project-management/oedmp/",cols:[{n:"TASK_ID",t:"NUMBER(15)",pk:1,nn:1,d:"Primary Key"},{n:"PROJECT_ID",t:"NUMBER(15)",nn:1,d:"FK to PA_PROJECTS_ALL"},{n:"TASK_NUMBER",t:"VARCHAR2(25)",nn:1,d:"Task number user-visible"},{n:"TASK_NAME",t:"VARCHAR2(20)",nn:1,d:"Task short name"},{n:"TOP_TASK_ID",t:"NUMBER(15)",nn:1,d:"FK to PA_TASKS top-level parent"},{n:"PARENT_TASK_ID",t:"NUMBER(15)",d:"FK to PA_TASKS immediate parent"},{n:"START_DATE",t:"DATE",d:"Planned start date"},{n:"COMPLETION_DATE",t:"DATE",d:"Planned completion"},{n:"CHARGEABLE_FLAG",t:"VARCHAR2(1)",d:"Y=Can charge expenditures"},{n:"BILLABLE_FLAG",t:"VARCHAR2(1)",d:"Y=Billable to customer"},{n:"TASK_MANAGER_PERSON_ID",t:"NUMBER(9)",d:"FK to PER_ALL_PEOPLE_F task manager"},{n:"LAST_UPDATE_DATE",t:"DATE",nn:1,d:"Last update date"}]};
+SCH.PA_EXPENDITURE_ITEMS_ALL={desc:"Individual costs charged to projects and tasks (labor, expense, usage).",pk:"EXPENDITURE_ITEM_ID",url:"https://docs.oracle.com/en/cloud/saas/project-management/oedmp/",cols:[{n:"EXPENDITURE_ITEM_ID",t:"NUMBER(15)",pk:1,nn:1,d:"Primary Key"},{n:"EXPENDITURE_ID",t:"NUMBER(15)",nn:1,d:"FK to PA_EXPENDITURES_ALL"},{n:"TASK_ID",t:"NUMBER(15)",nn:1,d:"FK to PA_TASKS"},{n:"PROJECT_ID",t:"NUMBER(15)",nn:1,d:"FK to PA_PROJECTS_ALL"},{n:"EXPENDITURE_ITEM_DATE",t:"DATE",nn:1,d:"Date expenditure occurred"},{n:"EXPENDITURE_TYPE",t:"VARCHAR2(30)",nn:1,d:"Labor Expense Usage etc"},{n:"QUANTITY",t:"NUMBER",d:"Quantity"},{n:"RAW_COST",t:"NUMBER",d:"Raw cost in project currency"},{n:"BURDENED_COST",t:"NUMBER",d:"Raw cost plus overhead"},{n:"BILLABLE_FLAG",t:"VARCHAR2(1)",nn:1,d:"Y=Billable"},{n:"LAST_UPDATE_DATE",t:"DATE",nn:1,d:"Last update date"}]};
+
+// ═══════════════ MODULES ═══════════════
+const MODS = {
+  "CX Sales": {color:"#4dabf7",icon:"🤝",tables:["HZ_PARTIES","HZ_CUST_ACCOUNTS","HZ_PARTY_SITES","HZ_LOCATIONS","HZ_CONTACT_POINTS","HZ_RELATIONSHIPS","HZ_ORG_CONTACTS","HZ_CUST_ACCT_SITES_ALL"]},
+  "TCA":      {color:"#20c997",icon:"🏢",tables:["HZ_PARTIES","HZ_CUST_ACCOUNTS","HZ_PARTY_SITES","HZ_LOCATIONS","HZ_CONTACT_POINTS","HZ_RELATIONSHIPS","HZ_ORG_PROFILES","HZ_PERSON_PROFILES"]},
+  "Finance":  {color:"#fcc419",icon:"💰",tables:["GL_LEDGERS","GL_JE_HEADERS","GL_JE_LINES","GL_CODE_COMBINATIONS","AP_INVOICES_ALL","AR_PAYMENT_SCHEDULES_ALL"]},
+  "HCM":      {color:"#cc5de8",icon:"👥",tables:["PER_ALL_PEOPLE_F","PER_ALL_ASSIGNMENTS_F","HR_ALL_ORGANIZATION_UNITS","PAY_PAYROLL_ACTIONS"]},
+  "SCM":      {color:"#ff6b35",icon:"📦",tables:["PO_HEADERS_ALL","PO_LINES_ALL","PO_LINE_LOCATIONS_ALL","PO_DISTRIBUTIONS_ALL"]},
+  "Projects": {color:"#34d399",icon:"📋",tables:["PA_PROJECTS_ALL","PA_TASKS","PA_EXPENDITURE_ITEMS_ALL"]}
+};
+
+// ═══════════════ STATE ═══════════════
+const ST = {
+  conn:false, url:"", user:"", pass:"",
+  mod:"CX Sales",
+  cols:[], allRows:[], filtRows:[],
+  sortCol:-1, sortDir:1,
+  tabs:[{id:"tab_1",name:"Query 1",sql:""}],
+  actTab:"tab_1", tabN:1,
+  saved: JSON.parse(localStorage.getItem("fxq")||"[]"),
+  kbOpen:false, dragging:false
+};
+
+// ═══════════════ TOAST ═══════════════
+let _tt;
+function toast(msg, type) {
+  type = type || "inf";
+  var el = document.getElementById("toast");
+  el.className = type + " show";
+  el.innerHTML = ({ok:"✓",er:"✕",inf:"◈",wa:"⚠"}[type]||"◈") + " " + msg;
+  clearTimeout(_tt);
+  _tt = setTimeout(function(){ el.classList.remove("show"); }, 3000);
+}
+
+// ═══════════════ MODAL ═══════════════
+function openModal(id){ document.getElementById(id).classList.add("open"); }
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+
+// ═══════════════ THEME ═══════════════
+function setTheme(t) {
+  document.body.dataset.theme = t;
+  document.querySelectorAll(".th").forEach(function(b){
+    b.classList.toggle("on", b.dataset.t === t);
+  });
+  localStorage.setItem("fxtheme", t);
+}
+(function(){
+  var st = localStorage.getItem("fxtheme") || "";
+  document.body.dataset.theme = st;
+  document.querySelectorAll(".th").forEach(function(b){
+    b.classList.toggle("on", b.dataset.t === st);
+  });
+})();
+
+// ═══════════════ SIDEBAR ═══════════════
+var sbOpen = true;
+function toggleSb() {
+  sbOpen = !sbOpen;
+  document.getElementById("sb").classList.toggle("closed", !sbOpen);
+  document.getElementById("sbTog").textContent = sbOpen ? "‹" : "›";
+}
+
+// ═══════════════ MODULES ═══════════════
+function buildMods() {
+  var container = document.getElementById("modTabs");
+  container.innerHTML = "";
+  Object.keys(MODS).forEach(function(m) {
+    var mod = MODS[m];
+    var div = document.createElement("div");
+    div.className = "mod-tab" + (m === ST.mod ? " active" : "");
+    div.textContent = mod.icon + " " + m;
+    if (m === ST.mod) {
+      div.style.background = mod.color;
+      div.style.borderColor = mod.color;
+      div.style.color = "#fff";
+    }
+    div.addEventListener("click", function() { selMod(m); });
+    container.appendChild(div);
+  });
+}
+
+function selMod(m) {
+  ST.mod = m;
+  var mod = MODS[m];
+  document.querySelectorAll(".mod-tab").forEach(function(t) {
+    var active = t.textContent.indexOf(m) !== -1 && t.textContent.indexOf(mod.icon) !== -1;
+    t.classList.toggle("active", active);
+    t.style.background = active ? mod.color : "";
+    t.style.borderColor = active ? mod.color : "";
+    t.style.color = active ? "#fff" : "";
+  });
+  var ind = document.getElementById("modInd");
+  ind.textContent = mod.icon + " " + m;
+  ind.style.color = mod.color;
+  ind.style.background = mod.color + "18";
+  document.getElementById("tblSearch").value = "";
+  closeSchema();
+  buildTables(m);
+}
+
+// ═══════════════ TABLES ═══════════════
+function buildTables(m) {
+  var mod = MODS[m];
+  var q = document.getElementById("tblSearch").value.toLowerCase();
+  var tables = (mod ? mod.tables : []).filter(function(tn) {
+    var tbl = SCH[tn];
+    return tn.toLowerCase().indexOf(q) !== -1 || (tbl && tbl.desc.toLowerCase().indexOf(q) !== -1);
+  });
+  document.getElementById("tblBadge").textContent = tables.length;
+  var list = document.getElementById("tblList");
+  list.innerHTML = "";
+  tables.forEach(function(tn) {
+    var tbl = SCH[tn];
+    var row = document.createElement("div");
+    row.className = "tbl-row";
+    row.id = "tr_" + tn;
+    row.innerHTML = '<span style="font-size:10px;color:var(--t3)">&#8863;</span> ' + tn;
+    row.addEventListener("click", function() { clickTable(tn); });
+    list.appendChild(row);
+    if (tbl) {
+      var desc = document.createElement("div");
+      desc.className = "tbl-desc";
+      desc.textContent = tbl.desc;
+      list.appendChild(desc);
+    }
+  });
+}
+
+function filterTables() { buildTables(ST.mod); }
+
+function clickTable(tn) {
+  document.querySelectorAll(".tbl-row").forEach(function(r){ r.classList.remove("active"); });
+  var rowEl = document.getElementById("tr_" + tn);
+  if (rowEl) rowEl.classList.add("active");
+  showSchema(tn);
+  var lim = document.getElementById("rowLim").value;
+  document.getElementById("sqled").value = "SELECT *\nFROM " + tn + "\nFETCH FIRST " + lim + " ROWS ONLY";
+  updateLines();
+  runQuery();
+}
+
+// ═══════════════ SCHEMA PANEL ═══════════════
+function showSchema(tn) {
+  var tbl = SCH[tn];
+  if (!tbl) return;
+  document.getElementById("schemaTblNm").textContent = tn;
+  var docsLink = document.getElementById("schemaDocsLink");
+  docsLink.style.display = tbl.url ? "inline-flex" : "none";
+  docsLink.href = tbl.url || "#";
+  var container = document.getElementById("schemaCols");
+  container.innerHTML = "";
+  tbl.cols.forEach(function(c) {
+    var row = document.createElement("div");
+    row.className = "col-row";
+    row.title = c.d || "";
+    var badges = "";
+    if (c.pk) badges += '<span class="badge b-pk">PK</span>';
+    if (c.nn && !c.pk) badges += '<span class="badge b-nn">NN</span>';
+    row.innerHTML =
+      '<div class="col-nm">' + c.n + badges + '</div>' +
+      '<div class="col-tp">' + c.t + '</div>' +
+      '<div class="col-ds">' + (c.d||"") + '</div>';
+    row.addEventListener("click", function() { insertCol(c.n); });
+    container.appendChild(row);
+  });
+  document.getElementById("schemaPanel").classList.add("open");
+}
+
+function closeSchema() {
+  document.getElementById("schemaPanel").classList.remove("open");
+}
+
+function insertCol(name) {
+  var ed = document.getElementById("sqled");
+  var s = ed.selectionStart;
+  ed.value = ed.value.substring(0, s) + name + ed.value.substring(ed.selectionEnd);
+  ed.selectionStart = ed.selectionEnd = s + name.length;
+  ed.focus();
+  updateLines();
+  toast("Inserted " + name, "inf");
+}
+
+// ═══════════════ TABS ═══════════════
+function newTab() {
+  ST.tabN++;
+  var id = "tab_" + ST.tabN;
+  ST.tabs.push({id:id, name:"Query " + ST.tabN, sql:""});
+  var bar = document.getElementById("tabs");
+  var add = document.getElementById("tabAdd");
+  var div = document.createElement("div");
+  div.className = "tab";
+  div.id = id;
+  div.innerHTML = "&#128196; Query " + ST.tabN + ' <span class="tab-x">&#215;</span>';
+  div.querySelector(".tab-x").addEventListener("click", function(e){ e.stopPropagation(); closeTab(id); });
+  div.addEventListener("click", function() { switchTab(id); });
+  bar.insertBefore(div, add);
+  switchTab(id);
+}
+
+function switchTab(id) {
+  var cur = ST.tabs.find(function(t){ return t.id === ST.actTab; });
+  if (cur) cur.sql = document.getElementById("sqled").value;
+  ST.actTab = id;
+  document.querySelectorAll(".tab").forEach(function(t){ t.classList.remove("active"); });
+  var el = document.getElementById(id);
+  if (el) el.classList.add("active");
+  var tab = ST.tabs.find(function(t){ return t.id === id; });
+  document.getElementById("sqled").value = tab ? tab.sql : "";
+  updateLines();
+}
+
+function closeTab(id) {
+  if (ST.tabs.length === 1) { toast("Cannot close last tab","wa"); return; }
+  ST.tabs = ST.tabs.filter(function(t){ return t.id !== id; });
+  var el = document.getElementById(id);
+  if (el) el.remove();
+  if (ST.actTab === id) switchTab(ST.tabs[ST.tabs.length-1].id);
+}
+
+// ═══════════════ EDITOR ═══════════════
+function updateLines() {
+  var ed = document.getElementById("sqled");
+  var n = (ed.value.match(/\n/g)||[]).length + 1;
+  var html = "";
+  for (var i = 1; i <= Math.max(n, 10); i++) html += i + "<br>";
+  document.getElementById("lnums").innerHTML = html;
+  document.getElementById("edStat").textContent = n + " lines";
+}
+
+function syncLnums() {
+  var ed = document.getElementById("sqled");
+  document.getElementById("lnums").style.marginTop = "-" + ed.scrollTop + "px";
+}
+
+function edKey(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); runQuery(); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+    e.preventDefault();
+    var ed = e.target, s = ed.selectionStart;
+    var ls = ed.value.lastIndexOf("\n", s-1) + 1;
+    var le = ed.value.indexOf("\n", s); if (le === -1) le = ed.value.length;
+    var line = ed.value.substring(ls, le);
+    var commented = line.trimLeft().indexOf("--") === 0;
+    ed.value = ed.value.substring(0,ls) + (commented ? line.replace(/^(\s*)-- ?/,"$1") : "-- " + line) + ed.value.substring(le);
+    updateLines(); return;
+  }
+  if (e.key === "Tab") {
+    e.preventDefault();
+    var ed2 = e.target, s2 = ed2.selectionStart;
+    ed2.value = ed2.value.substring(0,s2) + "  " + ed2.value.substring(ed2.selectionEnd);
+    ed2.selectionStart = ed2.selectionEnd = s2 + 2;
+    updateLines();
+  }
+}
+
+function fmtSQL() {
+  var sql = document.getElementById("sqled").value;
+  ["SELECT","FROM","WHERE","AND","OR","ORDER BY","GROUP BY","HAVING","LEFT JOIN","INNER JOIN","RIGHT JOIN","JOIN","FETCH FIRST","UNION ALL","UNION","ON"].forEach(function(k){
+    sql = sql.replace(new RegExp("\\b"+k+"\\b","gi"), "\n"+k);
+  });
+  document.getElementById("sqled").value = sql.trim().replace(/\n{3,}/g,"\n\n");
+  updateLines(); toast("Formatted","inf");
+}
+
+function clearEd() { document.getElementById("sqled").value = ""; updateLines(); }
+
+// ═══════════════ DRAG HANDLE ═══════════════
+(function(){
+  var h = document.getElementById("dragger");
+  var ep = document.getElementById("ed-pane");
+  var sy = 0, sh = 0;
+  h.addEventListener("mousedown", function(e){
+    ST.dragging = true; sy = e.clientY; sh = ep.offsetHeight;
+    h.classList.add("drag"); document.body.style.userSelect = "none"; document.body.style.cursor = "ns-resize";
+  });
+  document.addEventListener("mousemove", function(e){
+    if (!ST.dragging) return;
+    ep.style.height = Math.max(80, Math.min(sh + (e.clientY - sy), 600)) + "px";
+  });
+  document.addEventListener("mouseup", function(){
+    if (!ST.dragging) return;
+    ST.dragging = false; h.classList.remove("drag"); document.body.style.userSelect = ""; document.body.style.cursor = "";
+  });
+})();
+
+// ═══════════════ AI ═══════════════
+async function callAI(prompt, maxT, sys) {
+  var r = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      model:"claude-sonnet-4-20250514", max_tokens: maxT||600,
+      system: sys || ("Oracle Fusion SQL expert. Module: " + ST.mod),
+      messages:[{role:"user", content:prompt}]
+    })
+  });
+  var d = await r.json();
+  return (d.content && d.content[0] && d.content[0].text) ? d.content[0].text.trim() : "";
+}
+
+async function genSQL() {
+  var prompt = document.getElementById("nlpInp").value.trim();
+  if (!prompt) { toast("Type a description first","wa"); return; }
+  document.getElementById("nlpInp").disabled = true;
+  var sp = document.getElementById("nlpSpin"); sp.classList.add("go");
+  var mod = MODS[ST.mod];
+  var ctx = mod.tables.map(function(tn){
+    var t = SCH[tn]; return tn + "(" + (t ? t.cols.slice(0,6).map(function(c){return c.n;}).join(",") : "") + ")";
+  }).join("\n");
+  try {
+    var sql = await callAI(
+      'Convert to Oracle Fusion SQL for module "' + ST.mod + '":\n"' + prompt + '"\n\nKey tables:\n' + ctx + '\n\nReturn ONLY clean SQL, no explanation, no backticks.',
+      700,
+      'Oracle Fusion SQL expert. Module: ' + ST.mod + '. Use FETCH FIRST N ROWS ONLY. Return ONLY the SQL query.'
+    );
+    if (sql) {
+      document.getElementById("sqled").value = sql;
+      document.getElementById("nlpInp").value = "";
+      updateLines();
+      toast("SQL generated — press Run", "ok");
+    }
+  } catch(e) { toast("AI unavailable: "+e.message,"er"); }
+  sp.classList.remove("go");
+  document.getElementById("nlpInp").disabled = false;
+}
+
+async function explainSQL() {
+  var sql = document.getElementById("sqled").value.trim();
+  if (!sql) { toast("Nothing to explain","wa"); return; }
+  var sp = document.getElementById("nlpSpin"); sp.classList.add("go");
+  document.getElementById("nlpInp").value = "Explaining...";
+  try {
+    var r = await callAI("Explain this Oracle Fusion SQL in 2-3 plain English sentences:\n" + sql, 200);
+    document.getElementById("nlpInp").value = r;
+  } catch(e) { document.getElementById("nlpInp").value = ""; }
+  sp.classList.remove("go");
+}
+
+async function suggestJoin() {
+  var sql = document.getElementById("sqled").value.trim();
+  var sp = document.getElementById("nlpSpin"); sp.classList.add("go");
+  var mod = MODS[ST.mod];
+  var ctx = mod.tables.map(function(tn){
+    var t = SCH[tn]; return tn + " PK:" + (t ? t.pk : "");
+  }).join("\n");
+  try {
+    var r = await callAI(
+      "Current SQL:\n" + (sql||"(empty)") + "\n\nAvailable tables:\n" + ctx + "\n\nSuggest a useful JOIN or generate a multi-table query. Return ONLY SQL.",
+      700
+    );
+    if (r) { document.getElementById("sqled").value = r; updateLines(); toast("JOIN suggested","ok"); }
+  } catch(e) { toast("AI unavailable","er"); }
+  sp.classList.remove("go");
+}
+
+// ═══════════════ CONNECTION ═══════════════
+async function doConnect() {
+  var url = document.getElementById("fUrl").value.trim();
+  var user = document.getElementById("fUser").value.trim();
+  var pass = document.getElementById("fPass").value.trim();
+  if (!url || !user || !pass) { toast("Fill all fields","er"); return; }
+  var sp = document.getElementById("connSpin"); sp.classList.add("go");
+  try {
+    var ok = false;
+    try {
+      var resp = await fetch(url.replace(/\/$/,"") + "/fscmRestApi/resources/latest/", {
+        headers:{"Authorization":"Basic " + btoa(user+":"+pass)},
+        signal: AbortSignal.timeout(8000)
+      });
+      if (resp.status === 401) { toast("Server reached but credentials rejected","er"); sp.classList.remove("go"); return; }
+      ok = resp.ok;
+    } catch(e) {
+      ok = /oraclecloud\.com|oracledemos\.com|fa\./i.test(url);
+    }
+    if (ok || url.length > 10) {
+      Object.assign(ST, {conn:true, url:url, user:user, pass:pass});
+      // Save to localStorage so they persist across reloads
+      localStorage.setItem("fxconn", JSON.stringify({url:url, user:user, pass:pass}));
+      document.getElementById("dot").className = "dot on";
+      document.getElementById("connLbl").textContent = url.replace("https://","").split("/")[0].slice(0,38);
+      document.getElementById("btnDisconn").style.display = "inline-flex";
+      closeModal("connModal");
+      toast("Connected ✓ (credentials saved)","ok");
+    } else { toast("Cannot reach URL","er"); }
+  } catch(e) { toast("Error: " + e.message,"er"); }
+  sp.classList.remove("go");
+}
+
+// ═══════════════ RUN QUERY ═══════════════
+async function runQuery() {
+  var sql = document.getElementById("sqled").value.trim();
+  if (!sql) { toast("Write a query first","er"); return; }
+  document.getElementById("prog").className = "prog run";
+  document.getElementById("emptyState").style.display = "none";
+  document.getElementById("resTbl").style.display = "none";
+  document.getElementById("resCnt").textContent = "Running...";
+  ["resTm","resSt","resEp"].forEach(function(id){ document.getElementById(id).textContent=""; });
+  document.getElementById("filtInp").value = "";
+  ["btnXls","btnCsv","btnJson"].forEach(function(id){ document.getElementById(id).disabled=true; });
+  var t0 = Date.now();
+  try {
+    var cols, rows, ep = "demo";
+    if (ST.conn && ST.url) {
+      try { var res = await queryREST(sql); cols=res.cols; rows=res.rows; ep=res.ep; }
+      catch(e) { var res2 = await aiData(sql); cols=res2.cols; rows=res2.rows; }
+    } else {
+      var res3 = await aiData(sql); cols=res3.cols; rows=res3.rows;
+    }
+    ST.cols=cols; ST.allRows=rows; ST.filtRows=rows;
+    renderResults(cols, rows, ((Date.now()-t0)/1000).toFixed(2), ep);
+  } catch(e) {
+    document.getElementById("resSt").innerHTML = '<span style="color:var(--err)">Error: '+e.message+'</span>';
+    document.getElementById("resCnt").textContent = "0 rows";
+    toast("Error: "+e.message,"er");
+  }
+  document.getElementById("prog").className = "prog";
+}
+
+var REST_MAP = {
+  HZ_PARTIES:"/crmRestApi/resources/latest/accounts",
+  HZ_CUST_ACCOUNTS:"/crmRestApi/resources/latest/accounts",
+  AP_INVOICES_ALL:"/fscmRestApi/resources/latest/invoices",
+  PO_HEADERS_ALL:"/fscmRestApi/resources/latest/purchaseOrders",
+  PA_PROJECTS_ALL:"/fscmRestApi/resources/latest/projects",
+  PER_ALL_PEOPLE_F:"/hcmRestApi/resources/latest/workers"
+};
+
+async function queryREST(sql) {
+  var base = ST.url.replace(/\/$/,"");
+  var creds = btoa(ST.user+":"+ST.pass);
+  var hdrs = {"Authorization":"Basic "+creds,"Content-Type":"application/json","Accept":"application/json"};
+  var m = sql.match(/FROM\s+(\w+)/i);
+  var tn = m ? m[1].toUpperCase() : "";
+  var ep = REST_MAP[tn] || "/fscmRestApi/resources/latest/";
+  var lim = document.getElementById("rowLim").value;
+  document.getElementById("resEp").textContent = "→ " + ep;
+  var r = await fetch(base+ep+"?limit="+lim+"&onlyData=true", {headers:hdrs, signal:AbortSignal.timeout(15000)});
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  var data = await r.json();
+  var items = data.items || data.value || [];
+  if (!items.length) return {cols:["Result"],rows:[["No data returned"]],ep:ep};
+  var cols = Object.keys(items[0]);
+  return {cols:cols, rows:items.map(function(i){ return cols.map(function(c){ return i[c]!=null?i[c]:null; }); }), ep:ep};
+}
+
+async function aiData(sql) {
+  var m = sql.match(/FROM\s+(\w+)/i);
+  var tn = m ? m[1].toUpperCase() : "HZ_PARTIES";
+  var tbl = SCH[tn];
+  var colHint = tbl ? "Use columns: " + tbl.cols.slice(0,10).map(function(c){return c.n;}).join(", ") : "";
+  var txt = await callAI(
+    "Simulate Oracle Fusion data for:\n" + sql + "\n" + colHint + "\nReturn ONLY JSON (no markdown): {\"columns\":[...],\"rows\":[[...],...]}\nGenerate 12-16 realistic rows.",
+    1200,
+    "Oracle Fusion data simulator. Return ONLY valid JSON. No markdown, no backticks, no explanation."
+  );
+  var parsed = JSON.parse(txt.replace(/\u0060\u0060\u0060json|\u0060\u0060\u0060/g,"").trim());
+  return {cols:parsed.columns, rows:parsed.rows};
+}
+
+// ═══════════════ RENDER ═══════════════
+function renderResults(cols, rows, elapsed, ep) {
+  var lim = parseInt(document.getElementById("rowLim").value);
+  var display = rows.slice(0, lim);
+  document.getElementById("resCnt").innerHTML = '<span class="res-cnt">'+display.length+'</span> rows';
+  document.getElementById("resTm").textContent = elapsed ? elapsed+"s" : "";
+  document.getElementById("resSt").innerHTML = (ep && ep.indexOf("demo")===-1)
+    ? '<span style="color:var(--ok)">&#10003; Live</span>'
+    : '<span style="color:var(--a4)">&#9672; Demo</span>';
+  document.getElementById("filtCnt").textContent = display.length + " of " + rows.length;
+  var tbl = document.getElementById("resTbl");
+  var ths = cols.map(function(c,i){ return "<th id='th_"+i+"'>"+c+"</th>"; }).join("");
+  var trs = display.map(function(row, ri){
+    var tds = row.map(function(cell, ci){
+      if (cell===null||cell===undefined||String(cell).trim()==="") return '<td class="nul">—</td>';
+      var s = String(cell), col = cols[ci]||"", cls="";
+      if (/^\d+(\.\d+)?$/.test(s) && !col.endsWith("_ID") && col.indexOf("SEGMENT")===-1) cls="num";
+      else if (s==="A"||s==="ACTIVE"||s==="Y"||s==="Posted") cls="act";
+      else if (s==="I"||s==="INACTIVE"||s==="N") cls="ina";
+      else if (col.indexOf("DATE")!==-1||/^\d{4}-\d{2}-\d{2}/.test(s)) cls="dt";
+      return '<td class="'+cls+'" title="'+s+'">'+s+'</td>';
+    }).join("");
+    return "<tr><td class='rn'>"+(ri+1)+"</td>"+tds+"</tr>";
+  }).join("");
+  tbl.innerHTML = "<thead><tr><th class='rn'>#</th>"+ths+"</tr></thead><tbody>"+trs+"</tbody>";
+  tbl.style.display = "table";
+  document.getElementById("emptyState").style.display = "none";
+  ["btnXls","btnCsv","btnJson"].forEach(function(id){ document.getElementById(id).disabled=false; });
+
+  // Attach sort handlers
+  cols.forEach(function(c, i){
+    var th = document.getElementById("th_"+i);
+    if (th) th.addEventListener("click", function(){ sortBy(i); });
+  });
+
+  // Attach row click handlers for detail view
+  var tbodyRows = document.querySelectorAll("#resTbl tbody tr");
+  tbodyRows.forEach(function(tr, ri){
+    tr.addEventListener("click", function(){
+      var rowData = display[ri];
+      openRowDetail(rowData, cols, ri);
+    });
+  });
+}
+
+function openRowDetail(row, cols, rowIdx) {
+  var overlay = document.getElementById("rdOverlay");
+  var grid = document.getElementById("rdGrid");
+  var title = document.getElementById("rdTitle");
+  var sub = document.getElementById("rdSubtitle");
+
+  // Find best title field
+  var nameFields = ["PARTY_NAME","ORGANIZATION_NAME","FULL_NAME","NAME","INVOICE_NUM","ACCOUNT_NAME","ACCOUNT_NUMBER","SEGMENT1","TRX_NUMBER","TASK_NAME","PROJECT_NAME"];
+  var titleVal = "Record " + (rowIdx+1);
+  nameFields.forEach(function(f){
+    var idx2 = cols.indexOf(f);
+    if (idx2 !== -1 && row[idx2]) titleVal = String(row[idx2]);
+  });
+  title.textContent = titleVal;
+  sub.textContent = "Row " + (rowIdx+1) + " · " + cols.length + " fields";
+
+  grid.innerHTML = "";
+  cols.forEach(function(col, i){
+    var val = row[i];
+    var div = document.createElement("div");
+    div.className = "rd-field";
+    var valStr = (val === null || val === undefined) ? "NULL" : String(val);
+    var valClass = "rd-value";
+    if (val === null || val === undefined || valStr === "") valClass += " null-val";
+    else if (valStr === "A" || valStr === "ACTIVE" || valStr === "Y") valClass += " ok-val";
+    else if (valStr === "I" || valStr === "INACTIVE" || valStr === "N") valClass += " ina-val";
+    else if (/^\d+(\.\d+)?$/.test(valStr)) valClass += " num-val";
+    else if (/^\d{4}-\d{2}-\d{2}/.test(valStr) || col.indexOf("DATE") !== -1) valClass += " date-val";
+    div.innerHTML = '<div class="rd-label">' + col + '</div><div class="' + valClass + '">' + (valStr||'—') + '</div>';
+    grid.appendChild(div);
+  });
+
+  overlay.classList.add("open");
+}
+
+function closeRowDetail() {
+  document.getElementById("rdOverlay").classList.remove("open");
+}
+
+function filterResults() {
+  var q = document.getElementById("filtInp").value.toLowerCase();
+  ST.filtRows = q
+    ? ST.allRows.filter(function(r){ return r.some(function(c){ return String(c||"").toLowerCase().indexOf(q)!==-1; }); })
+    : ST.allRows;
+  renderResults(ST.cols, ST.filtRows, "", "");
+}
+
+function sortBy(i) {
+  if (ST.sortCol===i) ST.sortDir*=-1; else { ST.sortCol=i; ST.sortDir=1; }
+  document.querySelectorAll(".res-tbl th").forEach(function(th, ti){
+    th.classList.remove("asc","desc");
+    if (ti-1===i) th.classList.add(ST.sortDir===1?"asc":"desc");
+  });
+  ST.filtRows.sort(function(a,b){
+    var av=a[i]!=null?a[i]:"", bv=b[i]!=null?b[i]:"";
+    var an=parseFloat(av), bn=parseFloat(bv);
+    if (!isNaN(an)&&!isNaN(bn)) return (an-bn)*ST.sortDir;
+    return String(av).localeCompare(String(bv))*ST.sortDir;
+  });
+  renderResults(ST.cols, ST.filtRows, "", "");
+}
+
+// ═══════════════ EXPORT ═══════════════
+function dl(name, content, type) {
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content],{type:type}));
+  a.download = name; a.click();
+}
+function exportCSV() {
+  if (!ST.filtRows.length) { toast("No results","er"); return; }
+  var rows = [ST.cols.join(",")].concat(ST.filtRows.map(function(r){ return r.map(function(c){ return '"'+(c!=null?c:"") + '"'; }).join(","); }));
+  dl("fusionx.csv", rows.join("\n"), "text/csv"); toast("CSV exported","ok");
+}
+function exportJSON() {
+  if (!ST.filtRows.length) { toast("No results","er"); return; }
+  dl("fusionx.json", JSON.stringify(ST.filtRows.map(function(r){ var o={}; ST.cols.forEach(function(c,i){o[c]=r[i];}); return o; }),null,2), "application/json");
+  toast("JSON exported","ok");
+}
+function exportXLSX() {
+  if (!ST.filtRows.length) { toast("No results","er"); return; }
+  var ws = XLSX.utils.aoa_to_sheet([ST.cols].concat(ST.filtRows));
+  ws["!cols"] = ST.cols.map(function(c,i){ return {wch:Math.min(Math.max(c.length, ...ST.filtRows.map(function(r){ return String(r[i]||"").length; }))+2,42)}; });
+  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Fusion Data");
+  XLSX.writeFile(wb, "fusionx.xlsx"); toast("Excel exported","ok");
+}
+
+// ═══════════════ SAVE / HISTORY ═══════════════
+function openSave() {
+  if (!document.getElementById("sqled").value.trim()) { toast("Nothing to save","wa"); return; }
+  document.getElementById("saveName").value = "";
+  openModal("saveModal");
+  setTimeout(function(){ document.getElementById("saveName").focus(); }, 100);
+}
+function doSave() {
+  var name = document.getElementById("saveName").value.trim();
+  if (!name) { toast("Enter a name","er"); return; }
+  ST.saved.unshift({id:Date.now(), name:name, sql:document.getElementById("sqled").value.trim(), mod:ST.mod, ts:new Date().toLocaleTimeString()});
+  if (ST.saved.length>60) ST.saved=ST.saved.slice(0,60);
+  localStorage.setItem("fxq", JSON.stringify(ST.saved));
+  closeModal("saveModal"); buildHistory(); toast("Saved: "+name,"ok");
+}
+function buildHistory() {
+  var wrap = document.getElementById("histArea");
+  document.getElementById("histBadge").textContent = ST.saved.length;
+  if (!ST.saved.length) { wrap.innerHTML='<div class="hist-empty">No saved queries</div>'; return; }
+  wrap.innerHTML = ST.saved.map(function(q){
+    return '<div class="hist-row" data-id="'+q.id+'"><span style="color:var(--a5)">&#9672;</span><span class="hist-nm" title="'+q.name+'">'+q.name+'</span><span style="font-size:9px;color:var(--t3)">'+q.ts+'</span><span class="hist-del" data-id="'+q.id+'">&#10005;</span></div>';
+  }).join("");
+  wrap.querySelectorAll(".hist-row").forEach(function(row){
+    row.addEventListener("click", function(e){
+      if (e.target.classList.contains("hist-del")) {
+        var id = parseInt(e.target.dataset.id);
+        ST.saved = ST.saved.filter(function(x){ return x.id!==id; });
+        localStorage.setItem("fxq", JSON.stringify(ST.saved)); buildHistory(); return;
+      }
+      var id = parseInt(row.dataset.id);
+      var q = ST.saved.find(function(x){ return x.id===id; });
+      if (q) { document.getElementById("sqled").value=q.sql; updateLines(); if(MODS[q.mod])selMod(q.mod); toast("Loaded: "+q.name,"inf"); }
+    });
+  });
+}
+
+// ═══════════════ KB PANEL ═══════════════
+function toggleKb() {
+  ST.kbOpen = !ST.kbOpen;
+  document.getElementById("kb-panel").classList.toggle("open", ST.kbOpen);
+}
+
+// ═══════════════ WIRE UP EVENTS ═══════════════
+document.addEventListener("DOMContentLoaded", function() {
+
+  // Set default SQL
+  document.getElementById("sqled").value = "SELECT\n  p.PARTY_NAME,\n  p.PARTY_NUMBER,\n  p.PARTY_TYPE,\n  p.STATUS,\n  p.EMAIL_ADDRESS,\n  p.PRIMARY_PHONE_NUMBER,\n  p.CITY,\n  p.STATE,\n  p.CREATION_DATE\nFROM HZ_PARTIES p\nWHERE p.PARTY_TYPE = 'ORGANIZATION'\n  AND p.STATUS = 'A'\nFETCH FIRST 100 ROWS ONLY";
+  updateLines();
+
+  // Build sidebar
+  buildMods();
+  buildTables("CX Sales");
+  buildHistory();
+
+  // Connection
+  document.getElementById("connPill").addEventListener("click", function(){ openModal("connModal"); });
+  document.getElementById("connOk").addEventListener("click", doConnect);
+  document.getElementById("connCancel").addEventListener("click", function(){ closeModal("connModal"); });
+  document.getElementById("fPass").addEventListener("keydown", function(e){ if(e.key==="Enter") doConnect(); });
+
+  // Save
+  document.getElementById("btnSave").addEventListener("click", openSave);
+  document.getElementById("saveOk").addEventListener("click", doSave);
+  document.getElementById("saveCancel").addEventListener("click", function(){ closeModal("saveModal"); });
+  document.getElementById("saveName").addEventListener("keydown", function(e){ if(e.key==="Enter") doSave(); });
+
+  // Run
+  document.getElementById("btnRun").addEventListener("click", runQuery);
+
+  // Toolbar
+  document.getElementById("btnFmt").addEventListener("click", fmtSQL);
+  document.getElementById("btnClr").addEventListener("click", clearEd);
+  document.getElementById("btnExplain").addEventListener("click", explainSQL);
+  document.getElementById("btnJoin").addEventListener("click", suggestJoin);
+  document.getElementById("btnGenSql").addEventListener("click", genSQL);
+  document.getElementById("nlpInp").addEventListener("keydown", function(e){ if(e.key==="Enter") genSQL(); });
+
+  // Export
+  document.getElementById("btnXls").addEventListener("click", exportXLSX);
+  document.getElementById("btnCsv").addEventListener("click", exportCSV);
+  document.getElementById("btnJson").addEventListener("click", exportJSON);
+  document.getElementById("resXls").addEventListener("click", exportXLSX);
+  document.getElementById("resCsv").addEventListener("click", exportCSV);
+  document.getElementById("resJson").addEventListener("click", exportJSON);
+
+  // Sidebar
+  document.getElementById("sbTog").addEventListener("click", toggleSb);
+  document.getElementById("sbOpenBtn").addEventListener("click", toggleSb);
+  document.getElementById("tblSearch").addEventListener("input", filterTables);
+
+  // Schema panel
+  document.getElementById("schemaClose").addEventListener("click", closeSchema);
+
+  // Tabs
+  document.getElementById("tabAdd").addEventListener("click", newTab);
+  document.getElementById("tab_1").querySelector(".tab-x").addEventListener("click", function(e){ e.stopPropagation(); closeTab("tab_1"); });
+  document.getElementById("tab_1").addEventListener("click", function(){ switchTab("tab_1"); });
+
+  // Editor
+  document.getElementById("sqled").addEventListener("keydown", edKey);
+  document.getElementById("sqled").addEventListener("input", updateLines);
+  document.getElementById("sqled").addEventListener("scroll", syncLnums);
+
+  // Filter
+  document.getElementById("filtInp").addEventListener("input", filterResults);
+
+  // Themes
+  document.querySelectorAll(".th").forEach(function(btn){
+    btn.addEventListener("click", function(){ setTheme(btn.dataset.t); });
+  });
+
+  // KB
+  document.getElementById("btnKb").addEventListener("click", toggleKb);
+  document.getElementById("kbClose").addEventListener("click", toggleKb);
+  document.getElementById("rdClose").addEventListener("click", closeRowDetail);
+  document.getElementById("btnDisconn").addEventListener("click", function(){
+    localStorage.removeItem("fxconn");
+    Object.assign(ST, {conn:false, url:"", user:"", pass:""});
+    document.getElementById("dot").className = "dot";
+    document.getElementById("connLbl").textContent = "Click to connect";
+    document.getElementById("btnDisconn").style.display = "none";
+    toast("Disconnected — credentials cleared","inf");
+  });
+  document.getElementById("rdOverlay").addEventListener("click", function(e){ if(e.target===this) closeRowDetail(); });
+
+  // Global keyboard
+  document.addEventListener("keydown", function(e){
+    var M = e.metaKey || e.ctrlKey;
+    if (e.key==="?" && !e.target.matches("input,textarea")) { toggleKb(); return; }
+    if (M && e.key==="Enter") { e.preventDefault(); runQuery(); }
+    if (M && e.key==="s") { e.preventDefault(); openSave(); }
+    if (M && e.key==="t") { e.preventDefault(); newTab(); }
+    if (M && e.key==="b") { e.preventDefault(); toggleSb(); }
+    if (M && e.key==="l") { e.preventDefault(); document.getElementById("nlpInp").focus(); }
+    if (M && e.key==="f") { e.preventDefault(); document.getElementById("filtInp").focus(); }
+    if (M && e.key==="e" && !e.shiftKey) { e.preventDefault(); exportXLSX(); }
+    if (M && e.shiftKey && e.key==="E") { e.preventDefault(); exportCSV(); }
+    if (M && e.shiftKey && e.key==="F") { e.preventDefault(); fmtSQL(); }
+    if (M && e.key==="ArrowUp") { e.preventDefault(); var ep=document.getElementById("ed-pane"); ep.style.height=Math.min(ep.offsetHeight+40,600)+"px"; }
+    if (M && e.key==="ArrowDown") { e.preventDefault(); var ep2=document.getElementById("ed-pane"); ep2.style.height=Math.max(ep2.offsetHeight-40,80)+"px"; }
+  });
+
+  // Restore saved credentials
+  var saved = localStorage.getItem("fxconn");
+  if (saved) {
+    try {
+      var creds = JSON.parse(saved);
+      document.getElementById("fUrl").value  = creds.url  || "";
+      document.getElementById("fUser").value = creds.user || "";
+      document.getElementById("fPass").value = creds.pass || "";
+      // Auto-reconnect silently
+      if (creds.url && creds.user && creds.pass) {
+        Object.assign(ST, {conn:true, url:creds.url, user:creds.user, pass:creds.pass});
+        document.getElementById("dot").className = "dot on";
+        document.getElementById("connLbl").textContent = creds.url.replace("https://","").split("/")[0].slice(0,38);
+        document.getElementById("btnDisconn").style.display = "inline-flex";
+        toast("Auto-connected to " + creds.url.replace("https://","").split("/")[0].slice(0,30),"ok");
+        return; // skip opening modal
+      }
+    } catch(e) {}
+  }
+  // No saved creds — open modal
+  setTimeout(function(){ openModal("connModal"); }, 300);
+});
+
+</script>
+</body>
+</html>

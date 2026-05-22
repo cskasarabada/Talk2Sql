@@ -1,0 +1,45 @@
+{
+  "name": "talk2sql",
+  "version": "1.0.0",
+  "description": "Talk2Sql — Personal Oracle Fusion Explorer",
+  "main": "main.js",
+  "author": "Chandra Kasarabada",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.ck.talk2sql",
+    "productName": "Talk2Sql",
+    "files": ["main.js","preload.js","renderer/**/*","assets/**/*"],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "darkModeSupport": true,
+      "target": [
+        {"target":"dmg","arch":["x64","arm64"]},
+        {"target":"zip","arch":["x64","arm64"]}
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {"target":"nsis","arch":["x64"]},
+        {"target":"portable","arch":["x64"]}
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}

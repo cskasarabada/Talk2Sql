@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#0f1117"/>
+  <rect x="40" y="40" width="432" height="432" rx="80" fill="#161b27"/>
+  <!-- Database cylinder -->
+  <ellipse cx="256" cy="160" rx="130" ry="35" fill="#4dabf7" opacity="0.9"/>
+  <rect x="126" y="160" width="260" height="120" fill="#1971c2"/>
+  <ellipse cx="256" cy="280" rx="130" ry="35" fill="#4dabf7" opacity="0.9"/>
+  <!-- Lightning bolt / SQL symbol -->
+  <path d="M276 185 L236 260 L266 260 L236 335 L296 245 L264 245 Z" fill="#fcc419"/>
+  <!-- Bottom accent line -->
+  <rect x="80" y="380" width="352" height="6" rx="3" fill="#4dabf7" opacity="0.4"/>
+  <rect x="80" y="396" width="220" height="6" rx="3" fill="#4dabf7" opacity="0.25"/>
+</svg>
