@@ -1,4 +1,5 @@
 name: Build & Release
+
 on:
   push:
     tags: ['v*']
@@ -10,22 +11,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 18 }
+        with:
+          node-version: 20
       - run: npm install
       - run: npm run build:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v4
-        with: { name: mac-build, path: dist/*.dmg }
+        with:
+          name: mac-build
+          path: dist/*.dmg
 
   build-win:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 18 }
+        with:
+          node-version: 20
       - run: npm install
       - run: npm run build:win
       - uses: actions/upload-artifact@v4
-        with: { name: win-build, path: dist/*.exe }
+        with:
+          name: win-build
+          path: dist/*.exe
 
   release:
     needs: [build-mac, build-win]
@@ -33,7 +42,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v4
-        with: { path: artifacts }
+        with:
+          path: artifacts
       - uses: softprops/action-gh-release@v1
         with:
           files: |
