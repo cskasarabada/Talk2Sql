@@ -79,6 +79,15 @@ ipcMain.handle('save-file', async (event, { filename, data, type }) => {
   return { success: false };
 });
 
+ipcMain.handle('toggle-maximize', () => {
+  if (!win) return;
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+});
+
 app.whenReady().then(() => {
   createWindow();
   buildMenu();
