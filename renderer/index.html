@@ -4326,8 +4326,9 @@ async function cfgBR100(){
       +(aiNarrative?'<span style="font-size:9px;background:#7c3aed22;color:#9f67fa;padding:2px 8px;border-radius:8px">✦ AI Enhanced</span>':'')
       +'</div>'
       +'<div style="display:flex;gap:6px">'
-      +'<button class="btn b-ghost" onclick="cfgShowGrid(cfgData,CFG_MODS[cfgMod].items.find(function(i){return i.id===cfgItemId}),0)" style="font-size:10px">← Grid</button>'
-      +'<button class="btn b-out" onclick="cfgPrintBR100()" style="font-size:10px">🖨 Print / PDF</button>'
+      +'<button class="btn b-ghost" onclick="if(cfgData&&cfgData.length){var _m=CFG_MODS[cfgMod];var _i=_m?_m.items.find(function(i){return i.id===cfgItemId;}):null;cfgShowGrid(cfgData,_i||{id:cfgItemId,label:cfgItemId,icon:\'📄\'},0);}" style="font-size:10px">← Grid</button>'
+      +'<button class="btn b-out" onclick="cfgDownloadWord()" style="font-size:10px">↓ Word</button>'
+      +'<button class="btn b-ghost" onclick="cfgPrintBR100()" style="font-size:10px">🖨 Print</button>'
       +'</div>';
   }
   if(body)body.innerHTML=html;
@@ -4342,6 +4343,41 @@ function cfgPrintBR100(){
   w.document.write('</body></html>');
   w.document.close();w.focus();
   setTimeout(function(){w.print();},600);
+}
+
+function cfgDownloadWord(){
+  var doc=document.querySelector('.br100-doc');if(!doc)return;
+  var mod=CFG_MODS[cfgMod];
+  var item=mod?mod.items.find(function(i){return i.id===cfgItemId;}):null;
+  var fname=(item?item.label.replace(/[^a-z0-9]/gi,'_'):'BR100')+'_'+new Date().toISOString().slice(0,10)+'.doc';
+  var wordCSS=[
+    'body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.6;margin:1in;color:#1a1a2e}',
+    'h1{font-size:28pt;font-weight:900;text-align:center;letter-spacing:-1px;color:#1a1a2e;margin-bottom:6pt}',
+    'h2{font-size:14pt;font-weight:700;border-bottom:2pt solid #1a1a2e;padding-bottom:4pt;margin:18pt 0 8pt;color:#1a1a2e}',
+    '.br100-cover{text-align:center;padding:40pt 0 24pt;border-bottom:2pt solid #1a1a2e;margin-bottom:24pt}',
+    '.br100-title{font-size:18pt;font-weight:700;margin:10pt 0 4pt}',
+    '.br100-sub{color:#555;margin:3pt 0;font-size:10pt}',
+    'table{width:100%;border-collapse:collapse;margin-bottom:14pt;font-size:10pt;page-break-inside:avoid}',
+    'th{background:#f0f4f8;padding:6pt 8pt;text-align:left;font-weight:700;border:1pt solid #cfd9e8}',
+    'td{padding:5pt 8pt;border:1pt solid #cfd9e8;vertical-align:top}',
+    'tr:nth-child(even) td{background:#f7f9fc}',
+    '.br100-section{margin-bottom:18pt}',
+    '.br100-section-hd{font-size:13pt;font-weight:700;border-bottom:1pt solid #cfd9e8;padding-bottom:4pt;margin-bottom:10pt;color:#1a2332}',
+    'p{margin:6pt 0;font-size:11pt}',
+    '.br100-logo{font-size:28pt;font-weight:900}',
+    '[style*="font-size:9px"],[style*="font-size:8px"]{display:none}'  /* hide UI badges */
+  ].join('\n');
+  var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">'
+    +'<head><meta charset="utf-8"><meta name="ProgId" content="Word.Document">'
+    +'<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->'
+    +'<style>'+wordCSS+'</style></head><body>'+doc.innerHTML+'</body></html>';
+  var blob=new Blob(['﻿'+html],{type:'application/msword;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=fname;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  toast('Word document downloaded','ok');
 }
 
 /* ── SNAPSHOT ── */
@@ -5015,6 +5051,7 @@ var ORACLE_EP = {
 };
 
 /* Full Config Snapshot definition — ALL config items per module with REST endpoints */
+/* CONFIG_SNAPSHOT — config objects only, no transactional or master data */
 var CONFIG_SNAPSHOT = {
   om: {
     label:'Order Management Config Snapshot', icon:'🛒', color:'#69db7c',
@@ -5022,27 +5059,25 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Setup',
         items:[
-          {id:'snap_bu',  label:'Business Units',             ep:ORACLE_EP.businessUnits,    params:''},
-          {id:'snap_cust',label:'Customer Accounts',          ep:ORACLE_EP.accounts,         params:'limit=200'},
-          {id:'snap_le',  label:'Legal Entities',             ep:ORACLE_EP.legalEntities,    params:''},
-          {id:'snap_loc', label:'Locations',                  ep:ORACLE_EP.locations,        params:'limit=200'},
-          {id:'snap_inv', label:'Inventory Organizations',    ep:ORACLE_EP.inventoryOrgs,    params:'limit=100'},
-          {id:'snap_uom', label:'Units of Measure',           ep:ORACLE_EP.uom,              params:''},
+          {id:'snap_bu',  label:'Business Units',             ep:ORACLE_EP.businessUnits,     params:''},
+          {id:'snap_le',  label:'Legal Entities',             ep:ORACLE_EP.legalEntities,     params:''},
+          {id:'snap_loc', label:'Locations',                  ep:ORACLE_EP.locations,         params:'limit=200'},
+          {id:'snap_inv', label:'Inventory Organizations',    ep:ORACLE_EP.inventoryOrgs,     params:'limit=100'},
+          {id:'snap_uom', label:'Units of Measure',           ep:ORACLE_EP.uom,               params:''},
         ]
       },
       {
         label:'Pricing Configuration',
         items:[
-          {id:'snap_pl',  label:'Price Lists',                ep:ORACLE_EP.priceLists,       params:'limit=200'},
-          {id:'snap_ps',  label:'Pricing Strategies',         ep:ORACLE_EP.pricingStrategies,params:'limit=100'},
+          {id:'snap_pl',  label:'Price Lists',                ep:ORACLE_EP.priceLists,        params:'limit=200'},
+          {id:'snap_ps',  label:'Pricing Strategies',         ep:ORACLE_EP.pricingStrategies, params:'limit=100'},
         ]
       },
       {
-        label:'Order Processing',
+        label:'Order Processing Setup',
         items:[
           {id:'snap_src', label:'Source Order Systems',       ep:ORACLE_EP.sourceOrderSystems,params:''},
-          {id:'snap_appr',label:'Approval Tasks (Orders)',    ep:ORACLE_EP.approvalTasks,    params:''},
-          {id:'snap_car', label:'Shipping Carriers',          ep:ORACLE_EP.shippingCarriers, params:''},
+          {id:'snap_car', label:'Shipping Carriers',          ep:ORACLE_EP.shippingCarriers,  params:''},
         ]
       }
     ]
@@ -5053,28 +5088,26 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Structures',
         items:[
-          {id:'hsnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,    params:''},
-          {id:'hsnap_le',  label:'Legal Entities',            ep:ORACLE_EP.legalEntities,    params:''},
-          {id:'hsnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,        params:'limit=200'},
-          {id:'hsnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,       params:'limit=200'},
+          {id:'hsnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
+          {id:'hsnap_le',  label:'Legal Entities',            ep:ORACLE_EP.legalEntities,     params:''},
+          {id:'hsnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,         params:'limit=200'},
+          {id:'hsnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,        params:'limit=200'},
         ]
       },
       {
         label:'Workforce Structures',
         items:[
-          {id:'hsnap_wkr', label:'Workers (Active)',          ep:ORACLE_EP.workers,          params:'limit=300'},
-          {id:'hsnap_dep', label:'Departments',               ep:ORACLE_EP.departments,      params:'limit=200'},
-          {id:'hsnap_job', label:'Jobs',                      ep:ORACLE_EP.jobs,             params:'limit=200'},
-          {id:'hsnap_grd', label:'Grades',                    ep:ORACLE_EP.grades,           params:'limit=100'},
-          {id:'hsnap_pos', label:'Positions',                 ep:ORACLE_EP.positions,        params:'limit=200'},
+          {id:'hsnap_dep', label:'Departments',               ep:ORACLE_EP.departments,       params:'limit=200'},
+          {id:'hsnap_job', label:'Jobs',                      ep:ORACLE_EP.jobs,              params:'limit=200'},
+          {id:'hsnap_grd', label:'Grades',                    ep:ORACLE_EP.grades,            params:'limit=100'},
+          {id:'hsnap_pos', label:'Positions',                 ep:ORACLE_EP.positions,         params:'limit=200'},
         ]
       },
       {
         label:'Payroll & Statutory',
         items:[
-          {id:'hsnap_ldg', label:'Legislative Data Groups',   ep:ORACLE_EP.ldg,              params:'limit=50'},
-          {id:'hsnap_icp', label:'ICM Participants',          ep:ORACLE_EP.participants,     params:'limit=300'},
-          {id:'hsnap_rol', label:'Compensation Roles',        ep:ORACLE_EP.icmRoles,         params:'limit=100'},
+          {id:'hsnap_ldg', label:'Legislative Data Groups',   ep:ORACLE_EP.ldg,               params:'limit=50'},
+          {id:'hsnap_rol', label:'Compensation Roles',        ep:ORACLE_EP.icmRoles,          params:'limit=100'},
         ]
       }
     ]
@@ -5085,25 +5118,17 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Supply Chain Structures',
         items:[
-          {id:'ssnap_inv', label:'Inventory Organizations',   ep:ORACLE_EP.inventoryOrgs,    params:'limit=100'},
-          {id:'ssnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,        params:'limit=200'},
-          {id:'ssnap_uom', label:'Units of Measure',          ep:ORACLE_EP.uom,              params:''},
-          {id:'ssnap_car', label:'Shipping Carriers',         ep:ORACLE_EP.shippingCarriers, params:''},
-        ]
-      },
-      {
-        label:'Procurement',
-        items:[
-          {id:'ssnap_sup', label:'Supplier Master',           ep:ORACLE_EP.suppliers,        params:'limit=300'},
-          {id:'ssnap_po',  label:'Purchase Orders',           ep:ORACLE_EP.purchaseOrders,   params:'limit=200'},
-          {id:'ssnap_apr', label:'PO Approval Tasks',         ep:ORACLE_EP.approvalTasks,    params:''},
+          {id:'ssnap_inv', label:'Inventory Organizations',   ep:ORACLE_EP.inventoryOrgs,     params:'limit=100'},
+          {id:'ssnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,         params:'limit=200'},
+          {id:'ssnap_uom', label:'Units of Measure',          ep:ORACLE_EP.uom,               params:''},
+          {id:'ssnap_car', label:'Shipping Carriers',         ep:ORACLE_EP.shippingCarriers,  params:''},
         ]
       },
       {
         label:'Cost Management',
         items:[
-          {id:'ssnap_co',  label:'Cost Organizations',        ep:ORACLE_EP.costOrganizations,params:'limit=50'},
-          {id:'ssnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,    params:''},
+          {id:'ssnap_co',  label:'Cost Organizations',        ep:ORACLE_EP.costOrganizations, params:'limit=50'},
+          {id:'ssnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
         ]
       }
     ]
@@ -5112,85 +5137,69 @@ var CONFIG_SNAPSHOT = {
     label:'ERP Financials Config Snapshot', icon:'💰', color:'#4dabf7',
     groups:[
       {
-        label:'General Ledger (The 4 Cs)',
+        label:'General Ledger Setup',
         items:[
-          {id:'fsnap_led', label:'Ledgers',                   ep:ORACLE_EP.ledgers,          params:'limit=50'},
-          {id:'fsnap_cal', label:'Accounting Calendars',      ep:ORACLE_EP.acctCalendars,    params:'limit=50'},
-          {id:'fsnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,       params:'limit=200'},
-          {id:'fsnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,    params:''},
-          {id:'fsnap_le',  label:'Legal Entities',            ep:ORACLE_EP.legalEntities,    params:''},
-          {id:'fsnap_jou', label:'GL Journals (Open)',        ep:ORACLE_EP.glJournals,       params:'limit=200'},
+          {id:'fsnap_led', label:'Ledgers',                   ep:ORACLE_EP.ledgers,           params:'limit=50'},
+          {id:'fsnap_cal', label:'Accounting Calendars',      ep:ORACLE_EP.acctCalendars,     params:'limit=50'},
+          {id:'fsnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,        params:'limit=200'},
+          {id:'fsnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
+          {id:'fsnap_le',  label:'Legal Entities',            ep:ORACLE_EP.legalEntities,     params:''},
         ]
       },
       {
-        label:'Accounts Payable / Receivable',
+        label:'Banking Setup',
         items:[
-          {id:'fsnap_inv', label:'AP Invoices',               ep:ORACLE_EP.invoices,         params:'limit=200'},
-          {id:'fsnap_ar',  label:'AR Transactions',           ep:ORACLE_EP.creditMemos,      params:'limit=200'},
-          {id:'fsnap_bnk', label:'Banks',                     ep:ORACLE_EP.banks,            params:'limit=100'},
-          {id:'fsnap_bba', label:'Bank Branches',             ep:ORACLE_EP.bankBranches,     params:'limit=100'},
-          {id:'fsnap_bac', label:'Bank Accounts',             ep:ORACLE_EP.bankAccounts,     params:'limit=100'},
-          {id:'fsnap_apr', label:'Approval Tasks (Finance)',  ep:ORACLE_EP.approvalTasks,    params:''},
+          {id:'fsnap_bnk', label:'Banks',                     ep:ORACLE_EP.banks,             params:'limit=100'},
+          {id:'fsnap_bba', label:'Bank Branches',             ep:ORACLE_EP.bankBranches,      params:'limit=100'},
+          {id:'fsnap_bac', label:'Bank Accounts',             ep:ORACLE_EP.bankAccounts,      params:'limit=100'},
         ]
       },
       {
         label:'Fixed Assets',
         items:[
-          {id:'fsnap_ab',  label:'Asset Books',               ep:ORACLE_EP.assetBooks,       params:'limit=50'},
-          {id:'fsnap_ac',  label:'Asset Categories',          ep:ORACLE_EP.assetCategories,  params:'limit=100'},
+          {id:'fsnap_ab',  label:'Asset Books',               ep:ORACLE_EP.assetBooks,        params:'limit=50'},
+          {id:'fsnap_ac',  label:'Asset Categories',          ep:ORACLE_EP.assetCategories,   params:'limit=100'},
           {id:'fsnap_dm',  label:'Depreciation Methods',      ep:ORACLE_EP.depreciationMethods,params:'limit=100'},
         ]
       }
     ]
   },
   cx: {
-    label:'CX Cloud Config Snapshot', icon:'🤝', color:'#ff6b6b',
+    label:'CX Cloud Config Snapshot', icon:'🤝', color:'#38b6ff',
     groups:[
       {
-        label:'Customer Data',
+        label:'Enterprise Setup',
         items:[
-          {id:'csnap_acc', label:'Customer Accounts',         ep:ORACLE_EP.accounts,         params:'limit=300'},
-          {id:'csnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,        params:'limit=200'},
-          {id:'csnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,       params:'limit=200'},
+          {id:'csnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
+          {id:'csnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,         params:'limit=200'},
+          {id:'csnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,        params:'limit=200'},
         ]
       },
       {
-        label:'Sales Performance (ICM)',
+        label:'Sales Config (ICM)',
         items:[
-          {id:'csnap_pln', label:'Compensation Plans',        ep:ORACLE_EP.compPlans,        params:'limit=100'},
-          {id:'csnap_prt', label:'ICM Participants',          ep:ORACLE_EP.participants,     params:'limit=300'},
-          {id:'csnap_ern', label:'Earnings Records',          ep:ORACLE_EP.earnings,         params:'limit=200'},
-          {id:'csnap_rol', label:'Compensation Roles',        ep:ORACLE_EP.icmRoles,         params:'limit=100'},
-          {id:'csnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,    params:''},
+          {id:'csnap_pln', label:'Compensation Plans',        ep:ORACLE_EP.compPlans,         params:'limit=100'},
+          {id:'csnap_rol', label:'Compensation Roles',        ep:ORACLE_EP.icmRoles,          params:'limit=100'},
         ]
       },
       {
-        label:'Sales & Service Ops',
+        label:'Pricing Setup',
         items:[
-          {id:'csnap_apr', label:'Approval Tasks',            ep:ORACLE_EP.approvalTasks,    params:''},
-          {id:'csnap_ps',  label:'Pricing Strategies',        ep:ORACLE_EP.pricingStrategies,params:'limit=100'},
-          {id:'csnap_pl',  label:'Price Lists',               ep:ORACLE_EP.priceLists,       params:'limit=200'},
+          {id:'csnap_ps',  label:'Pricing Strategies',        ep:ORACLE_EP.pricingStrategies, params:'limit=100'},
+          {id:'csnap_pl',  label:'Price Lists',               ep:ORACLE_EP.priceLists,        params:'limit=200'},
         ]
       }
     ]
   },
   icm: {
-    label:'ICM Deep Config Snapshot', icon:'🎯', color:'#ff6b6b',
+    label:'ICM Config Snapshot', icon:'🎯', color:'#ff6b6b',
     groups:[
       {
         label:'Plan Architecture',
         items:[
-          {id:'isnap_pln', label:'Compensation Plans',        ep:ORACLE_EP.compPlans,        params:'limit=100'},
-          {id:'isnap_rol', label:'ICM Roles',                 ep:ORACLE_EP.icmRoles,         params:'limit=100'},
-          {id:'isnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,    params:''},
-        ]
-      },
-      {
-        label:'Participant Data',
-        items:[
-          {id:'isnap_prt', label:'Participants',              ep:ORACLE_EP.participants,     params:'limit=300'},
-          {id:'isnap_ern', label:'Earnings Records',          ep:ORACLE_EP.earnings,         params:'limit=200'},
-          {id:'isnap_wkr', label:'Workers (HCM)',             ep:ORACLE_EP.workers,          params:'limit=300'},
+          {id:'isnap_pln', label:'Compensation Plans',        ep:ORACLE_EP.compPlans,         params:'limit=100'},
+          {id:'isnap_rol', label:'ICM Roles',                 ep:ORACLE_EP.icmRoles,          params:'limit=100'},
+          {id:'isnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
         ]
       }
     ]
@@ -5371,7 +5380,11 @@ async function cfgSnapBR100(){
       +'<span style="font-size:12px;font-weight:800;color:var(--t1)">📄 Config Snapshot BR100 — '+snap.label+'</span>'
       +(aiText?'<span style="font-size:9px;background:#7c3aed22;color:#9f67fa;padding:2px 8px;border-radius:8px">✦ AI</span>':'')
       +'</div>'
-      +'<button class="btn b-out" onclick="cfgPrintBR100()" style="font-size:10px">🖨 Print / PDF</button>';
+      +'<div style="display:flex;gap:6px">'
+      +'<button class="btn b-ghost" onclick="cfgRunSnapshot()" style="font-size:10px">← Snapshot</button>'
+      +'<button class="btn b-out" onclick="cfgDownloadWord()" style="font-size:10px">↓ Word</button>'
+      +'<button class="btn b-ghost" onclick="cfgPrintBR100()" style="font-size:10px">🖨 Print</button>'
+      +'</div>';
   }
 
   var sectionsHtml='';
