@@ -9,7 +9,7 @@ Talk2Sql is distributed **unsigned** (no paid code-signing certificate), so the 
 This message appears on Apple Silicon (M1/M2/M3) Macs because the `.dmg` was downloaded from the internet and macOS applies a *quarantine* flag to unsigned apps. The app is fine — you just need to clear that flag.
 
 ### Step 1 — Install normally
-1. Open the `.dmg` (e.g. `Talk2Sql-2.0.1-arm64.dmg`).
+1. Open the `.dmg` (e.g. `Talk2Sql-2.0.5-arm64.dmg`).
 2. Drag **Talk2Sql** into your **Applications** folder.
 3. Eject the `.dmg`.
 
@@ -38,7 +38,7 @@ SmartScreen warns about installers it hasn't seen signed by a known publisher. T
 
 1. When the blue **"Windows protected your PC"** box appears, click **More info**.
 2. Click the **Run anyway** button that appears.
-3. Continue through the Talk2Sql setup (`Talk2Sql.Setup.2.0.1.exe`).
+3. Continue through the Talk2Sql setup (`Talk2Sql.Setup.2.0.5.exe`).
 
 ### If Defender Antivirus quarantines the file
 Occasionally Defender's real-time scan may flag a brand-new unsigned `.exe`. If the installer disappears or is blocked:
