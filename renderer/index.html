@@ -4072,7 +4072,8 @@ function cfgShowEmpty(){
     body.innerHTML='<div style="padding:16px">'
       +'<div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:4px">'+(mod?mod.icon+' '+mod.label:'')+' Configuration</div>'
       +'<div style="font-size:10px;color:var(--t3);margin-bottom:16px;line-height:1.7">'
-      +'Select a config object from the left, then click <strong>⚡ Extract Live</strong> to pull from Oracle Fusion. '
+      +'<strong>How to use:</strong> (1) Click an item in the left panel → (2) Click <strong>⚡ Extract</strong> in the toolbar → (3) View live data → (4) Click <strong>📄 BR100</strong> to generate Word doc.<br><br>'
+      +'Select a config object from the left, then click <strong>⚡ Extract</strong> to pull from Oracle Fusion. '
       +'Extracted data can be exported as Excel, CSV, or a BR100 setup document.</div>'
       +(mod?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">'
         +mod.items.map(function(it){
@@ -4100,10 +4101,44 @@ function cfgShowEmpty(){
 /* ── EXTRACT ── */
 function cfgExtract(){
   var mod=CFG_MODS[cfgMod];
-  if(!cfgItemId||!mod){toast('Select a config object first','wa');return;}
-  if(!ST.conn||!ST.url){openModal('connModal');return;}
+  var body=document.getElementById('cfg-result-body');
+  var hd=document.getElementById('cfg-result-hd');
+
+  /* Step 1: Must select an item from left sidebar */
+  if(!cfgItemId||!mod){
+    toast('← Select a config item from the left panel first','wa');
+    if(body) body.innerHTML='<div class="cfg-empty">'
+      +'<div style="font-size:32px;margin-bottom:12px">👈</div>'
+      +'<div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:8px">Select a Config Item First</div>'
+      +'<div style="font-size:10px;color:var(--t3);max-width:300px;line-height:1.8;text-align:center">'
+      +'Click any item in the <strong>left panel</strong> to select it,<br>then click <strong>⚡ Extract</strong> to pull live data from Oracle Fusion.</div>'
+      +'<div style="margin-top:16px;display:flex;align-items:center;gap:10px;font-size:10px;color:var(--t3)">'
+      +'<span style="background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:6px 12px">1️⃣ Pick module tab</span>'
+      +'<span>→</span>'
+      +'<span style="background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:6px 12px">2️⃣ Click item in sidebar</span>'
+      +'<span>→</span>'
+      +'<span style="background:var(--a1)22;border:1px solid var(--a1)44;border-radius:6px;padding:6px 12px;color:var(--a1)">3️⃣ ⚡ Extract</span>'
+      +'</div></div>';
+    return;
+  }
+
+  /* Step 2: Must be connected to Oracle */
+  if(!ST.conn||!ST.url){
+    toast('Connect to Oracle Fusion first','wa');
+    if(body) body.innerHTML='<div class="cfg-empty">'
+      +'<div style="font-size:32px;margin-bottom:12px">🔌</div>'
+      +'<div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:8px">Not Connected</div>'
+      +'<div style="font-size:10px;color:var(--t3);max-width:280px;text-align:center;line-height:1.8">Connect to Oracle Fusion using the connection pill in the top bar, then click Extract.</div>'
+      +'<button class="btn b-blue" onclick="openModal(\'connModal\')" style="margin-top:14px;font-size:11px">🔌 Connect to Oracle</button>'
+      +'</div>';
+    return;
+  }
+
   var item=mod.items.find(function(i){return i.id===cfgItemId;});
-  if(!item){toast('Select a config item from the left panel first','wa');return;}
+  if(!item){
+    toast('Config item not available for direct extract','wa');
+    return;
+  }
 
   var hd=document.getElementById('cfg-result-hd');
   var body=document.getElementById('cfg-result-body');
