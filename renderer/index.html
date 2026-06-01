@@ -46,6 +46,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 .sep{width:1px;height:22px;background:var(--b1);flex-shrink:0}
 .conn-pill{display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;background:var(--s3);border:1px solid var(--b1);font-size:11px;color:var(--t2);cursor:pointer;font-family:var(--mono)}
 .conn-pill:hover{border-color:var(--a1);color:var(--t1)}
+.prof-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;cursor:pointer;border:1px solid var(--b1);background:var(--s3);color:var(--t3);white-space:nowrap;transition:all .15s;letter-spacing:.2px}
+.prof-chip:hover{border-color:var(--a1);color:var(--t1);background:var(--s2)}
+.prof-chip.active{border-color:#51cf66;color:#51cf66;background:#51cf6611}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0}
 .dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -404,10 +407,21 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     <input id="fApiKey" type="password" placeholder="YOUR_ANTHROPIC_API_KEY..."/>
     <div style="font-size:9px;color:var(--t3);margin-top:3px">console.anthropic.com</div>
   </div>
+  <div class="field" style="margin-top:10px">
+    <label>Role / Access Level</label>
+    <select id="fRole" style="width:100%;background:var(--bg2);border:1px solid var(--b1);border-radius:5px;color:var(--t1);padding:5px 8px;font-size:11px">
+      <option value="">🔧 Admin — All Modules</option>
+      <option value="scm">📦 SCM_IMPL — Supply Chain &amp; Order Mgmt</option>
+      <option value="crm">🎯 ICM / CRM — Sales &amp; Compensation</option>
+      <option value="fin">💰 FIN_IMPL — Finance &amp; GL</option>
+      <option value="hcm">👥 HCM_IMPL — Human Capital Mgmt</option>
+      <option value="cx">🤝 CX — Sales Cloud</option>
+    </select>
+  </div>
   <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
     <div style="flex:1">
       <div style="font-size:9px;color:var(--t3);margin-bottom:3px">SAVE AS PROFILE</div>
-      <input id="fProfName" style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--b1);border-radius:5px;color:var(--t1);padding:5px 8px;font-size:11px" placeholder="e.g. Production / UAT / Demo"/>
+      <input id="fProfName" style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--b1);border-radius:5px;color:var(--t1);padding:5px 8px;font-size:11px" placeholder="e.g. SCM_IMPL Demo / FIN Prod / ICM UAT"/>
     </div>
     <button class="btn b-out" id="fSaveProf" onclick="window._saveConnProf()" style="font-size:11px;white-space:nowrap;flex-shrink:0">Save Profile</button>
   </div>
@@ -440,6 +454,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
   <div class="sep"></div>
   <div class="conn-pill" id="connPill"><div class="dot" id="dot"></div><span id="connLbl">Click to connect</span></div>
   <button class="btn b-ghost" id="btnDisconn" style="font-size:10px;padding:3px 8px;display:none">✕</button>
+  <div id="profileSwitcher" style="display:flex;align-items:center;gap:3px;margin-left:4px"></div>
   <div class="sep"></div>
   
   <button class="btn b-out" id="btnConfig" title="App Configurations" style="font-size:11px">⚙ Config</button>
@@ -5005,16 +5020,15 @@ initCfg=function(){
 /* Complete Oracle Fusion REST endpoint registry */
 var ORACLE_EP = {
   /* Enterprise / Common */
-  /* businessUnits: full endpoint needs Financial Application Administrator role
-     LOV variant is accessible to more roles (read-only, returns name/id) */
-  businessUnits:       '/fscmRestApi/resources/latest/businessUnitsLOV',
-  /* legalEntities: needs Application Implementation Consultant — try procurement variant */
-  legalEntities:       '/fscmRestApi/resources/latest/legalEntitiesForProcurement',
+  /* businessUnits: accessible to SCM_IMPL / Supply Chain Application Administrator */
+  businessUnits:       '/fscmRestApi/resources/latest/businessUnits',
+  /* legalEntities: needs Application Implementation Consultant or Setup Admin */
+  legalEntities:       '/fscmRestApi/resources/latest/legalEntities',
   currencies:          '/fscmRestApi/resources/latest/currencies',
   locations:           '/hcmRestApi/resources/latest/locations',               /* ✅ confirmed */
   inventoryOrgs:       '/fscmRestApi/resources/latest/inventoryOrganizations', /* ✅ confirmed */
-  /* uom: Supply Chain Admin role required on fscm path — try HCM path */
-  uom:                 '/hcmRestApi/resources/latest/unitOfMeasures',
+  /* uom: accessible to SCM_IMPL / Supply Chain Application Administrator */
+  uom:                 '/fscmRestApi/resources/latest/unitOfMeasures',
   /* HCM — confirmed working */
   workers:             '/hcmRestApi/resources/latest/workers',                 /* ✅ confirmed */
   departments:         '/hcmRestApi/resources/latest/organizationDepartments',
@@ -5038,14 +5052,14 @@ var ORACLE_EP = {
   /* SCM */
   suppliers:           '/fscmRestApi/resources/latest/suppliers',
   purchaseOrders:      '/fscmRestApi/resources/latest/purchaseOrders',
-  /* shippingCarriers: Shipping Manager role required — try logistics path */
-  shippingCarriers:    '/logisticsRestApi/resources/latest/carriers',
+  /* shippingCarriers: accessible to SCM_IMPL / Shipping Manager */
+  shippingCarriers:    '/fscmRestApi/resources/latest/shippingCarriers',
   costOrganizations:   '/fscmRestApi/resources/latest/costOrganizations',
   /* Order Management */
   priceLists:          '/fscmRestApi/resources/latest/priceLists',             /* ✅ confirmed */
   pricingStrategies:   '/fscmRestApi/resources/latest/pricingStrategies',      /* ✅ confirmed */
-  /* sourceOrderSystems: Order Administrator role required — try OMC path */
-  sourceOrderSystems:  '/omcRestApi/resources/latest/sourceSystems',
+  /* sourceOrderSystems: accessible to SCM_IMPL / Order Administrator */
+  sourceOrderSystems:  '/fscmRestApi/resources/latest/sourceOrderSystems',
   /* CRM / ICM */
   accounts:            '/crmRestApi/resources/latest/accounts',
   compPlans:           '/cxRestApi/resources/latest/incentiveCompensationPlans',
@@ -5955,14 +5969,14 @@ cfgRunAudit=function(){
 /* Oracle Fusion role required per endpoint */
 var ENDPOINT_ROLES = {
   /* Enterprise / Common — primary paths */
-  '/fscmRestApi/resources/latest/businessUnits':                  {role:'Financial Application Administrator', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/businessUnits':                  {role:'SCM_IMPL / Supply Chain Application Administrator', module:'Enterprise'},
   '/fscmRestApi/resources/latest/businessUnitsLOV':               {role:'Any authenticated user (LOV)', module:'Enterprise'},
   '/fscmRestApi/resources/latest/legalEntities':                  {role:'Application Implementation Consultant', module:'Enterprise'},
-  '/fscmRestApi/resources/latest/legalEntitiesForProcurement':    {role:'Procurement Application Administrator', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/legalEntitiesForProcurement':    {role:'SCM_IMPL / Procurement Application Administrator', module:'Enterprise'},
   '/fscmRestApi/resources/latest/currencies':                     {role:'Financial Application Administrator', module:'Enterprise'},
   '/hcmRestApi/resources/latest/locations':                       {role:'Human Resources Specialist', module:'HCM'},
-  '/fscmRestApi/resources/latest/inventoryOrganizations':         {role:'Inventory Manager', module:'SCM'},
-  '/fscmRestApi/resources/latest/unitOfMeasures':                 {role:'Supply Chain Application Administrator', module:'SCM'},
+  '/fscmRestApi/resources/latest/inventoryOrganizations':         {role:'SCM_IMPL / Inventory Manager', module:'SCM'},
+  '/fscmRestApi/resources/latest/unitOfMeasures':                 {role:'SCM_IMPL / Supply Chain Application Administrator', module:'SCM'},
   '/hcmRestApi/resources/latest/unitOfMeasures':                  {role:'Human Resources Specialist', module:'HCM'},
   /* HCM */
   '/hcmRestApi/resources/latest/workers':                         {role:'Human Resources Specialist', module:'HCM'},
@@ -5988,13 +6002,13 @@ var ENDPOINT_ROLES = {
   /* SCM */
   '/fscmRestApi/resources/latest/suppliers':                      {role:'Procurement Manager', module:'SCM Procurement'},
   '/fscmRestApi/resources/latest/purchaseOrders':                 {role:'Buyer', module:'SCM Procurement'},
-  '/fscmRestApi/resources/latest/shippingCarriers':               {role:'Shipping Manager', module:'SCM Shipping'},
+  '/fscmRestApi/resources/latest/shippingCarriers':               {role:'SCM_IMPL / Shipping Manager', module:'SCM Shipping'},
   '/logisticsRestApi/resources/latest/carriers':                  {role:'Shipping Manager', module:'SCM Shipping'},
-  '/fscmRestApi/resources/latest/costOrganizations':              {role:'Cost Accountant Manager', module:'Cost Management'},
+  '/fscmRestApi/resources/latest/costOrganizations':              {role:'SCM_IMPL / Cost Accountant Manager', module:'Cost Management'},
   /* OM */
-  '/fscmRestApi/resources/latest/priceLists':                     {role:'Pricing Manager', module:'Order Management'},
-  '/fscmRestApi/resources/latest/pricingStrategies':              {role:'Pricing Manager', module:'Order Management'},
-  '/fscmRestApi/resources/latest/sourceOrderSystems':             {role:'Order Administrator', module:'Order Management'},
+  '/fscmRestApi/resources/latest/priceLists':                     {role:'SCM_IMPL / Pricing Manager', module:'Order Management'},
+  '/fscmRestApi/resources/latest/pricingStrategies':              {role:'SCM_IMPL / Pricing Manager', module:'Order Management'},
+  '/fscmRestApi/resources/latest/sourceOrderSystems':             {role:'SCM_IMPL / Order Administrator', module:'Order Management'},
   '/omcRestApi/resources/latest/sourceSystems':                   {role:'Order Administrator', module:'Order Management'},
   /* CRM */
   '/crmRestApi/resources/latest/accounts':                        {role:'Sales Administrator', module:'CX Sales'},
@@ -6172,27 +6186,92 @@ function cfgPrintRolesReport(){
   }
   function saveP(a){ var s=JSON.stringify(a); KEYS.forEach(function(k){ try{localStorage.setItem(k,s);}catch(e){} }); }
 
-  function render(){
-    var list=document.getElementById('connProfileList');
-    if(!list) return;
-    var p=loadP();
-    if(!p.length){ list.innerHTML='<span style="font-size:10px;color:var(--t3)">No saved profiles yet</span>'; return; }
-    list.innerHTML=p.map(function(x,i){
-      var act=(typeof ST!=='undefined')&&ST.url===x.url&&ST.user===x.user;
-      return '<span style="display:inline-flex;align-items:center;gap:2px;margin:2px">'
-        +'<button class="btn b-out" style="font-size:10px;padding:3px 10px;'+(act?'border-color:#51cf66;color:#51cf66':'')+'" onclick="window._LP('+i+')">'+(act?'* ':'')+x.name+'</button>'
-        +'<button onclick="window._DP('+i+')" style="background:none;border:none;color:var(--err);cursor:pointer;font-size:14px;padding:0 4px">x</button>'
-        +'</span>';
+  /* Role → visible Config Extract module tabs */
+  var ROLE_MODULES = {
+    'scm': ['om','scm'],
+    'crm': ['cx','icm'],
+    'fin': ['fin'],
+    'hcm': ['hcm'],
+    'cx':  ['cx'],
+    'icm': ['icm'],
+    '':    ['om','hcm','scm','fin','cx','icm']
+  };
+
+  var ROLE_ICONS = {
+    'scm':'📦', 'crm':'🎯', 'fin':'💰', 'hcm':'👥', 'cx':'🤝', 'icm':'🎯', '':'🔧'
+  };
+
+  function cfgFilterModsByRole(role){
+    var allowed = ROLE_MODULES[role] || ROLE_MODULES[''];
+    /* Show/hide cfg module tabs */
+    document.querySelectorAll('#cfg-mod-tabs .ct').forEach(function(tab){
+      var m = tab.dataset.m;
+      tab.style.display = (allowed.indexOf(m) !== -1) ? '' : 'none';
+    });
+    /* If current cfgMod is hidden, switch to first allowed */
+    if(typeof cfgMod !== 'undefined' && allowed.indexOf(cfgMod) === -1){
+      if(typeof cfgSetMod === 'function') cfgSetMod(allowed[0]);
+    }
+  }
+
+  function updateConnUI(url, user, role){
+    var pill = document.getElementById('connPill');
+    var lbl  = document.getElementById('connLbl');
+    var dot  = document.getElementById('dot');
+    var disc = document.getElementById('btnDisconn');
+    if(lbl)  lbl.textContent = (url||'').replace('https://','').split('/')[0].slice(0,32);
+    if(dot)  dot.className = 'dot on';
+    if(disc) disc.style.display = 'inline-flex';
+    if(pill) pill.title = user + (role ? ' · ' + (ROLE_ICONS[role]||'') + ' ' + role.toUpperCase() : '');
+    renderTopbarSwitcher();
+  }
+
+  function renderTopbarSwitcher(){
+    var sw = document.getElementById('profileSwitcher'); if(!sw) return;
+    var profiles = loadP();
+    if(!profiles.length){ sw.innerHTML=''; return; }
+    sw.innerHTML = profiles.map(function(p,i){
+      var act = (typeof ST!=='undefined') && ST.url===p.url && ST.user===p.user;
+      var icon = ROLE_ICONS[p.role||''] || '🔧';
+      return '<span class="prof-chip'+(act?' active':'')+'" onclick="window._LP('+i+',true)" title="'+p.url+'\n'+p.user+(p.role?' · '+p.role:'')+'">'
+        +icon+' '+p.name+'</span>';
     }).join('');
   }
 
-  window._LP=function(i){
-    var p=loadP()[i]; if(!p) return;
+  function render(){
+    var list = document.getElementById('connProfileList'); if(!list) return;
+    var p = loadP();
+    if(!p.length){ list.innerHTML='<span style="font-size:10px;color:var(--t3)">No saved profiles yet</span>'; return; }
+    list.innerHTML = p.map(function(x,i){
+      var act = (typeof ST!=='undefined') && ST.url===x.url && ST.user===x.user;
+      var icon = ROLE_ICONS[x.role||''] || '🔧';
+      var roleLabel = x.role ? x.role.toUpperCase() : 'ALL';
+      return '<span style="display:inline-flex;align-items:center;gap:2px;margin:2px">'
+        +'<button class="btn b-out" style="font-size:10px;padding:3px 10px;'+(act?'border-color:#51cf66;color:#51cf66':'')+'" onclick="window._LP('+i+')">'
+        +icon+' '+x.name+' <span style="font-size:8px;opacity:.6">['+roleLabel+']</span></button>'
+        +'<button onclick="window._DP('+i+')" style="background:none;border:none;color:var(--err);cursor:pointer;font-size:14px;padding:0 4px" title="Delete">×</button>'
+        +'</span>';
+    }).join('');
+    renderTopbarSwitcher();
+  }
+
+  window._LP = function(i, instant){
+    var p = loadP()[i]; if(!p) return;
+    /* Always fill modal fields */
     function sv(id,v){var e=document.getElementById(id);if(e)e.value=v||'';}
-    sv('fUrl',p.url);sv('fUser',p.user);sv('fPass',p.pass);sv('fApiKey',p.apiKey||'');sv('fProfName',p.name);
-    if(typeof ST!=='undefined'){ST.url=p.url;ST.user=p.user;ST.pass=p.pass;if(p.apiKey)ST.apiKey=p.apiKey;ST.conn=true;}
+    sv('fUrl',p.url); sv('fUser',p.user); sv('fPass',p.pass||'');
+    sv('fApiKey',p.apiKey||''); sv('fProfName',p.name);
+    var roleEl=document.getElementById('fRole');
+    if(roleEl) roleEl.value = p.role||'';
+    /* Activate the connection immediately */
+    if(typeof ST!=='undefined'){
+      Object.assign(ST,{conn:true, url:p.url, user:p.user, pass:p.pass||'', apiKey:p.apiKey||ST.apiKey||''});
+    }
+    updateConnUI(p.url, p.user, p.role||'');
+    cfgFilterModsByRole(p.role||'');
     render();
-    if(typeof toast==='function') toast('Loaded: '+p.name,'ok');
+    if(instant){ closeModal('connModal'); }
+    if(typeof toast==='function') toast((instant?'Switched to: ':'Loaded: ')+p.name+(p.role?' ['+p.role.toUpperCase()+']':''),'ok');
   };
 
   window._DP=function(i){
@@ -6204,10 +6283,11 @@ function cfgPrintRolesReport(){
     var name=gv('fProfName'),url=gv('fUrl'),user=gv('fUser');
     var pass=(document.getElementById('fPass')||{}).value||'';
     var apiKey=gv('fApiKey');
+    var role=gv('fRole');
     if(!name||!url||!user){alert('Name, URL and username required');return;}
     var a=loadP();
     var idx=a.findIndex(function(p){return p.name===name;});
-    var prof={name:name,url:url.replace(/\/$/,''),user:user,pass:pass,apiKey:apiKey};
+    var prof={name:name,url:url.replace(/\/$/,''),user:user,pass:pass,apiKey:apiKey,role:role};
     if(idx>=0)a[idx]=prof;else a.push(prof);
     saveP(a);render();
     if(typeof toast==='function')toast('Profile "'+name+'" saved','ok');else alert('Saved!');
@@ -6227,12 +6307,16 @@ function cfgPrintRolesReport(){
 
   document.addEventListener('DOMContentLoaded',function(){
     wireAndRender();
+    renderTopbarSwitcher();
     var pill=document.getElementById('connPill');
     if(pill&&!pill._ph){pill.addEventListener('click',function(){setTimeout(wireAndRender,20);});pill._ph=true;}
   });
 
-  // Seed profile
-  var SEED=[{"name":"DEMO Argano","url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"John.Dunbar","pass":"J8?cZ2f#","apiKey":"YOUR_ANTHROPIC_API_KEY"}];
+  // Seed profiles — two users on the same demo instance with different access roles
+  var SEED=[
+    {"name":"John Dunbar Demo", "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"John.Dunbar","pass":"J8?cZ2f#","apiKey":"YOUR_ANTHROPIC_API_KEY","role":""},
+    {"name":"SCM_IMPL Demo",   "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"SCM_IMPL",   "pass":"Welcome1","apiKey":"YOUR_ANTHROPIC_API_KEY","role":"scm"}
+  ];
   var hasSeed=false;
   for(var ki=0;ki<KEYS.length;ki++){
     try{var rv=localStorage.getItem(KEYS[ki]);if(rv&&JSON.parse(rv).length>0){hasSeed=true;break;}}catch(e){}
