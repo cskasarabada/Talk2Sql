@@ -15,7 +15,7 @@ npm run build:mac   # Mac DMG (arm64 + x64)
 npm run build:win   # Windows installer + portable
 npm run build:all   # Both
 ```
-Releases are built by GitHub Actions on a version tag (`git tag v2.0.0 && git push origin v2.0.0`) — the `.dmg` and `.exe` are attached to the GitHub Release automatically.
+Releases are built by GitHub Actions on a version tag (`git tag v2.0.1 && git push origin v2.0.1`) — the `.dmg` and `.exe` are attached to the GitHub Release automatically.
 
 ## Installing a release
 The installers are unsigned, so macOS and Windows show a one-time security warning on first launch. This is expected — see **[INSTALL.md](INSTALL.md)** for the quick bypass (macOS "damaged / move to Trash" and Windows Defender SmartScreen). The macOS `Fix-macOS-Open.command` helper is attached to each release.
