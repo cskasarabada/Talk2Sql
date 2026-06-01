@@ -2108,7 +2108,7 @@ document.addEventListener("DOMContentLoaded",function(){
 #cfg-result-body{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .cfg-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;height:100%;padding:40px;text-align:center}
 /* BR100 document preview */
-.br100-wrap{padding:20px;background:var(--bg);min-height:100%}
+.br100-wrap{padding:20px;background:var(--bg);flex:1;overflow:auto;min-height:0}
 .br100-doc{background:#fff;color:#1a1a2e;max-width:720px;margin:0 auto;padding:40px;box-shadow:0 4px 24px #0003;border-radius:4px;font-family:Georgia,serif;font-size:12px;line-height:1.7}
 .br100-cover{text-align:center;padding:40px 0 30px;border-bottom:2px solid #1a1a2e;margin-bottom:30px}
 .br100-logo{font-size:32px;font-weight:900;letter-spacing:-1px;color:#1a1a2e}
@@ -5004,15 +5004,19 @@ initCfg=function(){
 
 /* Complete Oracle Fusion REST endpoint registry */
 var ORACLE_EP = {
-  /* Enterprise / Common — verified working paths */
-  businessUnits:       '/fscmRestApi/resources/latest/businessUnits',
-  legalEntities:       '/fscmRestApi/resources/latest/legalEntities',
+  /* Enterprise / Common */
+  /* businessUnits: full endpoint needs Financial Application Administrator role
+     LOV variant is accessible to more roles (read-only, returns name/id) */
+  businessUnits:       '/fscmRestApi/resources/latest/businessUnitsLOV',
+  /* legalEntities: needs Application Implementation Consultant — try procurement variant */
+  legalEntities:       '/fscmRestApi/resources/latest/legalEntitiesForProcurement',
   currencies:          '/fscmRestApi/resources/latest/currencies',
-  locations:           '/hcmRestApi/resources/latest/locations',          /* ✅ confirmed */
+  locations:           '/hcmRestApi/resources/latest/locations',               /* ✅ confirmed */
   inventoryOrgs:       '/fscmRestApi/resources/latest/inventoryOrganizations', /* ✅ confirmed */
-  uom:                 '/fscmRestApi/resources/latest/unitOfMeasures',
+  /* uom: Supply Chain Admin role required on fscm path — try HCM path */
+  uom:                 '/hcmRestApi/resources/latest/unitOfMeasures',
   /* HCM — confirmed working */
-  workers:             '/hcmRestApi/resources/latest/workers',             /* ✅ confirmed */
+  workers:             '/hcmRestApi/resources/latest/workers',                 /* ✅ confirmed */
   departments:         '/hcmRestApi/resources/latest/organizationDepartments',
   jobs:                '/hcmRestApi/resources/latest/jobs',
   grades:              '/hcmRestApi/resources/latest/grades',
@@ -5034,12 +5038,14 @@ var ORACLE_EP = {
   /* SCM */
   suppliers:           '/fscmRestApi/resources/latest/suppliers',
   purchaseOrders:      '/fscmRestApi/resources/latest/purchaseOrders',
-  shippingCarriers:    '/fscmRestApi/resources/latest/shippingCarriers',
+  /* shippingCarriers: Shipping Manager role required — try logistics path */
+  shippingCarriers:    '/logisticsRestApi/resources/latest/carriers',
   costOrganizations:   '/fscmRestApi/resources/latest/costOrganizations',
   /* Order Management */
-  priceLists:          '/fscmRestApi/resources/latest/priceLists',
-  pricingStrategies:   '/fscmRestApi/resources/latest/pricingStrategies',     /* ✅ confirmed */
-  sourceOrderSystems:  '/fscmRestApi/resources/latest/sourceOrderSystems',
+  priceLists:          '/fscmRestApi/resources/latest/priceLists',             /* ✅ confirmed */
+  pricingStrategies:   '/fscmRestApi/resources/latest/pricingStrategies',      /* ✅ confirmed */
+  /* sourceOrderSystems: Order Administrator role required — try OMC path */
+  sourceOrderSystems:  '/omcRestApi/resources/latest/sourceSystems',
   /* CRM / ICM */
   accounts:            '/crmRestApi/resources/latest/accounts',
   compPlans:           '/cxRestApi/resources/latest/incentiveCompensationPlans',
@@ -5948,49 +5954,55 @@ cfgRunAudit=function(){
 
 /* Oracle Fusion role required per endpoint */
 var ENDPOINT_ROLES = {
-  /* Enterprise / Common */
-  '/fscmRestApi/resources/latest/businessUnits':             {role:'Financial Application Administrator', module:'Enterprise'},
-  '/fscmRestApi/resources/latest/legalEntities':             {role:'Application Implementation Consultant', module:'Enterprise'},
-  '/fscmRestApi/resources/latest/currencies':                {role:'Financial Application Administrator', module:'Enterprise'},
-  '/hcmRestApi/resources/latest/locations':                  {role:'Human Resources Specialist', module:'HCM'},
-  '/fscmRestApi/resources/latest/inventoryOrganizations':    {role:'Inventory Manager', module:'SCM'},
-  '/fscmRestApi/resources/latest/unitOfMeasures':            {role:'Supply Chain Application Administrator', module:'SCM'},
+  /* Enterprise / Common — primary paths */
+  '/fscmRestApi/resources/latest/businessUnits':                  {role:'Financial Application Administrator', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/businessUnitsLOV':               {role:'Any authenticated user (LOV)', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/legalEntities':                  {role:'Application Implementation Consultant', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/legalEntitiesForProcurement':    {role:'Procurement Application Administrator', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/currencies':                     {role:'Financial Application Administrator', module:'Enterprise'},
+  '/hcmRestApi/resources/latest/locations':                       {role:'Human Resources Specialist', module:'HCM'},
+  '/fscmRestApi/resources/latest/inventoryOrganizations':         {role:'Inventory Manager', module:'SCM'},
+  '/fscmRestApi/resources/latest/unitOfMeasures':                 {role:'Supply Chain Application Administrator', module:'SCM'},
+  '/hcmRestApi/resources/latest/unitOfMeasures':                  {role:'Human Resources Specialist', module:'HCM'},
   /* HCM */
-  '/hcmRestApi/resources/latest/workers':                    {role:'Human Resources Specialist', module:'HCM'},
-  '/hcmRestApi/resources/latest/departments':                {role:'Human Resources Specialist', module:'HCM'},
-  '/hcmRestApi/resources/latest/jobs':                       {role:'Human Resources Specialist', module:'HCM'},
-  '/hcmRestApi/resources/latest/grades':                     {role:'Human Resources Specialist', module:'HCM'},
-  '/hcmRestApi/resources/latest/positions':                  {role:'Human Resources Specialist', module:'HCM'},
-  '/hcmRestApi/resources/latest/legislativeDataGroups':      {role:'Payroll Manager', module:'HCM Payroll'},
+  '/hcmRestApi/resources/latest/workers':                         {role:'Human Resources Specialist', module:'HCM'},
+  '/hcmRestApi/resources/latest/departments':                     {role:'Human Resources Specialist', module:'HCM'},
+  '/hcmRestApi/resources/latest/organizationDepartments':         {role:'Human Resources Specialist', module:'HCM'},
+  '/hcmRestApi/resources/latest/jobs':                            {role:'Human Resources Specialist', module:'HCM'},
+  '/hcmRestApi/resources/latest/grades':                          {role:'Human Resources Specialist', module:'HCM'},
+  '/hcmRestApi/resources/latest/positions':                       {role:'Human Resources Specialist', module:'HCM'},
+  '/hcmRestApi/resources/latest/legislativeDataGroups':           {role:'Payroll Manager', module:'HCM Payroll'},
   /* Finance */
-  '/fscmRestApi/resources/latest/ledgers':                   {role:'General Accountant Manager', module:'GL'},
-  '/fscmRestApi/resources/latest/accountingCalendars':       {role:'Financial Application Administrator', module:'GL'},
-  '/fscmRestApi/resources/latest/banks':                     {role:'Cash Manager', module:'Cash Management'},
-  '/fscmRestApi/resources/latest/bankBranches':              {role:'Cash Manager', module:'Cash Management'},
-  '/fscmRestApi/resources/latest/internalBankAccounts':      {role:'Cash Manager', module:'Cash Management'},
-  '/fscmRestApi/resources/latest/assetBooks':                {role:'Asset Manager', module:'Fixed Assets'},
-  '/fscmRestApi/resources/latest/assetCategories':           {role:'Asset Manager', module:'Fixed Assets'},
-  '/fscmRestApi/resources/latest/depreciationMethods':       {role:'Asset Manager', module:'Fixed Assets'},
+  '/fscmRestApi/resources/latest/ledgers':                        {role:'General Accountant Manager', module:'GL'},
+  '/fscmRestApi/resources/latest/accountingCalendars':            {role:'Financial Application Administrator', module:'GL'},
+  '/fscmRestApi/resources/latest/banks':                          {role:'Cash Manager', module:'Cash Management'},
+  '/fscmRestApi/resources/latest/bankBranches':                   {role:'Cash Manager', module:'Cash Management'},
+  '/fscmRestApi/resources/latest/internalBankAccounts':           {role:'Cash Manager', module:'Cash Management'},
+  '/fscmRestApi/resources/latest/assetBooks':                     {role:'Asset Manager', module:'Fixed Assets'},
+  '/fscmRestApi/resources/latest/assetCategories':                {role:'Asset Manager', module:'Fixed Assets'},
+  '/fscmRestApi/resources/latest/depreciationMethods':            {role:'Asset Manager', module:'Fixed Assets'},
   /* AP/AR */
-  '/fscmRestApi/resources/latest/invoices':                  {role:'Accounts Payable Manager', module:'AP'},
-  '/fscmRestApi/resources/latest/receivablesCreditMemos':    {role:'Accounts Receivable Manager', module:'AR'},
-  '/fscmRestApi/resources/latest/approvalTasks':             {role:'Any workflow participant role', module:'Workflow'},
+  '/fscmRestApi/resources/latest/invoices':                       {role:'Accounts Payable Manager', module:'AP'},
+  '/fscmRestApi/resources/latest/receivablesCreditMemos':         {role:'Accounts Receivable Manager', module:'AR'},
+  '/fscmRestApi/resources/latest/approvalTasks':                  {role:'Any workflow participant role', module:'Workflow'},
   /* SCM */
-  '/fscmRestApi/resources/latest/suppliers':                 {role:'Procurement Manager', module:'SCM Procurement'},
-  '/fscmRestApi/resources/latest/purchaseOrders':            {role:'Buyer', module:'SCM Procurement'},
-  '/fscmRestApi/resources/latest/shippingCarriers':          {role:'Shipping Manager', module:'SCM Shipping'},
-  '/fscmRestApi/resources/latest/costOrganizations':         {role:'Cost Accountant Manager', module:'Cost Management'},
+  '/fscmRestApi/resources/latest/suppliers':                      {role:'Procurement Manager', module:'SCM Procurement'},
+  '/fscmRestApi/resources/latest/purchaseOrders':                 {role:'Buyer', module:'SCM Procurement'},
+  '/fscmRestApi/resources/latest/shippingCarriers':               {role:'Shipping Manager', module:'SCM Shipping'},
+  '/logisticsRestApi/resources/latest/carriers':                  {role:'Shipping Manager', module:'SCM Shipping'},
+  '/fscmRestApi/resources/latest/costOrganizations':              {role:'Cost Accountant Manager', module:'Cost Management'},
   /* OM */
-  '/fscmRestApi/resources/latest/priceLists':                {role:'Pricing Manager', module:'Order Management'},
-  '/fscmRestApi/resources/latest/pricingStrategies':         {role:'Pricing Manager', module:'Order Management'},
-  '/fscmRestApi/resources/latest/sourceOrderSystems':        {role:'Order Administrator', module:'Order Management'},
+  '/fscmRestApi/resources/latest/priceLists':                     {role:'Pricing Manager', module:'Order Management'},
+  '/fscmRestApi/resources/latest/pricingStrategies':              {role:'Pricing Manager', module:'Order Management'},
+  '/fscmRestApi/resources/latest/sourceOrderSystems':             {role:'Order Administrator', module:'Order Management'},
+  '/omcRestApi/resources/latest/sourceSystems':                   {role:'Order Administrator', module:'Order Management'},
   /* CRM */
-  '/crmRestApi/resources/latest/accounts':                   {role:'Sales Administrator', module:'CX Sales'},
-  /* ICM (should work for John.Dunbar) */
-  '/cxRestApi/resources/latest/incentiveCompensationPlans':        {role:'Incentive Compensation Analyst', module:'ICM'},
-  '/cxRestApi/resources/latest/incentiveCompensationParticipants': {role:'Incentive Compensation Analyst', module:'ICM'},
-  '/cxRestApi/resources/latest/incentiveCompensationEarnings':     {role:'Incentive Compensation Analyst', module:'ICM'},
-  '/fscmRestApi/resources/latest/incentiveCompensationRoles':      {role:'Incentive Compensation Administrator', module:'ICM'},
+  '/crmRestApi/resources/latest/accounts':                        {role:'Sales Administrator', module:'CX Sales'},
+  /* ICM */
+  '/cxRestApi/resources/latest/incentiveCompensationPlans':       {role:'Incentive Compensation Analyst', module:'ICM'},
+  '/cxRestApi/resources/latest/incentiveCompensationParticipants':{role:'Incentive Compensation Analyst', module:'ICM'},
+  '/cxRestApi/resources/latest/incentiveCompensationEarnings':    {role:'Incentive Compensation Analyst', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationRoles':     {role:'Incentive Compensation Administrator', module:'ICM'},
 };
 
 /* Snapshot result tracker — populated by cfgRunSnapshot */
