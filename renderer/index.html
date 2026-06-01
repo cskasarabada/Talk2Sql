@@ -4049,61 +4049,122 @@ function cfgSetItem(id){
   if(snEl)snEl.disabled=!cfgSnapshots[cfgMod+'_'+cfgItemId];
 }
 
-/* ── Items sidebar ── */
-function cfgRenderItems(){
-  var il=document.getElementById('cfg-items-list');if(!il)return;
-  var mod=CFG_MODS[cfgMod];if(!mod){il.innerHTML='';return;}
-  il.innerHTML='<div style="padding:8px 12px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);border-bottom:1px solid var(--b1);background:var(--bg2)">'
-    +mod.icon+' '+mod.label+' Config Objects</div>'
-    +mod.items.map(function(item){
-      var on=item.id===cfgItemId;
-      var hasSnap=!!cfgSnapshots[cfgMod+'_'+item.id];
-      return'<div class="ci'+(on?' on':'')+'" onclick="cfgSetItem(\''+item.id+'\')">'
-        +'<div class="ci-top"><span class="ci-icon">'+item.icon+'</span>'
-        +'<span class="ci-label">'+item.label+'</span>'
-        +(hasSnap?'<span class="ci-badge" title="Snapshot saved">📸</span>':'')+'</div>'
-        +'<div class="ci-desc">'+item.desc+'</div>'
-        +'</div>';
-    }).join('');
+/* ── helper: flatten all taxonomy items (live + guide) for current module ── */
+function cfgModItems(){
+  var tax=(typeof CFG_TAXONOMY!=='undefined')?CFG_TAXONOMY[cfgMod]:null;
+  if(tax&&tax.sections){
+    var out=[];
+    tax.sections.forEach(function(sec){sec.items.forEach(function(it){out.push(it);});});
+    return out;
+  }
+  var mod=CFG_MODS[cfgMod];
+  return mod?mod.items:[];
+}
+function cfgIsLive(item){
+  return (typeof CFG_LIVE!=='undefined')?(item.type===CFG_LIVE):!!item.ep;
 }
 
-/* ── Empty / welcome state ── */
+/* ── Items sidebar — grouped by phase/section ── */
+function cfgRenderItems(){
+  var il=document.getElementById('cfg-items-list');if(!il)return;
+  var tax=(typeof CFG_TAXONOMY!=='undefined')?CFG_TAXONOMY[cfgMod]:null;
+  var mod=CFG_MODS[cfgMod];
+  if(!tax&&!mod){il.innerHTML='';return;}
+  var icon=tax?tax.icon:(mod?mod.icon:'');
+  var label=tax?tax.label:(mod?mod.label:'');
+  function renderItem(item){
+    var on=item.id===cfgItemId;
+    var hasSnap=!!cfgSnapshots[cfgMod+'_'+item.id];
+    var isLive=cfgIsLive(item);
+    return'<div class="ci'+(on?' on':'')+'" onclick="cfgSetItem(\''+item.id+'\')">'
+      +'<div class="ci-top"><span class="ci-icon">'+item.icon+'</span>'
+      +'<span class="ci-label">'+item.label+'</span>'
+      +(isLive?'<span class="ci-badge" title="Live REST extract" style="background:#51cf6622;color:#51cf66">⚡</span>':'')
+      +(hasSnap?'<span class="ci-badge" title="Snapshot saved">📸</span>':'')+'</div>'
+      +'<div class="ci-desc">'+item.desc+'</div>'
+      +'</div>';
+  }
+  var html='<div style="padding:8px 12px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);border-bottom:1px solid var(--b1);background:var(--bg2)">'
+    +icon+' '+label+' Config Objects</div>';
+  if(tax&&tax.sections){
+    tax.sections.forEach(function(sec){
+      html+='<div style="padding:7px 12px 5px;font-size:8.5px;font-weight:800;letter-spacing:.3px;color:var(--t2);background:var(--bg2);border-top:1px solid var(--b1);border-bottom:1px solid var(--b1)33">'+sec.label+'</div>';
+      html+=sec.items.map(renderItem).join('');
+    });
+  }else if(mod){
+    html+=mod.items.map(renderItem).join('');
+  }
+  il.innerHTML=html;
+}
+
+/* ── Empty / welcome state — landing lists every area grouped by phase ── */
 function cfgShowEmpty(){
   var hd=document.getElementById('cfg-result-hd');
   var body=document.getElementById('cfg-result-body');
   if(hd)hd.style.display='none';
+  var tax=(typeof CFG_TAXONOMY!=='undefined')?CFG_TAXONOMY[cfgMod]:null;
   var mod=CFG_MODS[cfgMod];
-  var item=mod&&cfgItemId?mod.items.find(function(i){return i.id===cfgItemId;}):null;
+  var color=(tax&&tax.color)?tax.color:(mod?mod.color:'#4dabf7');
+  var icon=tax?tax.icon:(mod?mod.icon:'');
+  var label=tax?tax.label:(mod?mod.label:'');
+  var allItems=cfgModItems();
+  var item=cfgItemId?allItems.find(function(i){return i.id===cfgItemId;}):null;
   if(!body)return;
 
   if(!item){
-    // Module landing — show health cards for all items
-    body.innerHTML='<div style="padding:16px">'
-      +'<div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:4px">'+(mod?mod.icon+' '+mod.label:'')+' Configuration</div>'
-      +'<div style="font-size:10px;color:var(--t3);margin-bottom:16px;line-height:1.7">'
-      +'<strong>How to use:</strong> (1) Click an item in the left panel → (2) Click <strong>⚡ Extract</strong> in the toolbar → (3) View live data → (4) Click <strong>📄 BR100</strong> to generate Word doc.<br><br>'
-      +'Select a config object from the left, then click <strong>⚡ Extract</strong> to pull from Oracle Fusion. '
-      +'Extracted data can be exported as Excel, CSV, or a BR100 setup document.</div>'
-      +(mod?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">'
+    // Module landing — every setup area grouped by phase
+    var liveCount=allItems.filter(cfgIsLive).length;
+    var phaseCount=(tax&&tax.sections)?tax.sections.length:1;
+    var h='<div style="padding:16px;overflow:auto">'
+      +'<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:4px">'+icon+' '+label+' Configuration</div>'
+      +'<div style="font-size:10px;color:var(--t3);margin-bottom:14px;line-height:1.7">'
+      +allItems.length+' setup areas across '+phaseCount+' phases · <span style="color:#51cf66">⚡ '+liveCount+' live-extractable</span>. '
+      +'Click any area for detail; ⚡ items pull live data from Oracle Fusion, 📋 items are configured in Setup &amp; Maintenance.</div>';
+    if(tax&&tax.sections){
+      tax.sections.forEach(function(sec){
+        h+='<div style="margin-bottom:14px">'
+          +'<div style="font-size:11px;font-weight:800;color:var(--t1);border-left:3px solid '+color+';padding-left:8px;margin-bottom:7px">'+sec.label
+          +'<span style="font-size:9px;font-weight:400;color:var(--t3);margin-left:8px">'+sec.desc+'</span></div>'
+          +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:8px">'
+          +sec.items.map(function(it){
+            var isLive=cfgIsLive(it);
+            return'<div onclick="cfgSetItem(\''+it.id+'\')" style="background:var(--bg2);border:1px solid var(--b1);border-radius:8px;padding:11px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor=\''+color+'\'" onmouseout="this.style.borderColor=\'\'">'
+              +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="font-size:18px">'+it.icon+'</span>'
+              +(isLive?'<span style="font-size:7.5px;font-weight:700;background:#51cf6622;color:#51cf66;padding:1px 5px;border-radius:7px">⚡ LIVE</span>':'<span style="font-size:7.5px;font-weight:700;background:#4dabf722;color:#4dabf7;padding:1px 5px;border-radius:7px">📋 SETUP</span>')
+              +'</div>'
+              +'<div style="font-size:11px;font-weight:700;color:var(--t1)">'+it.label+'</div>'
+              +'<div style="font-size:9px;color:var(--t3);margin-top:3px;line-height:1.45">'+it.desc+'</div>'
+              +'</div>';
+          }).join('')
+          +'</div></div>';
+      });
+    }else if(mod){
+      h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:8px">'
         +mod.items.map(function(it){
-          return'<div onclick="cfgSetItem(\''+it.id+'\')" style="background:var(--bg2);border:1px solid var(--b1);border-radius:8px;padding:12px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor=\''+mod.color+'\'" onmouseout="this.style.borderColor=\'\'">'
-            +'<div style="font-size:20px;margin-bottom:6px">'+it.icon+'</div>'
+          return'<div onclick="cfgSetItem(\''+it.id+'\')" style="background:var(--bg2);border:1px solid var(--b1);border-radius:8px;padding:11px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor=\''+color+'\'" onmouseout="this.style.borderColor=\'\'">'
+            +'<div style="font-size:18px;margin-bottom:5px">'+it.icon+'</div>'
             +'<div style="font-size:11px;font-weight:700;color:var(--t1)">'+it.label+'</div>'
-            +'<div style="font-size:9px;color:var(--t3);margin-top:3px;line-height:1.5">'+it.desc+'</div>'
+            +'<div style="font-size:9px;color:var(--t3);margin-top:3px;line-height:1.45">'+it.desc+'</div>'
             +'</div>';
         }).join('')
-        +'</div>':'')
-      +'</div>';
+        +'</div>';
+    }
+    h+='</div>';
+    body.innerHTML=h;
     return;
   }
 
+  // Item detail
+  var isLive=cfgIsLive(item);
   body.innerHTML='<div class="cfg-empty">'
     +'<div style="font-size:36px;margin-bottom:10px">'+item.icon+'</div>'
     +'<div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:6px">'+item.label+'</div>'
-    +'<div style="font-size:11px;color:var(--t3);max-width:320px;line-height:1.8;text-align:center">'+item.desc+'<br><br>'
-    +(ST.conn?'Click <strong>⚡ Extract Live</strong> to pull from Oracle Fusion.':'<span style="color:#fcc419">⚠ Connect to Oracle Fusion first</span>')
+    +'<div style="font-size:11px;color:var(--t3);max-width:340px;line-height:1.8;text-align:center">'+item.desc+'<br><br>'
+    +(isLive
+       ?(ST.conn?'Click <strong>⚡ Extract Live</strong> to pull from Oracle Fusion.':'<span style="color:#fcc419">⚠ Connect to Oracle Fusion first</span>')
+       :'<span style="color:#4dabf7">📋 Setup-only area</span><br><span style="font-size:10px;line-height:1.6">'+(item.guide||'Configured in Oracle Setup &amp; Maintenance.')+'</span>')
     +'</div>'
-    +(ST.conn?'<button class="btn b-blue" onclick="cfgExtract()" style="margin-top:14px;font-size:11px">⚡ Extract '+item.label+'</button>':'')
+    +(isLive&&ST.conn?'<button class="btn b-blue" onclick="cfgExtract()" style="margin-top:14px;font-size:11px">⚡ Extract '+item.label+'</button>':'')
     +'</div>';
 }
 
