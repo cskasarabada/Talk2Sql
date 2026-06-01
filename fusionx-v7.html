@@ -1,0 +1,2455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FusionX — Personal Oracle Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0f1117;--s1:#161b27;--s2:#1c2333;--s3:#232f45;--s4:#2a3a56;
+  --b1:#1e2d45;--b2:#2a3f5f;
+  --t1:#e8edf5;--t2:#8fa3be;--t3:#4a6585;--t4:#2a3f5f;
+  --a1:#4dabf7;--a2:#ff6b35;--a3:#51cf66;--a4:#fcc419;--a5:#cc5de8;--a6:#20c997;
+  --err:#ff4757;--ok:#2ed573;--warn:#ffa502;
+  --mono:'JetBrains Mono',monospace;--ui:'Plus Jakarta Sans',sans-serif;
+}
+[data-theme="light"]{--bg:#f0f4f8;--s1:#fff;--s2:#f7f9fc;--s3:#edf2f7;--s4:#e2e8f0;--b1:#d0dae8;--b2:#b8c9dc;--t1:#1a2332;--t2:#4a6585;--t3:#8fa3be;--t4:#c8d8e8;--a1:#1971c2;--a2:#e85d04;--a3:#2f9e44;--a4:#e67700;--a5:#862e9c;--a6:#0ca678}
+[data-theme="ocean"]{--bg:#0d1b2a;--s1:#112236;--s2:#162d45;--s3:#1c3854;--s4:#234468;--b1:#1e3a54;--b2:#2a4e70;--t1:#cce8ff;--t2:#6aabda;--t3:#3a7aaa;--t4:#1e3a54;--a1:#38b6ff;--a2:#ff7c43;--a3:#44d177;--a4:#ffd166;--a5:#c77dff;--a6:#06d6a0}
+[data-theme="solarized"]{--bg:#002b36;--s1:#073642;--s2:#083b47;--s3:#0d4455;--s4:#124e62;--b1:#1a5468;--b2:#256475;--t1:#fdf6e3;--t2:#93a1a1;--t3:#586e75;--t4:#1a5468;--a1:#268bd2;--a2:#cb4b16;--a3:#859900;--a4:#b58900;--a5:#6c71c4;--a6:#2aa198}
+[data-theme="hc"]{--bg:#000;--s1:#0a0a0a;--s2:#111;--s3:#1a1a1a;--s4:#222;--b1:#333;--b2:#444;--t1:#fff;--t2:#ccc;--t3:#888;--t4:#444;--a1:#00ff88;--a2:#ff4400;--a3:#00ffff;--a4:#ffff00;--a5:#ff00ff;--a6:#00ccff}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-size:13px}
+body{background:var(--bg);color:var(--t1);font-family:var(--ui);display:flex;flex-direction:column;transition:background .2s,color .2s}
+#topbar{height:46px;background:var(--s1);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0;z-index:50;box-shadow:0 1px 8px #0003}
+.logo{font-family:var(--ui);font-weight:800;font-size:16px;letter-spacing:-.6px;display:flex;align-items:center;gap:7px;white-space:nowrap;margin-right:4px}
+.logo-mark{width:28px;height:28px;background:linear-gradient(135deg,var(--a1),var(--a5));border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff}
+.logo-ver{font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px}
+.div{width:1px;height:22px;background:var(--b1);flex-shrink:0}
+.conn-badge{display:flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;background:var(--s3);border:1px solid var(--b1);font-size:11px;color:var(--t2);cursor:pointer;transition:all .15s;white-space:nowrap;font-family:var(--mono);max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.conn-badge:hover{border-color:var(--a1);color:var(--t1)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0;transition:all .3s}
+.dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok);animation:pulse 2s infinite}
+.dot.err{background:var(--err)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.spacer{flex:1}
+.theme-row{display:flex;gap:4px;align-items:center}
+.th-btn{width:18px;height:18px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform .15s;flex-shrink:0}
+.th-btn:hover{transform:scale(1.25)}
+.th-btn.active{border-color:var(--t1);transform:scale(1.15)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:none;cursor:pointer;font-family:var(--ui);font-size:11px;font-weight:600;transition:all .15s;white-space:nowrap}
+.btn:disabled{opacity:.3;pointer-events:none}
+.btn-accent{background:var(--a1);color:#fff}
+.btn-accent:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.btn-outline{background:transparent;color:var(--t2);border:1px solid var(--b2)}
+.btn-outline:hover{border-color:var(--a1);color:var(--a1)}
+.btn-ghost{background:transparent;color:var(--t2)}
+.btn-ghost:hover{color:var(--t1);background:var(--s3)}
+.kbd{padding:1px 4px;border-radius:3px;background:var(--s4);color:var(--t3);font-size:9px;font-family:var(--mono)}
+.overlay{position:fixed;inset:0;background:#00000090;backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:26px;width:500px;box-shadow:0 24px 80px #0008;transform:translateY(12px);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.overlay.open .modal{transform:translateY(0)}
+.modal-t{font-family:var(--ui);font-weight:800;font-size:17px;letter-spacing:-.4px;margin-bottom:5px}
+.modal-s{font-size:11px;color:var(--t2);margin-bottom:20px;line-height:1.6}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:13px}
+.field label{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3)}
+.field input{background:var(--s3);border:1px solid var(--b1);border-radius:7px;padding:9px 12px;color:var(--t1);font-family:var(--mono);font-size:12px;outline:none;transition:border-color .15s}
+.field input:focus{border-color:var(--a1)}
+.field input::placeholder{color:var(--t3)}
+.modal-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modal-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+#workspace{display:flex;flex:1;overflow:hidden;min-height:0}
+#sidebar{width:240px;min-width:240px;background:var(--s1);border-right:1px solid var(--b1);display:flex;flex-direction:column;overflow:hidden;transition:width .2s,min-width .2s;position:relative}
+#sidebar.collapsed{width:44px;min-width:44px}
+#sidebar.collapsed .sb-content{display:none}
+#sidebar.collapsed .sb-icons{display:flex}
+.sb-icons{display:none;flex-direction:column;align-items:center;padding:8px 0;gap:4px}
+.sb-icon-btn{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--t2);transition:all .15s}
+.sb-icon-btn:hover{background:var(--s3);color:var(--a1)}
+.sb-content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.sb-collapse-btn{position:absolute;right:-12px;top:50%;transform:translateY(-50%);width:22px;height:22px;background:var(--s2);border:1px solid var(--b2);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;color:var(--t2);z-index:10;transition:all .15s}
+.sb-collapse-btn:hover{background:var(--a1);color:#fff;border-color:var(--a1)}
+.sb-sec{border-bottom:1px solid var(--b1);flex-shrink:0}
+.sb-hd{padding:8px 12px;font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;justify-content:space-between}
+.sb-badge{background:var(--a1)22;color:var(--a1);padding:1px 6px;border-radius:10px;font-size:9px;font-weight:700}
+.mod-tabs{display:flex;flex-wrap:wrap;gap:3px;padding:6px 10px}
+.mod-tab{padding:4px 10px;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;pointer-events:all;color:var(--t3);border:1px solid transparent;transition:all .12s;white-space:nowrap}
+.mod-tab:hover{color:var(--t1);background:var(--s3)}
+.mod-tab.active{color:#fff}
+.sb-tables-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.sb-search{padding:6px 10px;flex-shrink:0}
+.sb-search input{width:100%;background:var(--s3);border:1px solid var(--b1);border-radius:5px;padding:5px 9px;color:var(--t1);font-family:var(--mono);font-size:11px;outline:none}
+.sb-search input:focus{border-color:var(--a1)}
+.sb-search input::placeholder{color:var(--t3)}
+.tbl-list{flex:1;overflow-y:auto;padding:2px 0}
+.tbl-row{padding:6px 12px;font-size:11px;font-family:var(--mono);color:var(--t2);cursor:pointer;pointer-events:all;display:flex;align-items:center;gap:5px;transition:all .1s;border-left:2px solid transparent}
+.tbl-row:hover{background:var(--s3);color:var(--t1)}
+.tbl-row.active{background:var(--s3);color:var(--a1);border-left-color:var(--a1)}
+.tbl-desc{font-size:9px;color:var(--t3);padding:0 12px 6px;line-height:1.5;font-style:italic}
+/* Schema detail */
+.schema-panel{background:var(--s2);border-top:1px solid var(--b1);flex-shrink:0;display:none;flex-direction:column;max-height:220px}
+.schema-panel.open{display:flex}
+.schema-hd{padding:6px 12px;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--b1);flex-shrink:0}
+.schema-hd .tbl-nm{color:var(--a1);font-family:var(--mono)}
+.schema-scroll{overflow-y:auto;flex:1}
+.col-row{padding:5px 12px;display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:start;border-bottom:1px solid var(--b1)33;cursor:pointer;transition:background .1s}
+.col-row:hover{background:var(--s3)}
+.col-name{font-family:var(--mono);font-size:11px;color:var(--t1);display:flex;align-items:center;gap:5px}
+.col-type{font-family:var(--mono);font-size:9px;color:var(--a4);white-space:nowrap}
+.col-badges{display:flex;gap:3px}
+.badge-pk{background:var(--a1)22;color:var(--a1);padding:1px 4px;border-radius:3px;font-size:8px;font-weight:700}
+.badge-nn{background:var(--a3)22;color:var(--a3);padding:1px 4px;border-radius:3px;font-size:8px}
+.badge-fk{background:var(--a5)22;color:var(--a5);padding:1px 4px;border-radius:3px;font-size:8px}
+.col-desc{font-size:10px;color:var(--t3);grid-column:1/-1;line-height:1.5;margin-top:1px;padding-left:0}
+/* history */
+.hist-wrap{max-height:130px;overflow-y:auto}
+.hist-item{padding:5px 12px;font-size:10px;color:var(--t2);cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--b1)33;transition:all .1s}
+.hist-item:hover{background:var(--s3);color:var(--t1)}
+.hist-name{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600}
+.hist-del{color:var(--err);opacity:0;padding:0 3px;font-size:12px}
+.hist-item:hover .hist-del{opacity:.6}
+.hist-empty{padding:12px;font-size:10px;color:var(--t3);font-style:italic;text-align:center}
+/* main panel */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#nlpbar{background:linear-gradient(90deg,var(--a5)11,var(--a1)08);border-bottom:1px solid var(--a5)30;padding:7px 14px;display:flex;align-items:center;gap:9px;flex-shrink:0}
+.nlp-tag{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--a5);white-space:nowrap}
+.nlp-inp{flex:1;background:transparent;border:none;outline:none;font-family:var(--mono);font-size:12px;color:var(--t1)}
+.nlp-inp::placeholder{color:var(--t3)}
+.spin{width:14px;height:14px;border:2px solid var(--b2);border-top-color:var(--a1);border-radius:50%;animation:spin .65s linear infinite;display:none;flex-shrink:0}
+.spin.go{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+#tabbar{display:flex;align-items:center;background:var(--s1);border-bottom:1px solid var(--b1);height:36px;flex-shrink:0;overflow-x:auto;padding:0 8px;gap:1px}
+.tab{padding:4px 12px;font-size:11px;cursor:pointer;color:var(--t2);border-bottom:2px solid transparent;transition:all .12s;white-space:nowrap;display:flex;align-items:center;gap:6px;border-radius:4px 4px 0 0;flex-shrink:0}
+.tab:hover{color:var(--t1)}
+.tab.active{color:var(--a1);border-bottom-color:var(--a1);background:var(--s3)66}
+.tab-x{font-size:13px;color:var(--t3);padding:1px 2px;border-radius:2px}
+.tab-x:hover{background:var(--err)22;color:var(--err)}
+.tab-add{padding:3px 7px;color:var(--t3);cursor:pointer;font-size:17px;border-radius:4px;transition:all .12s}
+.tab-add:hover{color:var(--a1);background:var(--s3)}
+#toolbar{display:flex;align-items:center;padding:5px 12px;background:var(--s2);border-bottom:1px solid var(--b1);flex-shrink:0;gap:6px;flex-wrap:wrap}
+.tbar-l,.tbar-r{display:flex;align-items:center;gap:5px}
+.tbar-l{flex:1}
+.mod-indicator{padding:3px 9px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap}
+#splitarea{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#editor-pane{height:200px;min-height:80px;display:flex;flex-direction:column;border-bottom:1px solid var(--b1);flex-shrink:0}
+.editor-inner{flex:1;position:relative;overflow:hidden}
+.line-nums{position:absolute;left:0;top:0;bottom:0;width:44px;background:var(--s1);border-right:1px solid var(--b1);padding:13px 8px;font-size:11px;color:var(--t3);line-height:1.7;text-align:right;pointer-events:none;user-select:none;font-family:var(--mono);overflow:hidden}
+.sql-ed{position:absolute;inset:0;background:var(--bg);border:none;color:var(--t1);font-family:var(--mono);font-size:12.5px;line-height:1.7;padding:13px 12px 13px 56px;resize:none;outline:none;tab-size:2;white-space:pre;overflow:auto}
+.sql-ed::placeholder{color:var(--t3);font-style:italic}
+.drag-handle{height:6px;background:var(--s2);border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);cursor:ns-resize;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s;user-select:none}
+.drag-handle:hover,.drag-handle.dragging{background:var(--a1)22}
+.drag-handle::after{content:"⋯";color:var(--t3);font-size:12px;letter-spacing:3px}
+.prog{height:2px;background:transparent;flex-shrink:0;overflow:hidden}
+.prog.run{background:linear-gradient(90deg,transparent,var(--a1),var(--a5),transparent);background-size:300%;animation:sweep .9s linear infinite}
+@keyframes sweep{0%{background-position:100%}100%{background-position:-100%}}
+#results-pane{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.res-toolbar{display:flex;align-items:center;justify-content:space-between;padding:5px 12px;background:var(--s2);border-bottom:1px solid var(--b1);flex-shrink:0;gap:8px;flex-wrap:wrap}
+.res-meta{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--t2)}
+.res-meta .cnt{color:var(--ok);font-weight:700}
+.res-meta .tm{color:var(--a1);font-family:var(--mono)}
+.filter-bar{display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--s1);border-bottom:1px solid var(--b1);flex-shrink:0}
+.filter-bar input{flex:1;background:var(--s3);border:1px solid var(--b1);border-radius:5px;padding:4px 10px;color:var(--t1);font-family:var(--mono);font-size:11px;outline:none}
+.filter-bar input:focus{border-color:var(--a1)}
+.filter-bar input::placeholder{color:var(--t3)}
+.filter-count{font-size:10px;color:var(--t3);white-space:nowrap}
+.res-scroll{flex:1;overflow:auto;min-height:0}
+.res-tbl{width:100%;border-collapse:collapse;font-size:11.5px;font-family:var(--mono)}
+.res-tbl th{background:var(--s1);padding:6px 13px;text-align:left;font-size:9px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--t3);border-bottom:2px solid var(--b1);white-space:nowrap;position:sticky;top:0;z-index:2;cursor:pointer;user-select:none;font-family:var(--ui)}
+.res-tbl th:hover{color:var(--a1)}
+.res-tbl th.sorted-asc::after{content:" ↑";color:var(--a1)}
+.res-tbl th.sorted-desc::after{content:" ↓";color:var(--a1)}
+.res-tbl td{padding:5px 13px;border-bottom:1px solid var(--b1)44;color:var(--t2);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.res-tbl tr:hover td{background:var(--s3);color:var(--t1)}
+.res-tbl td.num{color:var(--a1);text-align:right}
+.res-tbl td.act{color:var(--ok)}
+.res-tbl td.ina{color:var(--t3)}
+.res-tbl td.dt{color:var(--a4)}
+.res-tbl td.nul{color:var(--t4);font-style:italic}
+.rn{color:var(--t3)!important;font-size:10px!important;text-align:right!important;width:36px;padding-right:8px!important}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px}
+.empty-ico{font-size:44px;opacity:.2}
+.empty-t{font-family:var(--ui);font-size:16px;font-weight:700;color:var(--t2)}
+.empty-s{font-size:11px;color:var(--t3);text-align:center;max-width:320px;line-height:1.7}
+#kbpanel{position:fixed;right:0;top:0;bottom:0;width:280px;background:var(--s1);border-left:1px solid var(--b1);z-index:80;transform:translateX(100%);transition:transform .25s cubic-bezier(.34,1.56,.64,1);box-shadow:-4px 0 24px #0004;display:flex;flex-direction:column}
+#kbpanel.open{transform:translateX(0)}
+.kb-hd{padding:16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between}
+.kb-hd h3{font-family:var(--ui);font-weight:800;font-size:14px}
+.kb-list{flex:1;overflow-y:auto;padding:8px 0}
+.kb-group{padding:8px 16px 4px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3)}
+.kb-row{display:flex;align-items:center;justify-content:space-between;padding:6px 16px;font-size:11px;color:var(--t2);border-bottom:1px solid var(--b1)33}
+.kb-row:hover{background:var(--s3)}
+.kb-key{display:flex;gap:4px}
+.kb-key span{padding:2px 6px;border-radius:4px;background:var(--s4);border:1px solid var(--b2);font-family:var(--mono);font-size:10px;color:var(--t2)}
+#toast{position:fixed;bottom:18px;right:18px;padding:9px 15px;border-radius:7px;font-size:11px;display:flex;align-items:center;gap:8px;transform:translateY(50px);opacity:0;transition:all .25s cubic-bezier(.34,1.56,.64,1);z-index:200;pointer-events:none;max-width:320px}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.ok{background:var(--ok)1a;border:1px solid var(--ok)44;color:var(--ok)}
+#toast.er{background:var(--err)1a;border:1px solid var(--err)44;color:var(--err)}
+#toast.inf{background:var(--a1)1a;border:1px solid var(--a1)44;color:var(--a1)}
+#toast.wa{background:var(--warn)1a;border:1px solid var(--warn)44;color:var(--warn)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b1);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--b2)}
+select.si{background:var(--s3);border:1px solid var(--b1);border-radius:5px;padding:3px 8px;color:var(--t1);font-family:var(--mono);font-size:11px;outline:none;cursor:pointer}
+.tooltip{position:absolute;background:var(--s4);border:1px solid var(--b2);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--t1);max-width:280px;line-height:1.5;z-index:300;pointer-events:none;box-shadow:0 4px 16px #0006;display:none}
+</style>
+</head>
+<body>
+
+<!-- CONNECTION MODAL -->
+<div class="overlay" id="connModal">
+<div class="modal">
+  <div class="modal-t">🔌 Connect to Oracle Fusion</div>
+  <div class="modal-s">Enter your instance URL and credentials. Everything stays local — nothing sent externally.</div>
+  <div class="field"><label>Instance URL</label><input id="fUrl" type="text" placeholder="https://your-instance.fa.us2.oraclecloud.com"/></div>
+  <div class="modal-row">
+    <div class="field" style="margin:0"><label>Username</label><input id="fUser" type="text" placeholder="user@company.com"/></div>
+    <div class="field" style="margin:0"><label>Password</label><input id="fPass" type="password" placeholder="••••••••"/></div>
+  </div>
+  <div class="modal-acts">
+    <button class="btn btn-ghost" onclick="closeModal('connModal')">Cancel</button>
+    <button class="btn btn-accent" onclick="doConnect()"><span class="spin" id="connSpin"></span>Connect</button>
+  </div>
+</div>
+</div>
+
+<!-- SAVE MODAL -->
+<div class="overlay" id="saveModal">
+<div class="modal" style="width:380px">
+  <div class="modal-t">💾 Save Query</div>
+  <div class="modal-s">Name this query to add it to your saved library.</div>
+  <div class="field"><label>Query Name</label><input id="saveName" type="text" placeholder="e.g. Active TCA Orgs Wisconsin"/></div>
+  <div class="modal-acts">
+    <button class="btn btn-ghost" onclick="closeModal('saveModal')">Cancel</button>
+    <button class="btn btn-accent" onclick="confirmSave()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="logo">
+    <div class="logo-mark">FX</div>
+    <span>FusionX</span>
+    <span class="logo-ver">v4</span>
+  </div>
+  <div class="div"></div>
+  <div class="conn-badge" id="connBadge" onclick="openModal('connModal')">
+    <div class="dot" id="dot"></div>
+    <span id="connLbl">Click to connect…</span>
+  </div>
+  <div class="div"></div>
+  <div class="theme-row" title="Choose theme">
+    <div class="th-btn active" data-theme="" style="background:linear-gradient(135deg,#0f1117,#4dabf7)" onclick="setTheme(this,'')"></div>
+    <div class="th-btn" data-theme="light" style="background:linear-gradient(135deg,#f0f4f8,#1971c2)" onclick="setTheme(this,'light')"></div>
+    <div class="th-btn" data-theme="ocean" style="background:linear-gradient(135deg,#0d1b2a,#38b6ff)" onclick="setTheme(this,'ocean')"></div>
+    <div class="th-btn" data-theme="solarized" style="background:linear-gradient(135deg,#002b36,#268bd2)" onclick="setTheme(this,'solarized')"></div>
+    <div class="th-btn" data-theme="hc" style="background:linear-gradient(135deg,#000,#00ff88)" onclick="setTheme(this,'hc')"></div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn btn-ghost" onclick="openModal('saveModal')" title="Save query ⌘S">💾</button>
+  <button class="btn btn-ghost" id="btnKb" onclick="toggleKb()" title="Keyboard shortcuts (?)">⌨</button>
+  <button class="btn btn-outline" id="btnXls" onclick="exportXLSX()" disabled>⬇ Excel</button>
+  <button class="btn btn-outline" id="btnCsv" onclick="exportCSV()" disabled>⬇ CSV</button>
+  <button class="btn btn-outline" id="btnJson" onclick="exportJSON()" disabled>⬇ JSON</button>
+  <div class="div"></div>
+  <button class="btn btn-accent" onclick="runQuery()">▶ Run <span class="kbd">⌘↵</span></button>
+</div>
+
+<!-- WORKSPACE -->
+<div id="workspace">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sb-collapse-btn" id="sbToggle" onclick="toggleSidebar()">‹</div>
+    <div class="sb-icons" id="sbIcons">
+      <div class="sb-icon-btn" onclick="toggleSidebar()">⊞</div>
+      <div class="sb-icon-btn" onclick="toggleSidebar()">⊟</div>
+      <div class="sb-icon-btn" onclick="toggleSidebar()">⊙</div>
+    </div>
+    <div class="sb-content">
+      <!-- Modules -->
+      <div class="sb-sec">
+        <div class="sb-hd">Module</div>
+        <div class="mod-tabs" id="modTabs"></div>
+      </div>
+      <!-- Tables -->
+      <div class="sb-tables-wrap">
+        <div class="sb-hd" style="cursor:default">Tables <span class="sb-badge" id="tblBadge">0</span></div>
+        <div class="sb-search"><input type="text" id="tblSearch" placeholder="🔍 filter tables…" oninput="filterTables()"/></div>
+        <div class="tbl-list" id="tblList"></div>
+      </div>
+      <!-- Schema detail panel -->
+      <div class="schema-panel" id="schemaPanel">
+        <div class="schema-hd">
+          <span>COLUMNS — <span class="tbl-nm" id="schemaTblName"></span></span>
+          <a id="schemaDocsLink" href="#" target="_blank" class="btn btn-ghost" style="font-size:9px;padding:2px 6px;display:none" title="View in Oracle Docs">📖 Docs</a><button class="btn btn-ghost" style="font-size:10px;padding:2px 6px" onclick="closeSchema()">✕</button>
+        </div>
+        <div class="schema-scroll" id="schemaCols"></div>
+      </div>
+      <!-- History -->
+      <div class="sb-sec">
+        <div class="sb-hd">Saved Queries <span class="sb-badge" id="histBadge">0</span></div>
+        <div class="hist-wrap" id="histWrap"><div class="hist-empty">No saved queries</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+    <div id="nlpbar">
+      <div class="nlp-tag">✦ NLP→SQL</div>
+      <input class="nlp-inp" id="nlpInp" placeholder="Describe in plain English: 'Show active Wisconsin organizations with phone numbers created in 2024…'" onkeydown="if(event.key==='Enter')genSQL()"/>
+      <div class="spin" id="nlpSpin"></div>
+      <button class="btn btn-outline" style="font-size:10px;padding:4px 10px" onclick="genSQL()">Generate SQL</button>
+    </div>
+    <div id="tabbar">
+      <div class="tab active" id="t1" onclick="switchTab('t1')">📄 Query 1 <span class="tab-x" onclick="closeTab(event,'t1')">×</span></div>
+      <div class="tab-add" onclick="newTab()" title="New tab">+</div>
+    </div>
+    <div id="toolbar">
+      <div class="tbar-l">
+        <span class="mod-indicator" id="modIndicator" style="background:var(--a1)18;color:var(--a1)">🤝 CX Sales</span>
+        <button class="btn btn-ghost" style="font-size:10px" onclick="fmtSQL()">⟳ Format</button>
+        <button class="btn btn-ghost" style="font-size:10px" onclick="clearEd()">✕ Clear</button>
+        <button class="btn btn-ghost" style="font-size:10px" onclick="explainSQL()">💡 Explain</button>
+        <button class="btn btn-ghost" style="font-size:10px" onclick="generateJoin()">🔗 Suggest JOIN</button>
+      </div>
+      <div class="tbar-r">
+        <span style="font-size:10px;color:var(--t3)">Limit:</span>
+        <select class="si" id="rowLim"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
+        <span style="font-size:10px;color:var(--t3)" id="edStatus"></span>
+      </div>
+    </div>
+    <div id="splitarea">
+      <div id="editor-pane">
+        <div class="editor-inner">
+          <div class="line-nums" id="lnums">1</div>
+          <textarea class="sql-ed" id="sqled" spellcheck="false"
+            placeholder="-- Write SQL or use NLP→SQL above  ·  ⌘+Enter to run  ·  ⌘+/ to comment  ·  Click column in schema to insert"
+            oninput="edChange()" onkeydown="edKey(event)" onscroll="syncLnums()">SELECT
+  p.PARTY_NAME,
+  p.PARTY_NUMBER,
+  p.PARTY_TYPE,
+  p.STATUS,
+  p.EMAIL_ADDRESS,
+  p.PHONE_NUMBER,
+  p.CITY,
+  p.STATE,
+  p.CREATION_DATE
+FROM HZ_PARTIES p
+WHERE p.PARTY_TYPE = 'ORGANIZATION'
+  AND p.STATUS = 'A'
+FETCH FIRST 100 ROWS ONLY</textarea>
+        </div>
+      </div>
+      <div class="drag-handle" id="dragHandle"></div>
+      <div class="prog" id="prog"></div>
+      <div id="results-pane">
+        <div class="res-toolbar">
+          <div class="res-meta">
+            <span id="resCnt">— rows</span>
+            <span id="resTm" class="tm"></span>
+            <span id="resSt"></span>
+            <span id="resEp" style="color:var(--t3);font-size:10px;font-family:var(--mono)"></span>
+          </div>
+          <div style="display:flex;gap:5px">
+            <button class="btn btn-ghost" style="font-size:10px" onclick="exportCSV()">CSV</button>
+            <button class="btn btn-ghost" style="font-size:10px" onclick="exportJSON()">JSON</button>
+            <button class="btn btn-ghost" style="font-size:10px" onclick="exportXLSX()">Excel</button>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <input type="text" id="filterInp" placeholder="🔍 filter results across all columns…" oninput="filterResults()"/>
+          <span class="filter-count" id="filterCnt"></span>
+        </div>
+        <div class="res-scroll" id="resScroll">
+          <div class="empty" id="emptyState">
+            <div class="empty-ico">⬡</div>
+            <div class="empty-t">FusionX v4 Ready</div>
+            <div class="empty-s">Real Oracle Fusion schema loaded from docs.oracle.com<br><br>Connect · Browse tables · Click column to insert · Run · Export<br><br>Press <strong>?</strong> for keyboard shortcuts</div>
+          </div>
+          <table class="res-tbl" id="resTbl" style="display:none"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KB PANEL -->
+<div id="kbpanel">
+  <div class="kb-hd"><h3>⌨ Shortcuts</h3><button class="btn btn-ghost" onclick="toggleKb()">✕</button></div>
+  <div class="kb-list">
+    <div class="kb-group">Query</div>
+    <div class="kb-row"><span>Run query</span><div class="kb-key"><span>⌘</span><span>↵</span></div></div>
+    <div class="kb-row"><span>Format SQL</span><div class="kb-key"><span>⌘⇧F</span></div></div>
+    <div class="kb-row"><span>Save query</span><div class="kb-key"><span>⌘S</span></div></div>
+    <div class="kb-row"><span>Comment line</span><div class="kb-key"><span>⌘/</span></div></div>
+    <div class="kb-group">Navigation</div>
+    <div class="kb-row"><span>New tab</span><div class="kb-key"><span>⌘T</span></div></div>
+    <div class="kb-row"><span>Toggle sidebar</span><div class="kb-key"><span>⌘B</span></div></div>
+    <div class="kb-row"><span>Focus NLP bar</span><div class="kb-key"><span>⌘L</span></div></div>
+    <div class="kb-row"><span>Filter results</span><div class="kb-key"><span>⌘F</span></div></div>
+    <div class="kb-row"><span>Shortcuts</span><div class="kb-key"><span>?</span></div></div>
+    <div class="kb-group">Resize</div>
+    <div class="kb-row"><span>Bigger editor</span><div class="kb-key"><span>⌘↑</span></div></div>
+    <div class="kb-row"><span>Smaller editor</span><div class="kb-key"><span>⌘↓</span></div></div>
+    <div class="kb-group">Export</div>
+    <div class="kb-row"><span>Export Excel</span><div class="kb-key"><span>⌘E</span></div></div>
+    <div class="kb-row"><span>Export CSV</span><div class="kb-key"><span>⌘⇧E</span></div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+
+// ═══════════════════════════════════════════════════════════
+// REAL ORACLE FUSION SCHEMA — sourced from docs.oracle.com
+// ═══════════════════════════════════════════════════════════
+const REAL_SCHEMA = {
+  "CX Sales": {
+    color:"#4dabf7", icon:"🤝",
+    tables:[
+      { n:"HZ_PARTIES", desc:"Stores basic information about parties — Organizations, Persons, Groups. The root TCA entity.",
+        cols:[
+          {n:"PARTY_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Unique party identifier. Primary Key."},
+          {n:"PARTY_NUMBER",t:"VARCHAR2(30)",nn:true,desc:"Unique identification number for this party"},
+          {n:"PARTY_NAME",t:"VARCHAR2(360)",nn:true,desc:"Name of the party"},
+          {n:"PARTY_TYPE",t:"VARCHAR2(30)",nn:true,desc:"ORGANIZATION, PERSON, GROUP, or RELATIONSHIP"},
+          {n:"STATUS",t:"VARCHAR2(1)",nn:true,desc:"A=Active, I=Inactive, M=Merged"},
+          {n:"CREATION_DATE",t:"TIMESTAMP",nn:true,desc:"Row creation timestamp"},
+          {n:"CREATED_BY",t:"VARCHAR2(64)",nn:true,desc:"User who created the row"},
+          {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:true,desc:"Last update timestamp"},
+          {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",nn:true,desc:"User who last updated the row"},
+          {n:"ADDRESS1",t:"VARCHAR2(240)",desc:"First line of the identifying address (denormalized from HZ_LOCATIONS)"},
+          {n:"ADDRESS2",t:"VARCHAR2(240)",desc:"Second line of the identifying address"},
+          {n:"CITY",t:"VARCHAR2(60)",desc:"City of the identifying address"},
+          {n:"STATE",t:"VARCHAR2(60)",desc:"State/province of the identifying address"},
+          {n:"POSTAL_CODE",t:"VARCHAR2(60)",desc:"Postal code of the identifying address"},
+          {n:"COUNTRY",t:"VARCHAR2(60)",desc:"Country code of the identifying address"},
+          {n:"EMAIL_ADDRESS",t:"VARCHAR2(2000)",desc:"Email address (denormalized from HZ_CONTACT_POINTS)"},
+          {n:"PHONE_COUNTRY_CODE",t:"VARCHAR2(10)",desc:"International country code for phone number"},
+          {n:"PHONE_AREA_CODE",t:"VARCHAR2(10)",desc:"Phone area code"},
+          {n:"PHONE_NUMBER",t:"VARCHAR2(40)",desc:"Phone number (denormalized from HZ_CONTACT_POINTS)"},
+          {n:"URL",t:"VARCHAR2(2000)",desc:"Uniform Resource Locator"},
+          {n:"DUNS_NUMBER_C",t:"VARCHAR2(30)",desc:"D-U-N-S Number — unique identifier issued by Dun & Bradstreet"},
+          {n:"TAX_REFERENCE",t:"VARCHAR2(50)",desc:"Taxpayer identification number"},
+          {n:"SIC_CODE",t:"VARCHAR2(30)",desc:"Standard Industry Classification code"},
+          {n:"EMPLOYEES_TOTAL",t:"NUMBER",desc:"Total number of employees"},
+          {n:"ANNUAL_REVENUE",t:"NUMBER",desc:"Annual revenue for the party"},
+          {n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",nn:true,desc:"Unique identifier from source/legacy system"},
+          {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",nn:true,desc:"Optimistic locking version number"}
+        ]
+      },
+      { n:"HZ_CUST_ACCOUNTS", desc:"Customer accounts — business relationships with parties of type Organization or Person. One party can have multiple accounts.",
+        cols:[
+          {n:"CUST_ACCOUNT_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Unique identifier for the customer account. Primary Key."},
+          {n:"PARTY_ID",t:"NUMBER(18)",nn:true,desc:"FK to HZ_PARTIES. The party associated with this account."},
+          {n:"ACCOUNT_NUMBER",t:"VARCHAR2(30)",nn:true,desc:"Account Number"},
+          {n:"ACCOUNT_NAME",t:"VARCHAR2(240)",desc:"Description chosen by external party"},
+          {n:"STATUS",t:"VARCHAR2(1)",nn:true,desc:"A=Active, I=Inactive. Customer status flag."},
+          {n:"CUSTOMER_TYPE",t:"VARCHAR2(30)",desc:"I=Internal, R=Revenue generating external customer"},
+          {n:"CUSTOMER_CLASS_CODE",t:"VARCHAR2(30)",desc:"Customer class e.g. RESELLER, EDUCATION"},
+          {n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",nn:true,desc:"Unique customer identifier from legacy system"},
+          {n:"CREATION_DATE",t:"TIMESTAMP",nn:true,desc:"Row creation timestamp"},
+          {n:"CREATED_BY",t:"VARCHAR2(64)",nn:true,desc:"User who created the row"},
+          {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:true,desc:"Last update timestamp"},
+          {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",nn:true,desc:"User who last updated the row"},
+          {n:"ACCOUNT_ESTABLISHED_DATE",t:"DATE",desc:"Date the customer account was originally established"},
+          {n:"STATUS_UPDATE_DATE",t:"DATE",desc:"Last status update date"},
+          {n:"TAX_CODE",t:"VARCHAR2(50)",desc:"Tax Code for the Customer"},
+          {n:"SOURCE_CODE",t:"VARCHAR2(150)",desc:"Promotion used to make the party a customer"},
+          {n:"COMMENTS",t:"VARCHAR2(2000)",desc:"Free format information about the customer"},
+          {n:"AUTOPAY_FLAG",t:"VARCHAR2(1)",desc:"Autopay flag Y/N"},
+          {n:"SELLING_PARTY_ID",t:"NUMBER(18)",desc:"Identifier of the party entering the relationship as seller"},
+          {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",nn:true,desc:"Optimistic locking version number"}
+        ]
+      },
+      { n:"HZ_PARTY_SITES", desc:"Links a party (HZ_PARTIES) to a location (HZ_LOCATIONS). One party can have multiple sites.",
+        cols:[
+          {n:"PARTY_SITE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Party site identifier. Primary Key."},
+          {n:"PARTY_ID",t:"NUMBER(18)",nn:true,desc:"FK to HZ_PARTIES"},
+          {n:"LOCATION_ID",t:"NUMBER(18)",nn:true,desc:"FK to HZ_LOCATIONS"},
+          {n:"PARTY_SITE_NUMBER",t:"VARCHAR2(30)",nn:true,desc:"Party site number"},
+          {n:"STATUS",t:"VARCHAR2(1)",desc:"A=Active, I=Inactive"},
+          {n:"IDENTIFYING_ADDRESS_FLAG",t:"VARCHAR2(1)",nn:true,desc:"Y if this is the identifying address for the party"},
+          {n:"MAILSTOP",t:"VARCHAR2(60)",desc:"A user-defined code to indicate a delivery point within their organization"},
+          {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:true,desc:"Last update timestamp"},
+          {n:"CREATION_DATE",t:"TIMESTAMP",desc:"Row creation timestamp"}
+        ]
+      },
+      { n:"HZ_LOCATIONS", desc:"Stores postal address and physical location data. Referenced by HZ_PARTY_SITES.",
+        cols:[
+          {n:"LOCATION_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Location identifier. Primary Key."},
+          {n:"ADDRESS1",t:"VARCHAR2(240)",nn:true,desc:"First line of address"},
+          {n:"ADDRESS2",t:"VARCHAR2(240)",desc:"Second line of address"},
+          {n:"ADDRESS3",t:"VARCHAR2(240)",desc:"Third line of address"},
+          {n:"ADDRESS4",t:"VARCHAR2(240)",desc:"Fourth line of address"},
+          {n:"CITY",t:"VARCHAR2(60)",desc:"City"},
+          {n:"POSTAL_CODE",t:"VARCHAR2(60)",desc:"Postal code"},
+          {n:"STATE",t:"VARCHAR2(60)",desc:"State or province"},
+          {n:"PROVINCE",t:"VARCHAR2(60)",desc:"Province"},
+          {n:"COUNTY",t:"VARCHAR2(60)",desc:"County"},
+          {n:"COUNTRY",t:"VARCHAR2(60)",nn:true,desc:"Country code — FND_TERRITORIES.TERRITORY_CODE"},
+          {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:true,desc:"Last update timestamp"},
+          {n:"CREATION_DATE",t:"TIMESTAMP",desc:"Row creation timestamp"},
+          {n:"GEOMETRY",t:"SDO_GEOMETRY",desc:"Spatial geometry object for geographic coordinates"}
+        ]
+      },
+      { n:"HZ_CONTACT_POINTS", desc:"Stores communication methods for parties: email, phone, fax, web, EDI, EFT.",
+        cols:[
+          {n:"CONTACT_POINT_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Contact point identifier. Primary Key."},
+          {n:"CONTACT_POINT_TYPE",t:"VARCHAR2(30)",nn:true,desc:"PHONE, EMAIL, WEB, FAX, EFT, EDI, TLX"},
+          {n:"OWNER_TABLE_NAME",t:"VARCHAR2(30)",nn:true,desc:"Table owning this contact point e.g. HZ_PARTIES"},
+          {n:"OWNER_TABLE_ID",t:"NUMBER(18)",nn:true,desc:"FK to the owner table"},
+          {n:"STATUS",t:"VARCHAR2(30)",nn:true,desc:"A=Active, I=Inactive"},
+          {n:"PRIMARY_FLAG",t:"VARCHAR2(1)",desc:"Y if primary contact point of this type"},
+          {n:"EMAIL_ADDRESS",t:"VARCHAR2(2000)",desc:"Email address (when CONTACT_POINT_TYPE = EMAIL)"},
+          {n:"PHONE_COUNTRY_CODE",t:"VARCHAR2(10)",desc:"International country code"},
+          {n:"PHONE_AREA_CODE",t:"VARCHAR2(10)",desc:"Area code"},
+          {n:"PHONE_NUMBER",t:"VARCHAR2(40)",desc:"Phone number (when CONTACT_POINT_TYPE = PHONE)"},
+          {n:"PHONE_EXTENSION",t:"VARCHAR2(20)",desc:"Phone extension"},
+          {n:"URL",t:"VARCHAR2(2000)",desc:"URL (when CONTACT_POINT_TYPE = WEB)"},
+          {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:true,desc:"Last update timestamp"},
+          {n:"CREATION_DATE",t:"TIMESTAMP",desc:"Row creation timestamp"}
+        ]
+      },
+      { n:"HZ_RELATIONSHIPS", desc:"Stores relationships between parties — e.g. CONTACT_OF, SUBSIDIARY_OF, PARTNER_OF.",
+        cols:[
+          {n:"RELATIONSHIP_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Relationship identifier. Primary Key."},
+          {n:"SUBJECT_ID",t:"NUMBER(18)",nn:true,desc:"FK to HZ_PARTIES — the subject of the relationship"},
+          {n:"SUBJECT_TYPE",t:"VARCHAR2(30)",nn:true,desc:"Party type of the subject"},
+          {n:"SUBJECT_TABLE_NAME",t:"VARCHAR2(30)",nn:true,desc:"HZ_PARTIES"},
+          {n:"OBJECT_ID",t:"NUMBER(18)",nn:true,desc:"FK to HZ_PARTIES — the object of the relationship"},
+          {n:"OBJECT_TYPE",t:"VARCHAR2(30)",nn:true,desc:"Party type of the object"},
+          {n:"OBJECT_TABLE_NAME",t:"VARCHAR2(30)",nn:true,desc:"HZ_PARTIES"},
+          {n:"RELATIONSHIP_CODE",t:"VARCHAR2(30)",nn:true,desc:"CONTACT_OF, SUBSIDIARY_OF, PARTNER_OF, EMPLOYEE_OF etc."},
+          {n:"RELATIONSHIP_TYPE",t:"VARCHAR2(30)",nn:true,desc:"Relationship type classification"},
+          {n:"STATUS",t:"VARCHAR2(1)",nn:true,desc:"A=Active, I=Inactive"},
+          {n:"START_DATE",t:"DATE",nn:true,desc:"Start date of the relationship"},
+          {n:"END_DATE",t:"DATE",desc:"End date of the relationship"},
+          {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:true,desc:"Last update timestamp"}
+        ]
+      },
+      { n:"HZ_ORG_CONTACTS", desc:"Stores contact role information for a person who is a contact for an organization.",
+        cols:[
+          {n:"ORG_CONTACT_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Org contact identifier. Primary Key."},
+          {n:"PARTY_RELATIONSHIP_ID",t:"NUMBER(18)",nn:true,desc:"FK to HZ_RELATIONSHIPS"},
+          {n:"PARTY_ID",t:"NUMBER(18)",desc:"FK to HZ_PARTIES — the organization"},
+          {n:"JOB_TITLE",t:"VARCHAR2(100)",desc:"Job title of the contact at the organization"},
+          {n:"JOB_TITLE_CODE",t:"VARCHAR2(30)",desc:"Lookup code for job title"},
+          {n:"DEPARTMENT",t:"VARCHAR2(60)",desc:"Department the contact belongs to"},
+          {n:"DEPARTMENT_CODE",t:"VARCHAR2(30)",desc:"Lookup code for the department"},
+          {n:"STATUS",t:"VARCHAR2(1)",desc:"A=Active, I=Inactive"},
+          {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:true,desc:"Last update timestamp"},
+          {n:"CREATION_DATE",t:"TIMESTAMP",desc:"Row creation timestamp"}
+        ]
+      },
+      { n:"HZ_CUST_ACCT_SITES_ALL", desc:"Stores customer sites against Oracle Business Units. Links customer accounts to party sites.",
+        cols:[
+          {n:"CUST_ACCT_SITE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Customer account site identifier. Primary Key."},
+          {n:"CUST_ACCOUNT_ID",t:"NUMBER(18)",nn:true,desc:"FK to HZ_CUST_ACCOUNTS"},
+          {n:"PARTY_SITE_ID",t:"NUMBER(18)",nn:true,desc:"FK to HZ_PARTY_SITES"},
+          {n:"ORG_ID",t:"NUMBER(18)",desc:"Operating Unit identifier"},
+          {n:"STATUS",t:"VARCHAR2(1)",nn:true,desc:"A=Active, I=Inactive"},
+          {n:"CUSTOMER_CATEGORY_CODE",t:"VARCHAR2(30)",desc:"User-definable category"},
+          {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",nn:true,desc:"Last update timestamp"},
+          {n:"CREATION_DATE",t:"TIMESTAMP",desc:"Row creation timestamp"}
+        ]
+      }
+    ]
+  },
+  "Finance": {
+    color:"#fcc419", icon:"💰",
+    tables:[
+      { n:"GL_JE_HEADERS", desc:"Journal entry headers. Each row represents one journal entry in Oracle General Ledger.",
+        cols:[
+          {n:"JE_HEADER_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Journal entry header identifier. Primary Key."},
+          {n:"LEDGER_ID",t:"NUMBER(15)",nn:true,desc:"FK to GL_LEDGERS — the ledger this entry belongs to"},
+          {n:"JE_CATEGORY",t:"VARCHAR2(25)",nn:true,desc:"Journal entry category — lookup code"},
+          {n:"JE_SOURCE",t:"VARCHAR2(25)",nn:true,desc:"Journal entry source e.g. Manual, Payables, Receivables"},
+          {n:"NAME",t:"VARCHAR2(100)",nn:true,desc:"Journal entry name"},
+          {n:"PERIOD_NAME",t:"VARCHAR2(15)",nn:true,desc:"Accounting period name e.g. JAN-24"},
+          {n:"STATUS",t:"VARCHAR2(1)",nn:true,desc:"U=Unposted, P=Posted, S=Selected"},
+          {n:"POSTED_DATE",t:"DATE",desc:"Date the journal was posted"},
+          {n:"ACTUAL_FLAG",t:"VARCHAR2(1)",nn:true,desc:"A=Actual, B=Budget, E=Encumbrance"},
+          {n:"CURRENCY_CODE",t:"VARCHAR2(15)",nn:true,desc:"Currency code — FND_CURRENCIES"},
+          {n:"DESCRIPTION",t:"VARCHAR2(240)",desc:"Journal entry description"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATED_BY",t:"NUMBER(15)",nn:true,desc:"User who created the row"},
+          {n:"CREATION_DATE",t:"DATE",nn:true,desc:"Row creation date"}
+        ]
+      },
+      { n:"GL_JE_LINES", desc:"Individual debit and credit lines for each journal entry header.",
+        cols:[
+          {n:"JE_HEADER_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"FK to GL_JE_HEADERS. Composite PK."},
+          {n:"JE_LINE_NUM",t:"NUMBER(15)",pk:true,nn:true,desc:"Line number within the journal entry. Composite PK."},
+          {n:"LEDGER_ID",t:"NUMBER(15)",nn:true,desc:"FK to GL_LEDGERS"},
+          {n:"CODE_COMBINATION_ID",t:"NUMBER(15)",nn:true,desc:"FK to GL_CODE_COMBINATIONS — accounting flexfield"},
+          {n:"PERIOD_NAME",t:"VARCHAR2(15)",nn:true,desc:"Accounting period"},
+          {n:"EFFECTIVE_DATE",t:"DATE",nn:true,desc:"Effective accounting date"},
+          {n:"ENTERED_DR",t:"NUMBER",desc:"Debit amount in entered currency"},
+          {n:"ENTERED_CR",t:"NUMBER",desc:"Credit amount in entered currency"},
+          {n:"ACCOUNTED_DR",t:"NUMBER",desc:"Debit amount in functional currency"},
+          {n:"ACCOUNTED_CR",t:"NUMBER",desc:"Credit amount in functional currency"},
+          {n:"CURRENCY_CODE",t:"VARCHAR2(15)",nn:true,desc:"Transaction currency"},
+          {n:"DESCRIPTION",t:"VARCHAR2(240)",desc:"Line description"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"}
+        ]
+      },
+      { n:"GL_CODE_COMBINATIONS", desc:"Chart of accounts structure — stores all valid account code combinations (segments).",
+        cols:[
+          {n:"CODE_COMBINATION_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Unique identifier for the account combination. Primary Key."},
+          {n:"CHART_OF_ACCOUNTS_ID",t:"NUMBER(15)",nn:true,desc:"FK to the chart of accounts structure"},
+          {n:"SEGMENT1",t:"VARCHAR2(25)",desc:"First segment — typically Company/Entity"},
+          {n:"SEGMENT2",t:"VARCHAR2(25)",desc:"Second segment — typically Department/Cost Center"},
+          {n:"SEGMENT3",t:"VARCHAR2(25)",desc:"Third segment — typically Account"},
+          {n:"SEGMENT4",t:"VARCHAR2(25)",desc:"Fourth segment — typically Sub-account"},
+          {n:"SEGMENT5",t:"VARCHAR2(25)",desc:"Fifth segment"},
+          {n:"ENABLED_FLAG",t:"VARCHAR2(1)",nn:true,desc:"Y=Enabled, N=Disabled"},
+          {n:"SUMMARY_FLAG",t:"VARCHAR2(1)",nn:true,desc:"Y=Summary account, N=Detail account"},
+          {n:"ACCOUNT_TYPE",t:"VARCHAR2(1)",desc:"A=Asset, L=Liability, O=Owners Equity, R=Revenue, E=Expense"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      },
+      { n:"AP_INVOICES_ALL", desc:"Payables invoices. Each row represents one supplier invoice across all operating units.",
+        cols:[
+          {n:"INVOICE_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Invoice identifier. Primary Key."},
+          {n:"INVOICE_NUM",t:"VARCHAR2(50)",nn:true,desc:"Invoice number from supplier"},
+          {n:"INVOICE_TYPE_LOOKUP_CODE",t:"VARCHAR2(25)",nn:true,desc:"STANDARD, CREDIT, DEBIT, PREPAYMENT, EXPENSE REPORT"},
+          {n:"VENDOR_ID",t:"NUMBER(15)",nn:true,desc:"FK to AP_SUPPLIERS — the supplier"},
+          {n:"VENDOR_SITE_ID",t:"NUMBER(15)",nn:true,desc:"FK to AP_SUPPLIER_SITES_ALL"},
+          {n:"INVOICE_DATE",t:"DATE",nn:true,desc:"Date of the invoice"},
+          {n:"INVOICE_AMOUNT",t:"NUMBER",nn:true,desc:"Total invoice amount"},
+          {n:"AMOUNT_PAID",t:"NUMBER",desc:"Total amount paid"},
+          {n:"PAYMENT_STATUS_FLAG",t:"VARCHAR2(1)",desc:"Y=Fully paid, P=Partially paid, N=Not paid"},
+          {n:"CURRENCY_CODE",t:"VARCHAR2(15)",nn:true,desc:"Invoice currency"},
+          {n:"ORG_ID",t:"NUMBER(15)",desc:"Operating Unit"},
+          {n:"DESCRIPTION",t:"VARCHAR2(240)",desc:"Invoice description"},
+          {n:"PAYMENT_METHOD_CODE",t:"VARCHAR2(30)",desc:"Payment method — CHECK, EFT, WIRE"},
+          {n:"PAY_GROUP_LOOKUP_CODE",t:"VARCHAR2(25)",desc:"Payment group"},
+          {n:"TERMS_ID",t:"NUMBER(15)",desc:"FK to AP_TERMS — payment terms"},
+          {n:"CANCELLED_DATE",t:"DATE",desc:"Date invoice was cancelled (if applicable)"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      },
+      { n:"AR_PAYMENT_SCHEDULES_ALL", desc:"Receivables payment schedules — tracks amounts due and outstanding for AR transactions.",
+        cols:[
+          {n:"PAYMENT_SCHEDULE_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Payment schedule identifier. Primary Key."},
+          {n:"CUSTOMER_ID",t:"NUMBER(15)",nn:true,desc:"FK to HZ_CUST_ACCOUNTS — the customer"},
+          {n:"CUSTOMER_SITE_USE_ID",t:"NUMBER(15)",desc:"FK to HZ_CUST_SITE_USES_ALL — bill-to site"},
+          {n:"CLASS",t:"VARCHAR2(20)",nn:true,desc:"INV=Invoice, CM=Credit Memo, DM=Debit Memo, PMT=Payment, CB=Chargeback"},
+          {n:"STATUS",t:"VARCHAR2(30)",nn:true,desc:"OP=Open, CL=Closed"},
+          {n:"AMOUNT_DUE_ORIGINAL",t:"NUMBER",nn:true,desc:"Original amount due"},
+          {n:"AMOUNT_DUE_REMAINING",t:"NUMBER",nn:true,desc:"Remaining amount due"},
+          {n:"AMOUNT_APPLIED",t:"NUMBER",desc:"Amount applied through receipts"},
+          {n:"AMOUNT_CREDITED",t:"NUMBER",desc:"Amount credited"},
+          {n:"DUE_DATE",t:"DATE",nn:true,desc:"Date payment is due"},
+          {n:"INVOICE_CURRENCY_CODE",t:"VARCHAR2(15)",nn:true,desc:"Invoice currency"},
+          {n:"ORG_ID",t:"NUMBER(15)",desc:"Operating Unit"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      }
+    ]
+  },
+  "HCM": {
+    color:"#cc5de8", icon:"👥",
+    tables:[
+      { n:"PER_ALL_PEOPLE_F", desc:"Date-tracked table storing personal information for all people — employees, contingent workers, contacts.",
+        cols:[
+          {n:"PERSON_ID",t:"NUMBER(10)",pk:true,nn:true,desc:"Person identifier. Primary Key."},
+          {n:"EFFECTIVE_START_DATE",t:"DATE",pk:true,nn:true,desc:"Date track: start of effective period. Composite PK."},
+          {n:"EFFECTIVE_END_DATE",t:"DATE",nn:true,desc:"Date track: end of effective period"},
+          {n:"EMPLOYEE_NUMBER",t:"VARCHAR2(30)",desc:"Employee number"},
+          {n:"FULL_NAME",t:"VARCHAR2(240)",desc:"Full name of the person"},
+          {n:"FIRST_NAME",t:"VARCHAR2(150)",desc:"First name"},
+          {n:"MIDDLE_NAMES",t:"VARCHAR2(60)",desc:"Middle name(s)"},
+          {n:"LAST_NAME",t:"VARCHAR2(150)",nn:true,desc:"Last name"},
+          {n:"EMAIL_ADDRESS",t:"VARCHAR2(240)",desc:"Primary email address"},
+          {n:"DATE_OF_BIRTH",t:"DATE",desc:"Date of birth"},
+          {n:"SEX",t:"VARCHAR2(30)",desc:"Gender lookup"},
+          {n:"NATIONALITY",t:"VARCHAR2(30)",desc:"Nationality lookup"},
+          {n:"PERSON_TYPE",t:"VARCHAR2(30)",desc:"EMP=Employee, CWK=Contingent Worker"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      },
+      { n:"PER_ALL_ASSIGNMENTS_F", desc:"Date-tracked assignment records — links people to jobs, grades, positions, and organizations.",
+        cols:[
+          {n:"ASSIGNMENT_ID",t:"NUMBER(10)",pk:true,nn:true,desc:"Assignment identifier. Primary Key."},
+          {n:"EFFECTIVE_START_DATE",t:"DATE",pk:true,nn:true,desc:"Date track: start of effective period"},
+          {n:"EFFECTIVE_END_DATE",t:"DATE",nn:true,desc:"Date track: end of effective period"},
+          {n:"PERSON_ID",t:"NUMBER(10)",nn:true,desc:"FK to PER_ALL_PEOPLE_F"},
+          {n:"ORGANIZATION_ID",t:"NUMBER(15)",nn:true,desc:"FK to HR_ALL_ORGANIZATION_UNITS — department"},
+          {n:"JOB_ID",t:"NUMBER(15)",desc:"FK to PER_JOBS"},
+          {n:"GRADE_ID",t:"NUMBER(15)",desc:"FK to PER_GRADES"},
+          {n:"POSITION_ID",t:"NUMBER(15)",desc:"FK to HR_ALL_POSITIONS_F"},
+          {n:"LOCATION_ID",t:"NUMBER(15)",desc:"FK to HR_LOCATIONS_ALL — work location"},
+          {n:"ASSIGNMENT_TYPE",t:"VARCHAR2(1)",nn:true,desc:"E=Employee, C=Contingent Worker, A=Applicant"},
+          {n:"ASSIGNMENT_STATUS_TYPE_ID",t:"NUMBER(9)",nn:true,desc:"FK to PER_ASSIGNMENT_STATUS_TYPES"},
+          {n:"PAYROLL_ID",t:"NUMBER(9)",desc:"FK to PAY_PAYROLLS_F"},
+          {n:"MANAGER_FLAG",t:"VARCHAR2(30)",desc:"Y if the person is a manager"},
+          {n:"PRIMARY_FLAG",t:"VARCHAR2(30)",nn:true,desc:"Y=Primary assignment"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"}
+        ]
+      },
+      { n:"HR_ALL_ORGANIZATION_UNITS", desc:"Organizations — departments, business groups, legal entities, operating units.",
+        cols:[
+          {n:"ORGANIZATION_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Organization identifier. Primary Key."},
+          {n:"NAME",t:"VARCHAR2(240)",nn:true,desc:"Organization name"},
+          {n:"TYPE",t:"VARCHAR2(30)",desc:"Organization type lookup"},
+          {n:"DATE_FROM",t:"DATE",nn:true,desc:"Date the organization became active"},
+          {n:"DATE_TO",t:"DATE",desc:"Date the organization became inactive"},
+          {n:"BUSINESS_GROUP_ID",t:"NUMBER(15)",desc:"FK to the business group"},
+          {n:"INTERNAL_EXTERNAL_FLAG",t:"VARCHAR2(30)",desc:"INT=Internal, EXT=External"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      }
+    ]
+  },
+  "SCM": {
+    color:"#ff6b35", icon:"📦",
+    tables:[
+      { n:"PO_HEADERS_ALL", desc:"Purchase order headers across all operating units.",
+        cols:[
+          {n:"PO_HEADER_ID",t:"NUMBER",pk:true,nn:true,desc:"Purchase order header identifier. Primary Key."},
+          {n:"SEGMENT1",t:"VARCHAR2(20)",nn:true,desc:"Purchase order number"},
+          {n:"TYPE_LOOKUP_CODE",t:"VARCHAR2(25)",nn:true,desc:"STANDARD, BLANKET, CONTRACT, PLANNED"},
+          {n:"STATUS_LOOKUP_CODE",t:"VARCHAR2(25)",desc:"INCOMPLETE, OPEN, CLOSED, FINALLY CLOSED, CANCELLED"},
+          {n:"VENDOR_ID",t:"NUMBER",desc:"FK to AP_SUPPLIERS"},
+          {n:"VENDOR_SITE_ID",t:"NUMBER",desc:"FK to AP_SUPPLIER_SITES_ALL"},
+          {n:"SHIP_TO_LOCATION_ID",t:"NUMBER",desc:"FK to HR_LOCATIONS_ALL — default ship-to location"},
+          {n:"BILL_TO_LOCATION_ID",t:"NUMBER",desc:"FK to HR_LOCATIONS_ALL — bill-to location"},
+          {n:"CURRENCY_CODE",t:"VARCHAR2(15)",desc:"PO currency"},
+          {n:"RATE",t:"NUMBER",desc:"Exchange rate to functional currency"},
+          {n:"APPROVED_FLAG",t:"VARCHAR2(1)",desc:"Y=Approved"},
+          {n:"APPROVED_DATE",t:"DATE",desc:"Date the PO was approved"},
+          {n:"ORG_ID",t:"NUMBER",desc:"Operating unit"},
+          {n:"AGENT_ID",t:"NUMBER",nn:true,desc:"FK to PER_ALL_PEOPLE_F — the buyer"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      },
+      { n:"PO_LINES_ALL", desc:"Individual line items on purchase orders.",
+        cols:[
+          {n:"PO_LINE_ID",t:"NUMBER",pk:true,nn:true,desc:"PO line identifier. Primary Key."},
+          {n:"PO_HEADER_ID",t:"NUMBER",nn:true,desc:"FK to PO_HEADERS_ALL"},
+          {n:"LINE_NUM",t:"NUMBER",nn:true,desc:"Line number on the PO"},
+          {n:"LINE_TYPE_ID",t:"NUMBER",nn:true,desc:"FK to PO_LINE_TYPES — Goods, Services, etc."},
+          {n:"ITEM_ID",t:"NUMBER",desc:"FK to MTL_SYSTEM_ITEMS_B — the item"},
+          {n:"ITEM_DESCRIPTION",t:"VARCHAR2(240)",desc:"Item description"},
+          {n:"UNIT_MEAS_LOOKUP_CODE",t:"VARCHAR2(25)",desc:"Unit of measure"},
+          {n:"QUANTITY",t:"NUMBER",desc:"Quantity ordered"},
+          {n:"UNIT_PRICE",t:"NUMBER",desc:"Price per unit"},
+          {n:"AMOUNT",t:"NUMBER",desc:"Line amount (for services)"},
+          {n:"CURRENCY_CODE",t:"VARCHAR2(15)",desc:"Currency override"},
+          {n:"CANCEL_FLAG",t:"VARCHAR2(1)",desc:"Y=Cancelled"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"}
+        ]
+      },
+      { n:"OE_ORDER_HEADERS_ALL", desc:"Order Management sales order headers.",
+        cols:[
+          {n:"HEADER_ID",t:"NUMBER",pk:true,nn:true,desc:"Order header identifier. Primary Key."},
+          {n:"ORDER_NUMBER",t:"NUMBER",nn:true,desc:"Order number — user-visible"},
+          {n:"ORDER_TYPE_ID",t:"NUMBER",nn:true,desc:"FK to OE_TRANSACTION_TYPES_ALL"},
+          {n:"SOLD_TO_ORG_ID",t:"NUMBER",desc:"FK to HZ_CUST_ACCOUNTS — sold-to customer"},
+          {n:"SHIP_TO_ORG_ID",t:"NUMBER",desc:"FK to HZ_CUST_ACCT_SITES_ALL — ship-to site"},
+          {n:"INVOICE_TO_ORG_ID",t:"NUMBER",desc:"FK to HZ_CUST_ACCT_SITES_ALL — bill-to site"},
+          {n:"ORDERED_DATE",t:"DATE",desc:"Date the order was placed"},
+          {n:"FLOW_STATUS_CODE",t:"VARCHAR2(30)",desc:"ENTERED, BOOKED, CLOSED, CANCELLED"},
+          {n:"CURRENCY_CODE",t:"VARCHAR2(15)",desc:"Order currency"},
+          {n:"PRICE_LIST_ID",t:"NUMBER",desc:"FK to QP_LIST_HEADERS_B — price list"},
+          {n:"ORG_ID",t:"NUMBER",desc:"Operating unit"},
+          {n:"SALESREP_ID",t:"NUMBER",desc:"FK to RA_SALESREPS_ALL — sales rep"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      }
+    ]
+  },
+  "Projects": {
+    color:"#34d399", icon:"📋",
+    tables:[
+      { n:"PA_PROJECTS_ALL", desc:"Project definitions across all operating units.",
+        cols:[
+          {n:"PROJECT_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Project identifier. Primary Key."},
+          {n:"SEGMENT1",t:"VARCHAR2(25)",nn:true,desc:"Project number — user-visible identifier"},
+          {n:"NAME",t:"VARCHAR2(30)",nn:true,desc:"Project name"},
+          {n:"PROJECT_TYPE",t:"VARCHAR2(20)",nn:true,desc:"Project type — INDIRECT, CONTRACT, CAPITAL"},
+          {n:"PROJECT_STATUS_CODE",t:"VARCHAR2(30)",nn:true,desc:"APPROVED, SUBMITTED, CLOSED, DRAFT"},
+          {n:"START_DATE",t:"DATE",desc:"Project start date"},
+          {n:"COMPLETION_DATE",t:"DATE",desc:"Expected completion date"},
+          {n:"ORG_ID",t:"NUMBER(15)",desc:"Operating unit"},
+          {n:"CARRYING_OUT_ORGANIZATION_ID",t:"NUMBER(15)",nn:true,desc:"Executing organization"},
+          {n:"PM_PRODUCT_CODE",t:"VARCHAR2(30)",desc:"Source product — MSPROJECT, PRIMAVERA etc."},
+          {n:"ACTUAL_START_DATE",t:"DATE",desc:"Actual project start date"},
+          {n:"ACTUAL_FINISH_DATE",t:"DATE",desc:"Actual project finish date"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      },
+      { n:"PA_TASKS", desc:"Task definitions within projects.",
+        cols:[
+          {n:"TASK_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Task identifier. Primary Key."},
+          {n:"PROJECT_ID",t:"NUMBER(15)",nn:true,desc:"FK to PA_PROJECTS_ALL"},
+          {n:"TASK_NUMBER",t:"VARCHAR2(25)",nn:true,desc:"Task number — user-visible"},
+          {n:"TASK_NAME",t:"VARCHAR2(20)",nn:true,desc:"Task name"},
+          {n:"TOP_TASK_ID",t:"NUMBER(15)",nn:true,desc:"FK to PA_TASKS — the top-level parent task"},
+          {n:"PARENT_TASK_ID",t:"NUMBER(15)",desc:"FK to PA_TASKS — immediate parent task"},
+          {n:"START_DATE",t:"DATE",desc:"Task planned start date"},
+          {n:"COMPLETION_DATE",t:"DATE",desc:"Task planned completion date"},
+          {n:"TASK_STATUS_CODE",t:"VARCHAR2(30)",desc:"Task status"},
+          {n:"CHARGEABLE_FLAG",t:"VARCHAR2(1)",desc:"Y=Expenditures can be charged to this task"},
+          {n:"BILLABLE_FLAG",t:"VARCHAR2(1)",desc:"Y=Task is billable"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"}
+        ]
+      }
+    ]
+  },
+  "CPQ": {
+    color:"#f472b6", icon:"💲",
+    tables:[
+      { n:"QP_LIST_HEADERS_B", desc:"Price list and modifier headers. Base language table.",
+        cols:[
+          {n:"LIST_HEADER_ID",t:"NUMBER",pk:true,nn:true,desc:"Price list header identifier. Primary Key."},
+          {n:"NAME",t:"VARCHAR2(240)",nn:true,desc:"Price list name"},
+          {n:"LIST_TYPE_CODE",t:"VARCHAR2(30)",nn:true,desc:"PRL=Price List, DIS=Discount, SUR=Surcharge, PRG=Price Group"},
+          {n:"CURRENCY_CODE",t:"VARCHAR2(15)",desc:"Currency for this price list"},
+          {n:"ACTIVE_FLAG",t:"VARCHAR2(1)",nn:true,desc:"Y=Active"},
+          {n:"START_DATE_ACTIVE",t:"DATE",desc:"Date price list becomes active"},
+          {n:"END_DATE_ACTIVE",t:"DATE",desc:"Date price list expires"},
+          {n:"DESCRIPTION",t:"VARCHAR2(2000)",desc:"Price list description"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      },
+      { n:"QP_LIST_LINES", desc:"Price list lines — individual pricing rules and adjustments.",
+        cols:[
+          {n:"LIST_LINE_ID",t:"NUMBER",pk:true,nn:true,desc:"Price list line identifier. Primary Key."},
+          {n:"LIST_HEADER_ID",t:"NUMBER",nn:true,desc:"FK to QP_LIST_HEADERS_B"},
+          {n:"LIST_LINE_TYPE_CODE",t:"VARCHAR2(30)",nn:true,desc:"PLL=Price, DIS=Discount, SUR=Surcharge, IUE=Item Upgrade"},
+          {n:"ARITHMETIC_OPERATOR",t:"VARCHAR2(30)",desc:"% or AMT — type of adjustment"},
+          {n:"OPERAND",t:"NUMBER",desc:"The discount/price value"},
+          {n:"START_DATE_ACTIVE",t:"DATE",desc:"Effectivity start date"},
+          {n:"END_DATE_ACTIVE",t:"DATE",desc:"Effectivity end date"},
+          {n:"AUTOMATIC_FLAG",t:"VARCHAR2(1)",desc:"Y=Automatically applied"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"}
+        ]
+      },
+      { n:"OKC_K_HEADERS_ALL_B", desc:"Contract headers — all contract types across Oracle Contracts.",
+        cols:[
+          {n:"ID",t:"NUMBER",pk:true,nn:true,desc:"Contract header identifier. Primary Key."},
+          {n:"CONTRACT_NUMBER",t:"VARCHAR2(120)",nn:true,desc:"Contract number"},
+          {n:"CONTRACT_NUMBER_MODIFIER",t:"VARCHAR2(120)",desc:"Contract number modifier — allows same number with different versions"},
+          {n:"STS_CODE",t:"VARCHAR2(30)",nn:true,desc:"Status: DRAFT, ACTIVE, SIGNED, EXPIRED, CANCELLED, TERMINATED"},
+          {n:"CHR_ID_RENEWED_TO",t:"NUMBER",desc:"FK to OKC_K_HEADERS_ALL_B — renewed-to contract"},
+          {n:"DESCRIPTION",t:"VARCHAR2(1995)",desc:"Contract description"},
+          {n:"START_DATE",t:"DATE",desc:"Contract start date"},
+          {n:"END_DATE",t:"DATE",desc:"Contract end date"},
+          {n:"DATE_SIGNED",t:"DATE",desc:"Date contract was signed"},
+          {n:"DATE_TERMINATED",t:"DATE",desc:"Date contract was terminated"},
+          {n:"CURRENCY_CODE",t:"VARCHAR2(15)",desc:"Contract currency"},
+          {n:"ORIG_SYSTEM_SOURCE_CODE",t:"VARCHAR2(30)",desc:"Source system code"},
+          {n:"LAST_UPDATE_DATE",t:"DATE",nn:true,desc:"Last update date"},
+          {n:"CREATION_DATE",t:"DATE",desc:"Row creation date"}
+        ]
+      }
+    ]
+  }
+};
+
+
+const ORACLE_SCHEMA = {
+  "HZ_PARTIES": {
+    desc: 'Stores basic information about parties — Organizations, Persons, Groups. Root TCA entity. Contains denormalized data from HZ_LOCATIONS, HZ_PERSON_PROFILES, HZ_CONTACT_POINTS.',
+    pk: "PARTY_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"PARTY_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Party identifier. Primary Key.'},
+      {n:"PARTY_NUMBER",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Unique identification number for this party'},
+      {n:"PARTY_NAME",t:"VARCHAR2(360)",pk:false,nn:true,desc:'Name of this party'},
+      {n:"PARTY_TYPE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'ORGANIZATION, PERSON, or GROUP'},
+      {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:true,desc:'Party status flag. A=Active, I=Inactive, M=Merged'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created the row'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated the row'},
+      {n:"LAST_UPDATE_LOGIN",t:"VARCHAR2(32)",pk:false,nn:false,desc:'Session login of user who last updated'},
+      {n:"ADDRESS1",t:"VARCHAR2(240)",pk:false,nn:false,desc:'First line of identifying address (denorm from HZ_LOCATIONS)'},
+      {n:"ADDRESS2",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Second line of identifying address'},
+      {n:"ADDRESS3",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Third line of identifying address'},
+      {n:"ADDRESS4",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Fourth line of identifying address'},
+      {n:"CITY",t:"VARCHAR2(60)",pk:false,nn:false,desc:'City of the identifying address'},
+      {n:"STATE",t:"VARCHAR2(60)",pk:false,nn:false,desc:'State of the identifying address'},
+      {n:"PROVINCE",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Province of the identifying address'},
+      {n:"COUNTY",t:"VARCHAR2(60)",pk:false,nn:false,desc:'County of the identifying address'},
+      {n:"POSTAL_CODE",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Postal Code of the identifying address'},
+      {n:"COUNTRY",t:"VARCHAR2(2)",pk:false,nn:false,desc:'Country code — FK to FND_TERRITORIES'},
+      {n:"EMAIL_ADDRESS",t:"VARCHAR2(320)",pk:false,nn:false,desc:'E-mail address (denorm from HZ_CONTACT_POINTS)'},
+      {n:"PRIMARY_PHONE_NUMBER",t:"VARCHAR2(40)",pk:false,nn:false,desc:'Phone number in local format (denorm from HZ_CONTACT_POINTS)'},
+      {n:"PRIMARY_PHONE_COUNTRY_CODE",t:"VARCHAR2(10)",pk:false,nn:false,desc:'International country code for phone'},
+      {n:"PRIMARY_PHONE_AREA_CODE",t:"VARCHAR2(20)",pk:false,nn:false,desc:'Area code for phone'},
+      {n:"PRIMARY_PHONE_EXTENSION",t:"VARCHAR2(20)",pk:false,nn:false,desc:'Phone extension'},
+      {n:"URL",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'Uniform resource locator'},
+      {n:"DUNS_NUMBER_C",t:"VARCHAR2(30)",pk:false,nn:false,desc:'D-U-N-S Number in VARCHAR format'},
+      {n:"SIC_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Standard Industry Classification code'},
+      {n:"SIC_CODE_TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Version of SIC code'},
+      {n:"EMPLOYEES_TOTAL",t:"NUMBER",pk:false,nn:false,desc:'Total number of employees'},
+      {n:"CURR_FY_POTENTIAL_REVENUE",t:"NUMBER",pk:false,nn:false,desc:'Organization potential revenue this fiscal year'},
+      {n:"NEXT_FY_POTENTIAL_REVENUE",t:"NUMBER",pk:false,nn:false,desc:'Organization potential revenue next fiscal year'},
+      {n:"CATEGORY_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'User-definable category. Lookup CUSTOMER_CATEGORY'},
+      {n:"SALUTATION",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Phrase used to address party in correspondence'},
+      {n:"PERSON_FIRST_NAME",t:"VARCHAR2(150)",pk:false,nn:false,desc:'First name (for PERSON type parties)'},
+      {n:"PERSON_MIDDLE_NAME",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Middle name (for PERSON type parties)'},
+      {n:"PERSON_LAST_NAME",t:"VARCHAR2(150)",pk:false,nn:false,desc:'Last name (for PERSON type parties)'},
+      {n:"PERSON_PRE_NAME_ADJUNCT",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Salutation e.g. Mr., Dr., Herr'},
+      {n:"PERSON_TITLE",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Professional or family title'},
+      {n:"HQ_BRANCH_IND",t:"VARCHAR2(30)",pk:false,nn:false,desc:'HQ, Branch, or Single location indicator'},
+      {n:"JGZZ_FISCAL_CODE",t:"VARCHAR2(20)",pk:false,nn:false,desc:'Taxpayer ID — SSN or Tax ID'},
+      {n:"MISSION_STATEMENT",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'Corporate charter of organization'},
+      {n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",pk:false,nn:true,desc:'Customer identifier from legacy system'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+      {n:"CREATED_BY_MODULE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'TCA Who column — which module created'},
+      {n:"PREFERRED_CONTACT_METHOD",t:"VARCHAR2(30)",pk:false,nn:false,desc:'How party prefers to be contacted. Lookup HZ_PREFERRED_CONTACT_METHOD'},
+      {n:"IDEN_ADDR_PARTY_SITE_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_PARTY_SITES — identifying address party site'},
+      {n:"IDEN_ADDR_LOCATION_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_LOCATIONS — identifying address location'},
+      {n:"PRIMARY_EMAIL_CONTACT_PT_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_CONTACT_POINTS — primary email'},
+      {n:"PREFERRED_NAME",t:"VARCHAR2(360)",pk:false,nn:false,desc:'Preferred name for the party'},
+      {n:"HOME_COUNTRY",t:"VARCHAR2(2)",pk:false,nn:false,desc:'Home country of the organization'},
+      {n:"CONFLICT_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'Disconnected Mobile: uniqueness guarantee'},
+    ]
+  },
+  "HZ_CUST_ACCOUNTS": {
+    desc: 'Customer accounts — business relationships with parties. One party can have multiple accounts. Contains billing and receivables relationship data.',
+    pk: "CUST_ACCOUNT_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"CUST_ACCOUNT_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Unique identifier. Primary Key.'},
+      {n:"PARTY_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_PARTIES'},
+      {n:"ACCOUNT_NUMBER",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Account Number'},
+      {n:"ACCOUNT_NAME",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Description chosen by external party'},
+      {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:true,desc:'A=Active, I=Inactive'},
+      {n:"CUSTOMER_TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'I=Internal, R=Revenue generating external'},
+      {n:"CUSTOMER_CLASS_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Customer class e.g. RESELLER, EDUCATION'},
+      {n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",pk:false,nn:true,desc:'Unique customer ID from legacy system'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated row'},
+      {n:"ACCOUNT_ESTABLISHED_DATE",t:"DATE",pk:false,nn:false,desc:'Date account was originally established'},
+      {n:"STATUS_UPDATE_DATE",t:"DATE",pk:false,nn:false,desc:'Last status update date'},
+      {n:"TAX_CODE",t:"VARCHAR2(50)",pk:false,nn:false,desc:'Tax code for the customer'},
+      {n:"TAX_HEADER_LEVEL_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:'Y=Tax header, N=Line item'},
+      {n:"TAX_ROUNDING_RULE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Tax amount rounding rule'},
+      {n:"SOURCE_CODE",t:"VARCHAR2(150)",pk:false,nn:false,desc:'Promotion used to make party a customer'},
+      {n:"COMMENTS",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'Free format information about customer'},
+      {n:"AUTOPAY_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:'Y=Autopay enabled'},
+      {n:"HOLD_BILL_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:'Y=Hold bill receivable'},
+      {n:"HELD_BILL_EXPIRATION_DATE",t:"DATE",pk:false,nn:false,desc:'Held bill expiration date'},
+      {n:"SELLING_PARTY_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_PARTIES — the selling party'},
+      {n:"DEPOSIT_REFUND_METHOD",t:"VARCHAR2(20)",pk:false,nn:false,desc:'Refund method'},
+      {n:"NPA_NUMBER",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Number Plan Area for telecommunications'},
+      {n:"DATE_TYPE_PREFERENCE",t:"VARCHAR2(20)",pk:false,nn:false,desc:'Preference for ship or arrival dates'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+      {n:"CREATED_BY_MODULE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'TCA Who column'},
+    ]
+  },
+  "HZ_PARTY_SITES": {
+    desc: 'Links parties to locations. Stores location-specific party info like MAILSTOP. One party can have multiple sites.',
+    pk: "PARTY_SITE_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"PARTY_SITE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Party site identifier. Primary Key.'},
+      {n:"PARTY_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_PARTIES'},
+      {n:"LOCATION_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_LOCATIONS'},
+      {n:"PARTY_SITE_NUMBER",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Party site number'},
+      {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:false,desc:'A=Active, I=Inactive'},
+      {n:"IDENTIFYING_ADDRESS_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:'Y=Primary identifying address for party'},
+      {n:"MAILSTOP",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Delivery point within organization'},
+      {n:"ADDRESSEE",t:"VARCHAR2(150)",pk:false,nn:false,desc:'Name/title of the person at the address'},
+      {n:"LANGUAGE",t:"VARCHAR2(4)",pk:false,nn:false,desc:'Language for address translation'},
+      {n:"PARTY_SITE_NAME",t:"VARCHAR2(240)",pk:false,nn:false,desc:'User-defined name for the party site'},
+      {n:"COMMENTS",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Comments about the party site'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:false,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated row'},
+      {n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Legacy system reference'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_LOCATIONS": {
+    desc: 'Stores postal address and physical location data. Contains delivery info, latitude/longitude. Referenced by HZ_PARTY_SITES.',
+    pk: "LOCATION_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"LOCATION_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Location identifier. Primary Key.'},
+      {n:"ADDRESS1",t:"VARCHAR2(240)",pk:false,nn:true,desc:'First line of address'},
+      {n:"ADDRESS2",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Second line of address'},
+      {n:"ADDRESS3",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Third line of address'},
+      {n:"ADDRESS4",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Fourth line of address'},
+      {n:"CITY",t:"VARCHAR2(60)",pk:false,nn:false,desc:'City'},
+      {n:"POSTAL_CODE",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Postal code'},
+      {n:"STATE",t:"VARCHAR2(60)",pk:false,nn:false,desc:'State or province abbreviation'},
+      {n:"PROVINCE",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Province'},
+      {n:"COUNTY",t:"VARCHAR2(60)",pk:false,nn:false,desc:'County'},
+      {n:"COUNTRY",t:"VARCHAR2(60)",pk:false,nn:true,desc:'Country code — FK to FND_TERRITORIES'},
+      {n:"LOCATION_DIRECTIONS",t:"VARCHAR2(640)",pk:false,nn:false,desc:'Directions to the location'},
+      {n:"ADDRESS_EFFECTIVE_DATE",t:"DATE",pk:false,nn:false,desc:'Date this address became effective'},
+      {n:"ADDRESS_EXPIRATION_DATE",t:"DATE",pk:false,nn:false,desc:'Date this address expires'},
+      {n:"TIME_ZONE",t:"NUMBER",pk:false,nn:false,desc:'Time zone offset from GMT'},
+      {n:"LANGUAGE",t:"VARCHAR2(4)",pk:false,nn:false,desc:'Language of address translation'},
+      {n:"SHORT_DESCRIPTION",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Short description of the location'},
+      {n:"DESCRIPTION",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'Long description of the location'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated row'},
+      {n:"GEOMETRY",t:"SDO_GEOMETRY",pk:false,nn:false,desc:'Spatial geometry for geographic coordinates'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_CONTACT_POINTS": {
+    desc: 'Stores electronic communication methods: PHONE, EMAIL, WEB, FAX, EDI, EFT. Each method stored as a separate row.',
+    pk: "CONTACT_POINT_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"CONTACT_POINT_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Contact point identifier. Primary Key.'},
+      {n:"CONTACT_POINT_TYPE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'PHONE, EMAIL, WEB, FAX, EFT, EDI, TLX'},
+      {n:"OWNER_TABLE_NAME",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Table owning this contact e.g. HZ_PARTIES'},
+      {n:"OWNER_TABLE_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to the owner table record'},
+      {n:"STATUS",t:"VARCHAR2(30)",pk:false,nn:true,desc:'A=Active, I=Inactive, D=Do Not Use'},
+      {n:"PRIMARY_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:'Y=Primary contact point of this type'},
+      {n:"CONTACT_POINT_PURPOSE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'BUSINESS, PERSONAL, MARKETING'},
+      {n:"EMAIL_ADDRESS",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'Email address (when CONTACT_POINT_TYPE=EMAIL)'},
+      {n:"PHONE_COUNTRY_CODE",t:"VARCHAR2(10)",pk:false,nn:false,desc:'International country code'},
+      {n:"PHONE_AREA_CODE",t:"VARCHAR2(10)",pk:false,nn:false,desc:'Phone area code'},
+      {n:"PHONE_NUMBER",t:"VARCHAR2(40)",pk:false,nn:false,desc:'Phone number in local format'},
+      {n:"PHONE_EXTENSION",t:"VARCHAR2(20)",pk:false,nn:false,desc:'Phone extension number'},
+      {n:"PHONE_LINE_TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'GENERAL, FAX, INBOUND, OUTBOUND, MOBILE'},
+      {n:"URL",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'URL (when CONTACT_POINT_TYPE=WEB)'},
+      {n:"RAW_PHONE_NUMBER",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Unformatted phone number'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated row'},
+      {n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Legacy system reference'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_RELATIONSHIPS": {
+    desc: 'Stores relationships between parties. E.g. CONTACT_OF, SUBSIDIARY_OF, PARTNER_OF, EMPLOYEE_OF.',
+    pk: "RELATIONSHIP_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"RELATIONSHIP_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Relationship identifier. Primary Key.'},
+      {n:"SUBJECT_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_PARTIES — subject of relationship'},
+      {n:"SUBJECT_TYPE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'ORGANIZATION, PERSON, GROUP'},
+      {n:"SUBJECT_TABLE_NAME",t:"VARCHAR2(30)",pk:false,nn:true,desc:'HZ_PARTIES'},
+      {n:"OBJECT_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_PARTIES — object of relationship'},
+      {n:"OBJECT_TYPE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'ORGANIZATION, PERSON, GROUP'},
+      {n:"OBJECT_TABLE_NAME",t:"VARCHAR2(30)",pk:false,nn:true,desc:'HZ_PARTIES'},
+      {n:"RELATIONSHIP_CODE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'CONTACT_OF, SUBSIDIARY_OF, PARTNER_OF, EMPLOYEE_OF'},
+      {n:"RELATIONSHIP_TYPE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Relationship type classification'},
+      {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:true,desc:'A=Active, I=Inactive'},
+      {n:"START_DATE",t:"DATE",pk:false,nn:true,desc:'Start date of the relationship'},
+      {n:"END_DATE",t:"DATE",pk:false,nn:false,desc:'End date of the relationship'},
+      {n:"COMMENTS",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Comments about the relationship'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated row'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_ORG_CONTACTS": {
+    desc: 'Contact roles for persons who are contacts for organizations. Links people to organizations via relationships.',
+    pk: "ORG_CONTACT_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"ORG_CONTACT_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Org contact identifier. Primary Key.'},
+      {n:"PARTY_RELATIONSHIP_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_RELATIONSHIPS'},
+      {n:"PARTY_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_PARTIES — the organization party'},
+      {n:"CONTACT_NUMBER",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Contact number — user visible'},
+      {n:"JOB_TITLE",t:"VARCHAR2(100)",pk:false,nn:false,desc:'Job title at the organization'},
+      {n:"JOB_TITLE_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Lookup code for job title'},
+      {n:"DEPARTMENT",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Department the contact belongs to'},
+      {n:"DEPARTMENT_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Lookup code for department'},
+      {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:false,desc:'A=Active, I=Inactive'},
+      {n:"DECISION_MAKER_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:'Y=Contact is a decision maker'},
+      {n:"MAIL_STOP",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Mail stop of the contact'},
+      {n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Legacy system reference'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_CUST_ACCT_SITES_ALL": {
+    desc: 'Customer account sites — links customer accounts to party sites across Operating Units.',
+    pk: "CUST_ACCT_SITE_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"CUST_ACCT_SITE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Customer account site identifier. Primary Key.'},
+      {n:"CUST_ACCOUNT_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_CUST_ACCOUNTS'},
+      {n:"PARTY_SITE_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_PARTY_SITES'},
+      {n:"ORG_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'Operating Unit identifier'},
+      {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:true,desc:'A=Active, I=Inactive'},
+      {n:"CUSTOMER_CATEGORY_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'User-definable category'},
+      {n:"LANGUAGE",t:"VARCHAR2(4)",pk:false,nn:false,desc:'Language for the site'},
+      {n:"ORIG_SYSTEM_REFERENCE",t:"VARCHAR2(240)",pk:false,nn:false,desc:'Legacy system reference'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated row'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_CUST_SITE_USES_ALL": {
+    desc: 'Purpose of each customer site — BILL_TO, SHIP_TO, STATEMENTS, DUNNING. One site can have multiple uses.',
+    pk: "SITE_USE_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"SITE_USE_ID",t:"NUMBER(15)",pk:true,nn:true,desc:'Site use identifier. Primary Key.'},
+      {n:"CUST_ACCT_SITE_ID",t:"NUMBER(15)",pk:false,nn:true,desc:'FK to HZ_CUST_ACCT_SITES_ALL'},
+      {n:"SITE_USE_CODE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'BILL_TO, SHIP_TO, MARKET, STATEMENTS, LEGAL, DUN'},
+      {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:true,desc:'A=Active, I=Inactive'},
+      {n:"ORG_ID",t:"NUMBER(15)",pk:false,nn:false,desc:'Operating Unit'},
+      {n:"LOCATION",t:"VARCHAR2(40)",pk:false,nn:true,desc:'User defined name for site use'},
+      {n:"PRIMARY_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:'Y=Primary site use of this type'},
+      {n:"BILL_TO_SITE_USE_ID",t:"NUMBER(15)",pk:false,nn:false,desc:'FK to HZ_CUST_SITE_USES_ALL — bill-to for ship-to'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated row'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_ORG_PROFILES": {
+    desc: 'Organization-specific profile data. Populated when a party of type ORGANIZATION is created or updated.',
+    pk: "ORG_PROFILE_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"ORG_PROFILE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Org profile identifier. Primary Key.'},
+      {n:"PARTY_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_PARTIES'},
+      {n:"ORGANIZATION_NAME",t:"VARCHAR2(360)",pk:false,nn:true,desc:'Organization name'},
+      {n:"ORGANIZATION_NAME_PHONETIC",t:"VARCHAR2(320)",pk:false,nn:false,desc:'Phonetic representation of organization name'},
+      {n:"DUNS_NUMBER_C",t:"VARCHAR2(30)",pk:false,nn:false,desc:'D-U-N-S Number'},
+      {n:"TAX_REFERENCE",t:"VARCHAR2(50)",pk:false,nn:false,desc:'Taxpayer identification number'},
+      {n:"EMPLOYEES_TOTAL",t:"NUMBER",pk:false,nn:false,desc:'Total number of employees'},
+      {n:"ANNUAL_REVENUE",t:"NUMBER",pk:false,nn:false,desc:'Annual revenue'},
+      {n:"CURR_FY_POTENTIAL_REVENUE",t:"NUMBER",pk:false,nn:false,desc:'Potential revenue current FY'},
+      {n:"NEXT_FY_POTENTIAL_REVENUE",t:"NUMBER",pk:false,nn:false,desc:'Potential revenue next FY'},
+      {n:"YEAR_ESTABLISHED",t:"NUMBER(4)",pk:false,nn:false,desc:'Year organization began doing business'},
+      {n:"SIC_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Standard Industry Classification code'},
+      {n:"SIC_CODE_TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Version of SIC code'},
+      {n:"HQ_BRANCH_IND",t:"VARCHAR2(30)",pk:false,nn:false,desc:'HQ, Branch, or Single location'},
+      {n:"MISSION_STATEMENT",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'Corporate charter'},
+      {n:"MINORITY_OWNED_IND",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Minority owned indicator'},
+      {n:"SMALL_BUS_IND",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Small business indicator'},
+      {n:"WOMAN_OWNED_IND",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Woman owned indicator'},
+      {n:"EFFECTIVE_START_DATE",t:"DATE",pk:false,nn:true,desc:'Date profile became effective'},
+      {n:"EFFECTIVE_END_DATE",t:"DATE",pk:false,nn:true,desc:'Date profile expired'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_PERSON_PROFILES": {
+    desc: 'Person-specific profile data. Populated when a party of type PERSON is created or updated.',
+    pk: "PERSON_PROFILE_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"PERSON_PROFILE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Person profile identifier. Primary Key.'},
+      {n:"PARTY_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to HZ_PARTIES'},
+      {n:"PERSON_LAST_NAME",t:"VARCHAR2(150)",pk:false,nn:true,desc:'Last or surname of person'},
+      {n:"PERSON_FIRST_NAME",t:"VARCHAR2(150)",pk:false,nn:false,desc:'First name'},
+      {n:"PERSON_MIDDLE_NAME",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Middle name'},
+      {n:"PERSON_NAME_SUFFIX",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Name suffix e.g. Jr., III'},
+      {n:"PERSON_PRE_NAME_ADJUNCT",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Salutation e.g. Mr., Dr.'},
+      {n:"PERSON_TITLE",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Professional title'},
+      {n:"PERSON_ACADEMIC_TITLE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Academic title e.g. PhD, MD'},
+      {n:"GENDER",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Gender — lookup HZ_GENDER'},
+      {n:"MARITAL_STATUS",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Marital status'},
+      {n:"DATE_OF_BIRTH",t:"DATE",pk:false,nn:false,desc:'Date of birth'},
+      {n:"DATE_OF_DEATH",t:"DATE",pk:false,nn:false,desc:'Date of death'},
+      {n:"DECLARED_ETHNICITY",t:"VARCHAR2(60)",pk:false,nn:false,desc:'Declared ethnicity'},
+      {n:"JOB_TITLE",t:"VARCHAR2(100)",pk:false,nn:false,desc:'Job title'},
+      {n:"JOB_TITLE_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Lookup code for job title'},
+      {n:"EFFECTIVE_START_DATE",t:"DATE",pk:false,nn:true,desc:'Date profile became effective'},
+      {n:"EFFECTIVE_END_DATE",t:"DATE",pk:false,nn:true,desc:'Date profile expired'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "HZ_CODE_ASSIGNMENTS": {
+    desc: 'Classification codes associated with parties. Stores SIC codes, industry codes, etc. alongside their category.',
+    pk: "CODE_ASSIGNMENT_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"CODE_ASSIGNMENT_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Code assignment identifier. Primary Key.'},
+      {n:"OWNER_TABLE_NAME",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Owner table e.g. HZ_PARTIES'},
+      {n:"OWNER_TABLE_ID",t:"NUMBER(18)",pk:false,nn:true,desc:'FK to the owner table record'},
+      {n:"CLASS_CATEGORY",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Classification category e.g. NACE, SIC, NAICS'},
+      {n:"CLASS_CODE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Classification code value'},
+      {n:"PRIMARY_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:'Y=Primary classification of this category'},
+      {n:"CONTENT_SOURCE_TYPE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Source of this classification'},
+      {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:true,desc:'A=Active, I=Inactive'},
+      {n:"START_DATE_ACTIVE",t:"DATE",pk:false,nn:false,desc:'Date classification became active'},
+      {n:"END_DATE_ACTIVE",t:"DATE",pk:false,nn:false,desc:'Date classification expired'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:'Optimistic locking version number'},
+    ]
+  },
+  "ZCA_SALES_LEADS": {
+    desc: 'Sales leads (opportunities at early stage). Tracks source, status, budget, and party associations.',
+    pk: "SALES_LEAD_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"SALES_LEAD_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Sales lead identifier. Primary Key.'},
+      {n:"LEAD_NUMBER",t:"VARCHAR2(30)",pk:false,nn:true,desc:'User-visible lead number'},
+      {n:"DESCRIPTION",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'Lead description'},
+      {n:"STATUS_CODE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'Status lookup — OPEN, CONVERTED, DEAD'},
+      {n:"CUSTOMER_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_PARTIES — the account party'},
+      {n:"CONTACT_PARTY_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_PARTIES — the contact'},
+      {n:"ASSIGN_TO_PERSON_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to resource — assigned sales rep'},
+      {n:"ASSIGN_TO_SALESFORCE_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to sales team member'},
+      {n:"BUDGET_AMOUNT",t:"NUMBER",pk:false,nn:false,desc:'Budget amount for the lead'},
+      {n:"CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:false,desc:'Currency of budget'},
+      {n:"BUDGET_STATUS_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Budget status — APPROVED, PENDING'},
+      {n:"CLOSE_REASON_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Reason lead was closed'},
+      {n:"SOURCE_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:'Source/campaign code'},
+      {n:"SOURCE_PROMOTION_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to source promotion'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+      {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who last updated row'},
+    ]
+  },
+  "MOO_OPPORTUNITIES": {
+    desc: 'Sales Opportunities (Cloud CX Sales). Tracks revenue, stage, close date, competitors, products.',
+    pk: "OPP_ID",
+    url: "https://docs.oracle.com/en/cloud/saas/sales/oedms/",
+    cols: [
+      {n:"OPP_ID",t:"NUMBER(18)",pk:true,nn:true,desc:'Opportunity identifier. Primary Key.'},
+      {n:"OPP_NUMBER",t:"VARCHAR2(30)",pk:false,nn:true,desc:'User-visible opportunity number'},
+      {n:"NAME",t:"VARCHAR2(240)",pk:false,nn:true,desc:'Opportunity name'},
+      {n:"STATUS_CODE",t:"VARCHAR2(30)",pk:false,nn:true,desc:'OPEN, WON, LOST, INACTIVE'},
+      {n:"SALES_STAGE_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to sales stage'},
+      {n:"WIN_PROBABILITY",t:"NUMBER",pk:false,nn:false,desc:'Win probability percentage 0-100'},
+      {n:"REVENUE_AMOUNT",t:"NUMBER",pk:false,nn:false,desc:'Expected revenue amount'},
+      {n:"CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:false,desc:'Revenue currency'},
+      {n:"CLOSE_DATE",t:"DATE",pk:false,nn:false,desc:'Expected close date'},
+      {n:"ACTUAL_CLOSE_DATE",t:"DATE",pk:false,nn:false,desc:'Actual close date'},
+      {n:"CUSTOMER_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_PARTIES — account party'},
+      {n:"CONTACT_PARTY_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to HZ_PARTIES — primary contact'},
+      {n:"OWNER_RESOURCE_ID",t:"NUMBER(18)",pk:false,nn:false,desc:'FK to resource — opportunity owner'},
+      {n:"DESCRIPTION",t:"VARCHAR2(2000)",pk:false,nn:false,desc:'Opportunity description'},
+      {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:'User who created row'},
+      {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Row creation timestamp'},
+      {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:'Last update timestamp'},
+    ]
+  },
+};
+
+// ORACLE_SCHEMA already declared above
+
+
+// ═══════════════════════════════════════════
+// FINANCE — from docs.oracle.com/financials/25c/oedmf
+// ═══════════════════════════════════════════
+ORACLE_SCHEMA["GL_JE_HEADERS"] = {
+  desc:"Journal entry headers. One row per journal entry. STATUS: U=Unposted, P=Posted. Source: docs.oracle.com/financials/25c/oedmf",
+  pk:"JE_HEADER_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/gljeheaders-6523.html",
+  cols:[
+    {n:"JE_HEADER_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Journal entry header identifier. Primary Key."},
+    {n:"LEDGER_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"FK to GL_LEDGERS — the ledger this entry belongs to"},
+    {n:"JE_BATCH_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"FK to GL_JE_BATCHES — journal batch"},
+    {n:"JE_CATEGORY",t:"VARCHAR2(25)",pk:false,nn:true,desc:"Journal category e.g. Accrual, Adjustment, Other. FK to GL_JE_CATEGORIES_B"},
+    {n:"JE_SOURCE",t:"VARCHAR2(25)",pk:false,nn:true,desc:"Source system e.g. Manual, Payables, Receivables. FK to GL_JE_SOURCES_B"},
+    {n:"PERIOD_NAME",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Accounting period e.g. JAN-24. FK to GL_PERIODS"},
+    {n:"NAME",t:"VARCHAR2(100)",pk:false,nn:true,desc:"User entered journal header name"},
+    {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:true,desc:"U=Unposted, P=Posted. Error codes 1-9, A-Z for validation failures"},
+    {n:"ACTUAL_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"A=Actual, B=Budget, E=Encumbrance"},
+    {n:"DEFAULT_EFFECTIVE_DATE",t:"DATE",pk:false,nn:true,desc:"Journal entry default effective date"},
+    {n:"CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:false,desc:"Journal currency. FK to FND_CURRENCIES_B"},
+    {n:"POSTED_DATE",t:"DATE",pk:false,nn:false,desc:"Date journal was posted"},
+    {n:"DESCRIPTION",t:"VARCHAR2(240)",pk:false,nn:false,desc:"User entered journal header description"},
+    {n:"RUNNING_TOTAL_DR",t:"NUMBER",pk:false,nn:false,desc:"Running total debits in entered currency"},
+    {n:"RUNNING_TOTAL_CR",t:"NUMBER",pk:false,nn:false,desc:"Running total credits in entered currency"},
+    {n:"RUNNING_TOTAL_ACCOUNTED_DR",t:"NUMBER",pk:false,nn:false,desc:"Running total debits in functional currency"},
+    {n:"RUNNING_TOTAL_ACCOUNTED_CR",t:"NUMBER",pk:false,nn:false,desc:"Running total credits in functional currency"},
+    {n:"CURRENCY_CONVERSION_RATE",t:"NUMBER",pk:false,nn:false,desc:"Exchange rate for the journal"},
+    {n:"CURRENCY_CONVERSION_TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Corporate, Spot, User, etc."},
+    {n:"CURRENCY_CONVERSION_DATE",t:"DATE",pk:false,nn:false,desc:"Date used for currency conversion"},
+    {n:"ACCRUAL_REV_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=This is a reversal of an accrual"},
+    {n:"ACCRUAL_REV_PERIOD_NAME",t:"VARCHAR2(15)",pk:false,nn:false,desc:"Period for the accrual reversal"},
+    {n:"ACCRUAL_REV_STATUS",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Status of accrual reversal"},
+    {n:"REVERSED_JE_HEADER_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to GL_JE_HEADERS — the journal reversed by this entry"},
+    {n:"LEGAL_ENTITY_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to XLE_ENTITY_PROFILES — legal entity"},
+    {n:"BALANCING_SEGMENT_VALUE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Key flexfield balancing segment value"},
+    {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:"User who created the row"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+    {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:"User who last updated the row"},
+  ]
+};
+
+ORACLE_SCHEMA["GL_JE_LINES"] = {
+  desc:"Journal entry lines — debit and credit entries. Child of GL_JE_HEADERS. Source: docs.oracle.com/financials/25c/oedmf",
+  pk:"JE_HEADER_ID,JE_LINE_NUM",
+  url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/gljelines-22720.html",
+  cols:[
+    {n:"JE_HEADER_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"FK to GL_JE_HEADERS. Composite PK."},
+    {n:"JE_LINE_NUM",t:"NUMBER(18)",pk:true,nn:true,desc:"Line number within the journal entry. Composite PK."},
+    {n:"LEDGER_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"FK to GL_LEDGERS"},
+    {n:"CODE_COMBINATION_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"FK to GL_CODE_COMBINATIONS — accounting flexfield CCID"},
+    {n:"PERIOD_NAME",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Accounting period"},
+    {n:"EFFECTIVE_DATE",t:"DATE",pk:false,nn:true,desc:"Effective accounting date"},
+    {n:"STATUS",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Journal line status"},
+    {n:"ENTERED_DR",t:"NUMBER",pk:false,nn:false,desc:"Debit amount in entered/transaction currency"},
+    {n:"ENTERED_CR",t:"NUMBER",pk:false,nn:false,desc:"Credit amount in entered/transaction currency"},
+    {n:"ACCOUNTED_DR",t:"NUMBER",pk:false,nn:false,desc:"Debit amount in functional/base currency"},
+    {n:"ACCOUNTED_CR",t:"NUMBER",pk:false,nn:false,desc:"Credit amount in functional/base currency"},
+    {n:"CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Transaction currency"},
+    {n:"CURRENCY_CONVERSION_RATE",t:"NUMBER",pk:false,nn:false,desc:"Exchange rate used for conversion"},
+    {n:"DESCRIPTION",t:"VARCHAR2(240)",pk:false,nn:false,desc:"User entered line description"},
+    {n:"SUBLEDGER_DOC_SEQUENCE_VALUE",t:"NUMBER",pk:false,nn:false,desc:"Voucher number from subledger"},
+    {n:"REFERENCE_1",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Free text reference field 1"},
+    {n:"REFERENCE_2",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Free text reference field 2"},
+    {n:"REFERENCE_3",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Free text reference field 3"},
+    {n:"REFERENCE_4",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Free text reference field 4"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+  ]
+};
+
+ORACLE_SCHEMA["GL_CODE_COMBINATIONS"] = {
+  desc:"Chart of accounts — all valid account code segment combinations. The Accounting Flexfield structure. Source: docs.oracle.com/financials/25c/oedmf",
+  pk:"CODE_COMBINATION_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/glcodecombinations-6523.html",
+  cols:[
+    {n:"CODE_COMBINATION_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Unique account combination identifier. Primary Key."},
+    {n:"CHART_OF_ACCOUNTS_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"FK to the chart of accounts structure"},
+    {n:"SEGMENT1",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Segment 1 — typically Company/Entity"},
+    {n:"SEGMENT2",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Segment 2 — typically Department/Cost Center"},
+    {n:"SEGMENT3",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Segment 3 — typically Account"},
+    {n:"SEGMENT4",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Segment 4 — typically Sub-Account"},
+    {n:"SEGMENT5",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Segment 5 — typically Project"},
+    {n:"SEGMENT6",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Segment 6"},
+    {n:"SEGMENT7",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Segment 7"},
+    {n:"ENABLED_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=This combination is enabled for use"},
+    {n:"SUMMARY_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=Summary account, N=Detail account"},
+    {n:"ACCOUNT_TYPE",t:"VARCHAR2(1)",pk:false,nn:false,desc:"A=Asset, L=Liability, O=Owners Equity, R=Revenue, E=Expense"},
+    {n:"START_DATE_ACTIVE",t:"DATE",pk:false,nn:false,desc:"Date combination became valid"},
+    {n:"END_DATE_ACTIVE",t:"DATE",pk:false,nn:false,desc:"Date combination became invalid"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:false,desc:"Row creation date"},
+  ]
+};
+
+ORACLE_SCHEMA["GL_LEDGERS"] = {
+  desc:"Ledger definitions — primary, secondary, and reporting ledgers. Each ledger has a chart of accounts, currency, and accounting calendar.",
+  pk:"LEDGER_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/glledgers-6523.html",
+  cols:[
+    {n:"LEDGER_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Ledger identifier. Primary Key."},
+    {n:"NAME",t:"VARCHAR2(30)",pk:false,nn:true,desc:"Ledger name"},
+    {n:"SHORT_NAME",t:"VARCHAR2(20)",pk:false,nn:true,desc:"Short name for the ledger"},
+    {n:"DESCRIPTION",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Ledger description"},
+    {n:"LEDGER_CATEGORY_CODE",t:"VARCHAR2(30)",pk:false,nn:true,desc:"PRIMARY, SECONDARY, ALC, NONE"},
+    {n:"CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Functional currency — FK to FND_CURRENCIES"},
+    {n:"PERIOD_SET_NAME",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Accounting calendar — FK to GL_PERIOD_SETS"},
+    {n:"ACCOUNTED_PERIOD_TYPE",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Accounting period type"},
+    {n:"CHART_OF_ACCOUNTS_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"FK to FND_ID_FLEX_STRUCTURES — chart of accounts"},
+    {n:"RET_EARN_CODE_COMBINATION_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"Retained earnings account CCID"},
+    {n:"ENABLE_BUDGETARY_CONTROL_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=Budgetary control enabled"},
+    {n:"REQUIRE_BUDGET_JOURNALS_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=Budget journals required"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:false,desc:"Row creation date"},
+  ]
+};
+
+ORACLE_SCHEMA["AP_INVOICES_ALL"] = {
+  desc:"Payables invoices — one row per invoice. Covers STANDARD, CREDIT, DEBIT, PREPAYMENT, EXPENSE REPORT types. Source: docs.oracle.com/financials/25c/oedmf",
+  pk:"INVOICE_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/apinvoicesall-26236.html",
+  cols:[
+    {n:"INVOICE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Unique invoice identifier. Primary Key."},
+    {n:"INVOICE_NUM",t:"VARCHAR2(50)",pk:false,nn:true,desc:"Supplier invoice number — must be unique per vendor site"},
+    {n:"INVOICE_TYPE_LOOKUP_CODE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"STANDARD, CREDIT, DEBIT, PREPAYMENT, EXPENSE REPORT, INTEREST"},
+    {n:"VENDOR_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to AP_SUPPLIERS — invoice supplier"},
+    {n:"VENDOR_SITE_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to AP_SUPPLIER_SITES_ALL — physical supplier location"},
+    {n:"INVOICE_DATE",t:"DATE",pk:false,nn:false,desc:"Date on the supplier invoice"},
+    {n:"INVOICE_AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Total invoice amount in transaction currency"},
+    {n:"INVOICE_CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Currency code of the invoice"},
+    {n:"PAYMENT_CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Currency used for payment"},
+    {n:"AMOUNT_PAID",t:"NUMBER",pk:false,nn:false,desc:"Amount paid against this invoice"},
+    {n:"PAYMENT_STATUS_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Fully paid, P=Partially paid, N=Not paid"},
+    {n:"APPROVAL_STATUS",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Status of manual authorization approval"},
+    {n:"SOURCE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Feeder system — MANUAL, EDI GATEWAY, XML GATEWAY, etc."},
+    {n:"DESCRIPTION",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Invoice description"},
+    {n:"TERMS_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to AP_TERMS — payment terms"},
+    {n:"TERMS_DATE",t:"DATE",pk:false,nn:false,desc:"Date used with payment terms to calculate scheduled payments"},
+    {n:"PAYMENT_METHOD_LOOKUP_CODE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"CHECK, EFT, WIRE, etc."},
+    {n:"PAY_GROUP_LOOKUP_CODE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Groups invoices for payment runs — EMPLOYEES, MERCHANDISE, etc."},
+    {n:"PO_HEADER_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to PO_HEADERS_ALL — the PO this invoice is matched to"},
+    {n:"GOODS_RECEIVED_DATE",t:"DATE",pk:false,nn:false,desc:"Date goods were received"},
+    {n:"INVOICE_RECEIVED_DATE",t:"DATE",pk:false,nn:false,desc:"Date invoice was received — used to calculate due date"},
+    {n:"CANCELLED_DATE",t:"DATE",pk:false,nn:false,desc:"Date invoice was cancelled"},
+    {n:"CANCELLED_BY",t:"VARCHAR2(64)",pk:false,nn:false,desc:"User who cancelled the invoice"},
+    {n:"ORG_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"Operating Unit identifier"},
+    {n:"SET_OF_BOOKS_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"Ledger identifier"},
+    {n:"BASE_AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Invoice amount in functional/base currency"},
+    {n:"PROJECT_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to PA_PROJECTS_ALL — for project-based invoices"},
+    {n:"TASK_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to PA_TASKS — project task"},
+    {n:"ACCTS_PAY_CODE_COMBINATION_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to GL_CODE_COMBINATIONS — AP liability account"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+    {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:"User who created the row"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+    {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:"User who last updated the row"},
+  ]
+};
+
+ORACLE_SCHEMA["AP_INVOICE_LINES_ALL"] = {
+  desc:"Payables invoice lines — individual line items on invoices. Child of AP_INVOICES_ALL.",
+  pk:"INVOICE_ID,LINE_NUMBER",
+  url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/apinvoicelinesall-26236.html",
+  cols:[
+    {n:"INVOICE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"FK to AP_INVOICES_ALL. Composite PK."},
+    {n:"LINE_NUMBER",t:"NUMBER(18)",pk:true,nn:true,desc:"Invoice line number. Composite PK."},
+    {n:"LINE_TYPE_LOOKUP_CODE",t:"VARCHAR2(25)",pk:false,nn:true,desc:"ITEM, TAX, FREIGHT, MISCELLANEOUS"},
+    {n:"AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Line amount in transaction currency"},
+    {n:"QUANTITY_INVOICED",t:"NUMBER",pk:false,nn:false,desc:"Quantity on the invoice line"},
+    {n:"UNIT_PRICE",t:"NUMBER",pk:false,nn:false,desc:"Unit price on the invoice line"},
+    {n:"DESCRIPTION",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Line description"},
+    {n:"PO_HEADER_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to PO_HEADERS_ALL — matched PO"},
+    {n:"PO_LINE_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to PO_LINES_ALL — matched PO line"},
+    {n:"DIST_CODE_COMBINATION_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to GL_CODE_COMBINATIONS — default distribution account"},
+    {n:"ORG_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"Operating Unit"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+  ]
+};
+
+ORACLE_SCHEMA["AR_PAYMENT_SCHEDULES_ALL"] = {
+  desc:"Receivables payment schedules — all transactions except adjustments and misc receipts. STATUS: OP=Open, CL=Closed. Source: docs.oracle.com/financials/25c/oedmf",
+  pk:"PAYMENT_SCHEDULE_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/arpaymentschedulesall-27543.html",
+  cols:[
+    {n:"PAYMENT_SCHEDULE_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Payment schedule identifier. Primary Key."},
+    {n:"CUSTOMER_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to HZ_CUST_ACCOUNTS — the customer"},
+    {n:"CUSTOMER_SITE_USE_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to HZ_CUST_SITE_USES_ALL — bill-to site. Must be BILL_TO type."},
+    {n:"CUSTOMER_TRX_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to RA_CUSTOMER_TRX_ALL — the transaction (for non-payment classes)"},
+    {n:"CASH_RECEIPT_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to AR_CASH_RECEIPTS_ALL — the payment (for PMT class)"},
+    {n:"CLASS",t:"VARCHAR2(20)",pk:false,nn:true,desc:"INV=Invoice, DM=Debit Memo, CM=Credit Memo, CB=Chargeback, PMT=Receipt, BR=Bills Receivable"},
+    {n:"STATUS",t:"VARCHAR2(30)",pk:false,nn:true,desc:"OP=Open, CL=Closed"},
+    {n:"DUE_DATE",t:"DATE",pk:false,nn:true,desc:"Date payment is due"},
+    {n:"AMOUNT_DUE_ORIGINAL",t:"NUMBER",pk:false,nn:true,desc:"Original amount due — positive for debit items, negative for credit items"},
+    {n:"AMOUNT_DUE_REMAINING",t:"NUMBER",pk:false,nn:true,desc:"Current amount due remaining — 0 when closed"},
+    {n:"AMOUNT_APPLIED",t:"NUMBER",pk:false,nn:false,desc:"Amount applied through receipts"},
+    {n:"AMOUNT_ADJUSTED",t:"NUMBER",pk:false,nn:false,desc:"Amount adjusted against the item"},
+    {n:"AMOUNT_IN_DISPUTE",t:"NUMBER",pk:false,nn:false,desc:"Amount in dispute"},
+    {n:"AMOUNT_CREDITED",t:"NUMBER",pk:false,nn:false,desc:"Amount credited against the item"},
+    {n:"INVOICE_CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Invoice currency"},
+    {n:"TERM_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to RA_TERMS — payment terms"},
+    {n:"TERMS_SEQUENCE_NUMBER",t:"NUMBER(18)",pk:false,nn:false,desc:"Installment number for split terms"},
+    {n:"TRX_NUMBER",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Transaction number of the item"},
+    {n:"TRX_DATE",t:"DATE",pk:false,nn:false,desc:"Transaction date"},
+    {n:"GL_DATE_CLOSED",t:"DATE",pk:false,nn:true,desc:"Accounting date when schedule was closed (31-DEC-4712 if still open)"},
+    {n:"ACTUAL_DATE_CLOSED",t:"DATE",pk:false,nn:true,desc:"Actual date when schedule was closed (31-DEC-4712 if still open)"},
+    {n:"FOLLOW_UP_DATE_LAST",t:"DATE",pk:false,nn:false,desc:"Date customer was last contacted about this item"},
+    {n:"PROMISE_DATE_LAST",t:"DATE",pk:false,nn:false,desc:"Latest promise date from customer for payment"},
+    {n:"IN_COLLECTION",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Item is in collection"},
+    {n:"ORG_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"Operating Unit"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+  ]
+};
+
+ORACLE_SCHEMA["RA_CUSTOMER_TRX_ALL"] = {
+  desc:"Receivables transaction headers — invoices, credit memos, debit memos, chargebacks. One row per transaction.",
+  pk:"CUSTOMER_TRX_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/financials/25c/oedmf/racustomertaxall.html",
+  cols:[
+    {n:"CUSTOMER_TRX_ID",t:"NUMBER(18)",pk:true,nn:true,desc:"Transaction identifier. Primary Key."},
+    {n:"TRX_NUMBER",t:"VARCHAR2(20)",pk:false,nn:true,desc:"Transaction number — user visible"},
+    {n:"TRX_DATE",t:"DATE",pk:false,nn:true,desc:"Transaction date"},
+    {n:"CUST_TRX_TYPE_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"FK to RA_CUST_TRX_TYPES — INV, CM, DM, CB"},
+    {n:"BILL_TO_CUSTOMER_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to HZ_CUST_ACCOUNTS — bill-to customer"},
+    {n:"BILL_TO_SITE_USE_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to HZ_CUST_SITE_USES_ALL — bill-to site"},
+    {n:"SHIP_TO_CUSTOMER_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"FK to HZ_CUST_ACCOUNTS — ship-to customer"},
+    {n:"INVOICE_CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:true,desc:"Transaction currency"},
+    {n:"COMPLETE_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=Transaction is complete"},
+    {n:"STATUS_TRX",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Transaction status"},
+    {n:"PURCHASE_ORDER_NUMBER",t:"VARCHAR2(50)",pk:false,nn:false,desc:"Customer PO number"},
+    {n:"ORG_ID",t:"NUMBER(18)",pk:false,nn:false,desc:"Operating Unit"},
+    {n:"SET_OF_BOOKS_ID",t:"NUMBER(18)",pk:false,nn:true,desc:"Ledger identifier"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+  ]
+};
+
+// ═══════════════════════════════════════════
+// HCM — from docs.oracle.com/human-resources/oedmh
+// ═══════════════════════════════════════════
+ORACLE_SCHEMA["PER_ALL_PEOPLE_F"] = {
+  desc:"Core person data — date-tracked. One row per person per effective period. Covers employees, contingent workers, contacts. Source: docs.oracle.com/human-resources/oedmh",
+  pk:"PERSON_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/perallpeoplef-18166.html",
+  cols:[
+    {n:"PERSON_ID",t:"NUMBER(10)",pk:true,nn:true,desc:"Person identifier. Primary Key."},
+    {n:"EFFECTIVE_START_DATE",t:"DATE",pk:true,nn:true,desc:"DateTrack: start of effective period. Composite PK."},
+    {n:"EFFECTIVE_END_DATE",t:"DATE",pk:false,nn:true,desc:"DateTrack: end of effective period. 31-DEC-4712 if current"},
+    {n:"EMPLOYEE_NUMBER",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Employee number — user visible identifier"},
+    {n:"FULL_NAME",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Concatenated full name"},
+    {n:"FIRST_NAME",t:"VARCHAR2(150)",pk:false,nn:false,desc:"First name"},
+    {n:"MIDDLE_NAMES",t:"VARCHAR2(60)",pk:false,nn:false,desc:"Middle name(s)"},
+    {n:"LAST_NAME",t:"VARCHAR2(150)",pk:false,nn:true,desc:"Last or surname"},
+    {n:"PREFIX",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Title/salutation e.g. Mr., Mrs., Dr."},
+    {n:"SUFFIX",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Name suffix e.g. Jr., III"},
+    {n:"KNOWN_AS",t:"VARCHAR2(80)",pk:false,nn:false,desc:"Preferred name or alias"},
+    {n:"EMAIL_ADDRESS",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Primary email address"},
+    {n:"DATE_OF_BIRTH",t:"DATE",pk:false,nn:false,desc:"Date of birth"},
+    {n:"DATE_OF_DEATH",t:"DATE",pk:false,nn:false,desc:"Date of death"},
+    {n:"SEX",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Gender — lookup type SEX"},
+    {n:"MARITAL_STATUS",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Marital status — lookup type MAR_STATUS"},
+    {n:"NATIONALITY",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Nationality — FK to FND_TERRITORIES"},
+    {n:"NATIONAL_IDENTIFIER",t:"VARCHAR2(30)",pk:false,nn:false,desc:"National ID number — SSN, NI, etc."},
+    {n:"ORIGINAL_DATE_OF_HIRE",t:"DATE",pk:false,nn:false,desc:"Original hire date — persists through rehires"},
+    {n:"START_DATE",t:"DATE",pk:false,nn:true,desc:"Date the person record became active"},
+    {n:"CURRENT_EMPLOYEE_FLAG",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Y=Currently an active employee"},
+    {n:"CURRENT_APPLICANT_FLAG",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Y=Currently an active applicant"},
+    {n:"CURRENT_NPW_FLAG",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Y=Currently a non-payroll worker"},
+    {n:"PERSON_TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:"EMP=Employee, CWK=Contingent Worker, EX_EMP=Ex-Employee"},
+    {n:"CREATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:"User who created the row"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+    {n:"LAST_UPDATED_BY",t:"VARCHAR2(64)",pk:false,nn:true,desc:"User who last updated the row"},
+    {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:"Optimistic locking version number"},
+  ]
+};
+
+ORACLE_SCHEMA["PER_ALL_ASSIGNMENTS_F"] = {
+  desc:"Date-tracked assignment records — links people to positions, jobs, grades, organizations, and payroll. Source: docs.oracle.com/human-resources/oedmh",
+  pk:"ASSIGNMENT_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/perallassignmentsf.html",
+  cols:[
+    {n:"ASSIGNMENT_ID",t:"NUMBER(10)",pk:true,nn:true,desc:"Assignment identifier. Primary Key."},
+    {n:"EFFECTIVE_START_DATE",t:"DATE",pk:true,nn:true,desc:"DateTrack: start of effective period. Composite PK."},
+    {n:"EFFECTIVE_END_DATE",t:"DATE",pk:false,nn:true,desc:"DateTrack: end of effective period"},
+    {n:"PERSON_ID",t:"NUMBER(10)",pk:false,nn:true,desc:"FK to PER_ALL_PEOPLE_F"},
+    {n:"ASSIGNMENT_NUMBER",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Assignment number — user visible"},
+    {n:"ASSIGNMENT_TYPE",t:"VARCHAR2(1)",pk:false,nn:true,desc:"E=Employee, C=Contingent Worker, A=Applicant, B=Benefits"},
+    {n:"ASSIGNMENT_STATUS_TYPE_ID",t:"NUMBER(9)",pk:false,nn:true,desc:"FK to PER_ASSIGNMENT_STATUS_TYPES — Active, Inactive, etc."},
+    {n:"ORGANIZATION_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"FK to HR_ALL_ORGANIZATION_UNITS — department/org unit"},
+    {n:"JOB_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to PER_JOBS"},
+    {n:"GRADE_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to PER_GRADES"},
+    {n:"POSITION_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to HR_ALL_POSITIONS_F"},
+    {n:"LOCATION_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to HR_LOCATIONS_ALL — work location"},
+    {n:"PAYROLL_ID",t:"NUMBER(9)",pk:false,nn:false,desc:"FK to PAY_PAYROLLS_F"},
+    {n:"MANAGER_FLAG",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Y=This person is a manager"},
+    {n:"PRIMARY_FLAG",t:"VARCHAR2(30)",pk:false,nn:true,desc:"Y=Primary assignment for this person"},
+    {n:"PROBATION_PERIOD",t:"NUMBER(22)",pk:false,nn:false,desc:"Length of probation period"},
+    {n:"PROBATION_UNIT",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Units for probation period — Hours, Days, Months"},
+    {n:"SUPERVISOR_ID",t:"NUMBER(10)",pk:false,nn:false,desc:"FK to PER_ALL_PEOPLE_F — the manager/supervisor"},
+    {n:"NORMAL_HOURS",t:"NUMBER(22)",pk:false,nn:false,desc:"Normal working hours per week"},
+    {n:"FREQUENCY",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Frequency of NORMAL_HOURS — Week, Month, Year"},
+    {n:"CHANGE_REASON",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Reason for assignment change"},
+    {n:"DATE_PROBATION_END",t:"DATE",pk:false,nn:false,desc:"Date probation ends"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+    {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:"Optimistic locking version number"},
+  ]
+};
+
+ORACLE_SCHEMA["HR_ALL_ORGANIZATION_UNITS"] = {
+  desc:"Organization units — departments, business groups, legal entities, operating units. Used across HCM, Finance, and SCM.",
+  pk:"ORGANIZATION_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/hrallorganizationunits.html",
+  cols:[
+    {n:"ORGANIZATION_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Organization identifier. Primary Key."},
+    {n:"BUSINESS_GROUP_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to the business group this org belongs to"},
+    {n:"NAME",t:"VARCHAR2(240)",pk:false,nn:true,desc:"Organization name"},
+    {n:"TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Organization classification type"},
+    {n:"DATE_FROM",t:"DATE",pk:false,nn:true,desc:"Date organization became active"},
+    {n:"DATE_TO",t:"DATE",pk:false,nn:false,desc:"Date organization became inactive — NULL if current"},
+    {n:"INTERNAL_EXTERNAL_FLAG",t:"VARCHAR2(30)",pk:false,nn:false,desc:"INT=Internal org, EXT=External org"},
+    {n:"LOCATION_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to HR_LOCATIONS_ALL — primary location"},
+    {n:"PARENT_ORGANIZATION_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to HR_ALL_ORGANIZATION_UNITS — parent org in hierarchy"},
+    {n:"COMMENTS",t:"VARCHAR2(2000)",pk:false,nn:false,desc:"Comments about the organization"},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+    {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:"Optimistic locking version number"},
+  ]
+};
+
+ORACLE_SCHEMA["PER_JOBS"] = {
+  desc:"Job definitions — generic job roles used in assignments. Not position-specific.",
+  pk:"JOB_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/perjobs.html",
+  cols:[
+    {n:"JOB_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Job identifier. Primary Key."},
+    {n:"JOB_DEFINITION_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to job definition — for global job structures"},
+    {n:"DATE_FROM",t:"DATE",pk:false,nn:true,desc:"Date job became active"},
+    {n:"DATE_TO",t:"DATE",pk:false,nn:false,desc:"Date job became inactive"},
+    {n:"NAME",t:"VARCHAR2(700)",pk:false,nn:true,desc:"Job name — concatenated from key flexfield segments"},
+    {n:"BUSINESS_GROUP_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"Business group identifier"},
+    {n:"JOB_GROUP_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"FK to PER_JOB_GROUPS"},
+    {n:"COMMENTS",t:"VARCHAR2(2000)",pk:false,nn:false,desc:"Job description/comments"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:false,desc:"Row creation date"},
+  ]
+};
+
+ORACLE_SCHEMA["PAY_PAYROLL_ACTIONS"] = {
+  desc:"Payroll processing actions — represents a single payroll run, prepayment, or costing action.",
+  pk:"PAYROLL_ACTION_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/human-resources/oedmh/paypayrollactions.html",
+  cols:[
+    {n:"PAYROLL_ACTION_ID",t:"NUMBER(9)",pk:true,nn:true,desc:"Payroll action identifier. Primary Key."},
+    {n:"ACTION_TYPE",t:"VARCHAR2(30)",pk:false,nn:true,desc:"R=Run, P=Prepayment, C=Costing, U=Payment, A=Archive"},
+    {n:"PAYROLL_ID",t:"NUMBER(9)",pk:false,nn:false,desc:"FK to PAY_PAYROLLS_F"},
+    {n:"DATE_EARNED",t:"DATE",pk:false,nn:false,desc:"Date the earnings were earned"},
+    {n:"EFFECTIVE_DATE",t:"DATE",pk:false,nn:true,desc:"Effective date of the payroll action"},
+    {n:"ACTION_STATUS",t:"VARCHAR2(30)",pk:false,nn:true,desc:"U=Unprocessed, P=Processing, C=Complete, E=Error, M=Mark for retry"},
+    {n:"BUSINESS_GROUP_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"Business group"},
+    {n:"PERIOD_TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Pay period type — Calendar Month, Bi-Week, etc."},
+    {n:"CREATION_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Row creation timestamp"},
+    {n:"LAST_UPDATE_DATE",t:"TIMESTAMP",pk:false,nn:true,desc:"Last update timestamp"},
+  ]
+};
+
+// ═══════════════════════════════════════════
+// SCM / PROCUREMENT — from docs.oracle.com/procurement/oedmp
+// ═══════════════════════════════════════════
+ORACLE_SCHEMA["PO_HEADERS_ALL"] = {
+  desc:"Purchase order headers — all PO types across operating units. SEGMENT1 is the PO number. Source: docs.oracle.com/procurement/23c/oedmp",
+  pk:"PO_HEADER_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/poheadersall-4243.html",
+  cols:[
+    {n:"PO_HEADER_ID",t:"NUMBER",pk:true,nn:true,desc:"Purchase order header identifier. Primary Key."},
+    {n:"SEGMENT1",t:"VARCHAR2(20)",pk:false,nn:true,desc:"PO number — the user-visible document number"},
+    {n:"TYPE_LOOKUP_CODE",t:"VARCHAR2(25)",pk:false,nn:true,desc:"STANDARD, BLANKET, CONTRACT, PLANNED"},
+    {n:"STATUS_LOOKUP_CODE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"INCOMPLETE, OPEN, CLOSED, FINALLY CLOSED, CANCELLED, FROZEN"},
+    {n:"VENDOR_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to AP_SUPPLIERS — the supplier"},
+    {n:"VENDOR_SITE_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to AP_SUPPLIER_SITES_ALL — ship-to site"},
+    {n:"AGENT_ID",t:"NUMBER",pk:false,nn:true,desc:"FK to PER_ALL_PEOPLE_F — the buyer"},
+    {n:"CURRENCY_CODE",t:"VARCHAR2(15)",pk:false,nn:false,desc:"PO currency"},
+    {n:"RATE",t:"NUMBER",pk:false,nn:false,desc:"Exchange rate to functional currency"},
+    {n:"RATE_DATE",t:"DATE",pk:false,nn:false,desc:"Date of exchange rate"},
+    {n:"RATE_TYPE",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Exchange rate type — Corporate, Spot, User"},
+    {n:"APPROVED_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=PO has been approved"},
+    {n:"APPROVED_DATE",t:"DATE",pk:false,nn:false,desc:"Date PO was approved"},
+    {n:"AUTHORIZATION_STATUS",t:"VARCHAR2(25)",pk:false,nn:false,desc:"APPROVED, IN PROCESS, INCOMPLETE, PRE-APPROVED, REJECTED, REQUIRES REAPPROVAL"},
+    {n:"SHIP_TO_LOCATION_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to HR_LOCATIONS_ALL — default ship-to location"},
+    {n:"BILL_TO_LOCATION_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to HR_LOCATIONS_ALL — bill-to location"},
+    {n:"TERMS_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to AP_TERMS — payment terms"},
+    {n:"CONFIRMING_ORDER_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=This is a confirming order for goods already received"},
+    {n:"SUPPLY_AGREEMENT_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Indicates if the blanket is a supply agreement"},
+    {n:"AMOUNT_LIMIT",t:"NUMBER",pk:false,nn:false,desc:"Maximum amount that can be released against a blanket/contract"},
+    {n:"MIN_RELEASE_AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Minimum amount for releases against blanket"},
+    {n:"ORG_ID",t:"NUMBER",pk:false,nn:false,desc:"Operating Unit"},
+    {n:"COMMENTS",t:"VARCHAR2(240)",pk:false,nn:false,desc:"General comments about the PO"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:true,desc:"Row creation date"},
+    {n:"CREATED_BY",t:"NUMBER",pk:false,nn:true,desc:"User who created row"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+  ]
+};
+
+ORACLE_SCHEMA["PO_LINES_ALL"] = {
+  desc:"Purchase order line items — individual goods and services ordered. Child of PO_HEADERS_ALL.",
+  pk:"PO_LINE_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/polinesall.html",
+  cols:[
+    {n:"PO_LINE_ID",t:"NUMBER",pk:true,nn:true,desc:"PO line identifier. Primary Key."},
+    {n:"PO_HEADER_ID",t:"NUMBER",pk:false,nn:true,desc:"FK to PO_HEADERS_ALL"},
+    {n:"LINE_NUM",t:"NUMBER",pk:false,nn:true,desc:"Line number on the PO"},
+    {n:"LINE_TYPE_ID",t:"NUMBER",pk:false,nn:true,desc:"FK to PO_LINE_TYPES — Goods, Services, etc."},
+    {n:"ITEM_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to EGP_SYSTEM_ITEMS_B (Cloud) / MTL_SYSTEM_ITEMS_B (EBS)"},
+    {n:"ITEM_DESCRIPTION",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Item description — required if no ITEM_ID"},
+    {n:"UNIT_MEAS_LOOKUP_CODE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Unit of measure"},
+    {n:"QUANTITY",t:"NUMBER",pk:false,nn:false,desc:"Quantity ordered"},
+    {n:"UNIT_PRICE",t:"NUMBER",pk:false,nn:false,desc:"Price per unit"},
+    {n:"AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Line amount — for amount-based lines (services)"},
+    {n:"QUANTITY_COMMITTED",t:"NUMBER",pk:false,nn:false,desc:"Quantity committed on blanket"},
+    {n:"PRICE_LIMIT",t:"NUMBER",pk:false,nn:false,desc:"Maximum price on a blanket line"},
+    {n:"COMMITTED_AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Amount committed on blanket/contract"},
+    {n:"CANCEL_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Line has been cancelled"},
+    {n:"CANCELLED_BY",t:"NUMBER",pk:false,nn:false,desc:"User who cancelled the line"},
+    {n:"CANCEL_DATE",t:"DATE",pk:false,nn:false,desc:"Date line was cancelled"},
+    {n:"ITEM_REVISION",t:"VARCHAR2(18)",pk:false,nn:false,desc:"Item revision number"},
+    {n:"VENDOR_PRODUCT_NUM",t:"VARCHAR2(25)",pk:false,nn:false,desc:"Supplier product number"},
+    {n:"ORG_ID",t:"NUMBER",pk:false,nn:false,desc:"Operating Unit"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:false,desc:"Row creation date"},
+  ]
+};
+
+ORACLE_SCHEMA["PO_DISTRIBUTIONS_ALL"] = {
+  desc:"Purchase order distributions — accounting and budget information for PO lines/shipments.",
+  pk:"PO_DISTRIBUTION_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/podistributionsall.html",
+  cols:[
+    {n:"PO_DISTRIBUTION_ID",t:"NUMBER",pk:true,nn:true,desc:"Distribution identifier. Primary Key."},
+    {n:"PO_HEADER_ID",t:"NUMBER",pk:false,nn:true,desc:"FK to PO_HEADERS_ALL"},
+    {n:"PO_LINE_ID",t:"NUMBER",pk:false,nn:true,desc:"FK to PO_LINES_ALL"},
+    {n:"LINE_LOCATION_ID",t:"NUMBER",pk:false,nn:true,desc:"FK to PO_LINE_LOCATIONS_ALL — shipment"},
+    {n:"DISTRIBUTION_NUM",t:"NUMBER",pk:false,nn:true,desc:"Distribution number within shipment"},
+    {n:"CODE_COMBINATION_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to GL_CODE_COMBINATIONS — charge account CCID"},
+    {n:"QUANTITY_ORDERED",t:"NUMBER",pk:false,nn:false,desc:"Quantity ordered on this distribution"},
+    {n:"QUANTITY_DELIVERED",t:"NUMBER",pk:false,nn:false,desc:"Quantity delivered against this distribution"},
+    {n:"QUANTITY_BILLED",t:"NUMBER",pk:false,nn:false,desc:"Quantity billed against this distribution"},
+    {n:"QUANTITY_CANCELLED",t:"NUMBER",pk:false,nn:false,desc:"Quantity cancelled"},
+    {n:"AMOUNT_ORDERED",t:"NUMBER",pk:false,nn:false,desc:"Amount ordered (for amount-based distributions)"},
+    {n:"AMOUNT_DELIVERED",t:"NUMBER",pk:false,nn:false,desc:"Amount delivered"},
+    {n:"AMOUNT_BILLED",t:"NUMBER",pk:false,nn:false,desc:"Amount billed"},
+    {n:"PROJECT_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to PA_PROJECTS_ALL — project charge"},
+    {n:"TASK_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to PA_TASKS — task charge"},
+    {n:"ORG_ID",t:"NUMBER",pk:false,nn:false,desc:"Operating Unit"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+  ]
+};
+
+ORACLE_SCHEMA["PO_LINE_LOCATIONS_ALL"] = {
+  desc:"Purchase order shipments — delivery schedules on PO lines (when, where, how much to deliver).",
+  pk:"LINE_LOCATION_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/polinelocationall.html",
+  cols:[
+    {n:"LINE_LOCATION_ID",t:"NUMBER",pk:true,nn:true,desc:"Line location/shipment identifier. Primary Key."},
+    {n:"PO_HEADER_ID",t:"NUMBER",pk:false,nn:true,desc:"FK to PO_HEADERS_ALL"},
+    {n:"PO_LINE_ID",t:"NUMBER",pk:false,nn:true,desc:"FK to PO_LINES_ALL"},
+    {n:"SHIPMENT_NUM",t:"NUMBER",pk:false,nn:true,desc:"Shipment number within PO line"},
+    {n:"SHIP_TO_LOCATION_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to HR_LOCATIONS_ALL — delivery location"},
+    {n:"SHIP_TO_ORGANIZATION_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to HR_ALL_ORGANIZATION_UNITS — receiving org"},
+    {n:"QUANTITY",t:"NUMBER",pk:false,nn:false,desc:"Quantity for this shipment"},
+    {n:"AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Amount for this shipment (services)"},
+    {n:"QUANTITY_RECEIVED",t:"NUMBER",pk:false,nn:false,desc:"Quantity received against this shipment"},
+    {n:"QUANTITY_ACCEPTED",t:"NUMBER",pk:false,nn:false,desc:"Quantity accepted (after inspection)"},
+    {n:"QUANTITY_REJECTED",t:"NUMBER",pk:false,nn:false,desc:"Quantity rejected (after inspection)"},
+    {n:"QUANTITY_BILLED",t:"NUMBER",pk:false,nn:false,desc:"Quantity billed"},
+    {n:"QUANTITY_CANCELLED",t:"NUMBER",pk:false,nn:false,desc:"Quantity cancelled"},
+    {n:"NEED_BY_DATE",t:"DATE",pk:false,nn:false,desc:"Date goods are needed"},
+    {n:"PROMISED_DATE",t:"DATE",pk:false,nn:false,desc:"Date supplier promised delivery"},
+    {n:"INSPECTION_REQUIRED_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Inspection required before acceptance"},
+    {n:"RECEIPT_REQUIRED_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Receipt required before payment"},
+    {n:"CLOSED_CODE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"OPEN, CLOSED, FINALLY CLOSED, CLOSED FOR INVOICE, CLOSED FOR RECEIVING"},
+    {n:"CANCEL_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Shipment cancelled"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+  ]
+};
+
+ORACLE_SCHEMA["RCV_SHIPMENT_HEADERS"] = {
+  desc:"Receiving shipment headers — records of incoming goods receipts.",
+  pk:"SHIPMENT_HEADER_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/procurement/23c/oedmp/rcvshipmentheaders.html",
+  cols:[
+    {n:"SHIPMENT_HEADER_ID",t:"NUMBER",pk:true,nn:true,desc:"Shipment header identifier. Primary Key."},
+    {n:"RECEIPT_NUM",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Receipt number — user visible"},
+    {n:"RECEIPT_SOURCE_CODE",t:"VARCHAR2(25)",pk:false,nn:true,desc:"VENDOR, INTERNAL ORDER, CUSTOMER"},
+    {n:"VENDOR_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to AP_SUPPLIERS"},
+    {n:"VENDOR_SITE_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to AP_SUPPLIER_SITES_ALL"},
+    {n:"SHIP_TO_LOCATION_ID",t:"NUMBER",pk:false,nn:false,desc:"FK to HR_LOCATIONS_ALL"},
+    {n:"SHIPPED_DATE",t:"DATE",pk:false,nn:false,desc:"Date goods were shipped"},
+    {n:"EXPECTED_RECEIPT_DATE",t:"DATE",pk:false,nn:false,desc:"Expected receipt date"},
+    {n:"COMMENTS",t:"VARCHAR2(4000)",pk:false,nn:false,desc:"Receipt comments"},
+    {n:"ORG_ID",t:"NUMBER",pk:false,nn:false,desc:"Operating Unit"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:true,desc:"Row creation date"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+  ]
+};
+
+// ═══════════════════════════════════════════
+// ERP / PROJECTS — from docs.oracle.com/project-management
+// ═══════════════════════════════════════════
+ORACLE_SCHEMA["PA_PROJECTS_ALL"] = {
+  desc:"Project definitions — all project types across operating units. SEGMENT1 is the project number.",
+  pk:"PROJECT_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/project-management/oedmp/paprojectsall.html",
+  cols:[
+    {n:"PROJECT_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Project identifier. Primary Key."},
+    {n:"SEGMENT1",t:"VARCHAR2(25)",pk:false,nn:true,desc:"Project number — user-visible identifier"},
+    {n:"NAME",t:"VARCHAR2(30)",pk:false,nn:true,desc:"Project name"},
+    {n:"LONG_NAME",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Project long name"},
+    {n:"PROJECT_TYPE",t:"VARCHAR2(20)",pk:false,nn:true,desc:"INDIRECT, CONTRACT, CAPITAL — determines accounting treatment"},
+    {n:"PROJECT_STATUS_CODE",t:"VARCHAR2(30)",pk:false,nn:true,desc:"APPROVED, SUBMITTED, CLOSED, DRAFT, PENDING_CLOSE"},
+    {n:"CARRYING_OUT_ORGANIZATION_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"FK to HR_ALL_ORGANIZATION_UNITS — executing org"},
+    {n:"START_DATE",t:"DATE",pk:false,nn:false,desc:"Project planned start date"},
+    {n:"COMPLETION_DATE",t:"DATE",pk:false,nn:false,desc:"Project planned completion date"},
+    {n:"ACTUAL_START_DATE",t:"DATE",pk:false,nn:false,desc:"Actual project start date"},
+    {n:"ACTUAL_FINISH_DATE",t:"DATE",pk:false,nn:false,desc:"Actual project finish date"},
+    {n:"ORG_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"Operating Unit"},
+    {n:"PM_PRODUCT_CODE",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Source product — MSPROJECT, PRIMAVERA, etc."},
+    {n:"PM_PROJECT_REFERENCE",t:"VARCHAR2(25)",pk:false,nn:false,desc:"External project reference from PM tool"},
+    {n:"DISTRIBUTION_RULE",t:"VARCHAR2(30)",pk:false,nn:false,desc:"Billing distribution rule for contract projects"},
+    {n:"BILL_TO_CUSTOMER_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to HZ_CUST_ACCOUNTS — billing customer"},
+    {n:"SHIP_TO_CUSTOMER_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to HZ_CUST_ACCOUNTS — shipping customer"},
+    {n:"CLOSED_DATE",t:"DATE",pk:false,nn:false,desc:"Date the project was closed"},
+    {n:"DESCRIPTION",t:"VARCHAR2(250)",pk:false,nn:false,desc:"Project description"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:false,desc:"Row creation date"},
+    {n:"CREATED_BY",t:"NUMBER(15)",pk:false,nn:true,desc:"User who created row"},
+    {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:"Optimistic locking version number"},
+  ]
+};
+
+ORACLE_SCHEMA["PA_TASKS"] = {
+  desc:"Project tasks — work breakdown structure elements within projects.",
+  pk:"TASK_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/project-management/oedmp/patasks.html",
+  cols:[
+    {n:"TASK_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Task identifier. Primary Key."},
+    {n:"PROJECT_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"FK to PA_PROJECTS_ALL"},
+    {n:"TASK_NUMBER",t:"VARCHAR2(25)",pk:false,nn:true,desc:"Task number — user visible"},
+    {n:"TASK_NAME",t:"VARCHAR2(20)",pk:false,nn:true,desc:"Task short name"},
+    {n:"LONG_TASK_NAME",t:"VARCHAR2(240)",pk:false,nn:false,desc:"Task long name/description"},
+    {n:"TOP_TASK_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"FK to PA_TASKS — the top-level parent task"},
+    {n:"PARENT_TASK_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"FK to PA_TASKS — immediate parent task"},
+    {n:"START_DATE",t:"DATE",pk:false,nn:false,desc:"Task planned start date"},
+    {n:"COMPLETION_DATE",t:"DATE",pk:false,nn:false,desc:"Task planned completion date"},
+    {n:"CHARGEABLE_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Expenditures can be charged to this task"},
+    {n:"BILLABLE_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Task is billable to customer"},
+    {n:"CAPITALIZABLE_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Task expenditures can be capitalized"},
+    {n:"LIMIT_TO_TXN_CONTROLS_FLAG",t:"VARCHAR2(1)",pk:false,nn:false,desc:"Y=Restrict charges to defined transaction controls"},
+    {n:"TASK_MANAGER_PERSON_ID",t:"NUMBER(9)",pk:false,nn:false,desc:"FK to PER_ALL_PEOPLE_F — task manager"},
+    {n:"DESCRIPTION",t:"VARCHAR2(250)",pk:false,nn:false,desc:"Task description"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:false,desc:"Row creation date"},
+    {n:"OBJECT_VERSION_NUMBER",t:"NUMBER(9)",pk:false,nn:true,desc:"Optimistic locking version number"},
+  ]
+};
+
+ORACLE_SCHEMA["PA_EXPENDITURE_ITEMS_ALL"] = {
+  desc:"Project expenditure items — individual costs charged to projects and tasks (labor, expenses, usages).",
+  pk:"EXPENDITURE_ITEM_ID",
+  url:"https://docs.oracle.com/en/cloud/saas/project-management/oedmp/paexpendituritemsall.html",
+  cols:[
+    {n:"EXPENDITURE_ITEM_ID",t:"NUMBER(15)",pk:true,nn:true,desc:"Expenditure item identifier. Primary Key."},
+    {n:"EXPENDITURE_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"FK to PA_EXPENDITURES_ALL — the expenditure batch"},
+    {n:"TASK_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"FK to PA_TASKS — charged task"},
+    {n:"PROJECT_ID",t:"NUMBER(15)",pk:false,nn:true,desc:"FK to PA_PROJECTS_ALL"},
+    {n:"EXPENDITURE_ITEM_DATE",t:"DATE",pk:false,nn:true,desc:"Date the expenditure item occurred"},
+    {n:"EXPENDITURE_TYPE",t:"VARCHAR2(30)",pk:false,nn:true,desc:"Type of expenditure e.g. Labor, Expense, Usage"},
+    {n:"QUANTITY",t:"NUMBER",pk:false,nn:false,desc:"Quantity of the expenditure item"},
+    {n:"RAW_COST",t:"NUMBER",pk:false,nn:false,desc:"Raw cost in project currency"},
+    {n:"BURDENED_COST",t:"NUMBER",pk:false,nn:false,desc:"Burdened cost (raw cost + overhead) in project currency"},
+    {n:"RAW_COST_RATE",t:"NUMBER",pk:false,nn:false,desc:"Cost rate per unit"},
+    {n:"BILL_AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Billing amount for this item"},
+    {n:"REVENUE_AMOUNT",t:"NUMBER",pk:false,nn:false,desc:"Revenue recognized for this item"},
+    {n:"COST_DISTRIBUTED_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=Cost has been distributed to GL"},
+    {n:"REVENUE_DISTRIBUTED_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=Revenue has been distributed"},
+    {n:"BILLABLE_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=Item is billable"},
+    {n:"NET_ZERO_ADJUSTMENT_FLAG",t:"VARCHAR2(1)",pk:false,nn:true,desc:"Y=Item is a net-zero adjustment"},
+    {n:"ORG_ID",t:"NUMBER(15)",pk:false,nn:false,desc:"Operating Unit"},
+    {n:"LAST_UPDATE_DATE",t:"DATE",pk:false,nn:true,desc:"Last update date"},
+    {n:"CREATION_DATE",t:"DATE",pk:false,nn:false,desc:"Row creation date"},
+  ]
+};
+
+
+// Extended module definitions for Finance, HCM, SCM, ERP
+const EXTENDED_MODULES = {
+  "Finance": {
+    color:"#fcc419", icon:"💰",
+    tables:[
+      {n:"GL_LEDGERS",desc:"Ledger definitions — primary, secondary, reporting ledgers"},
+      {n:"GL_JE_HEADERS",desc:"Journal entry headers. STATUS: U=Unposted, P=Posted"},
+      {n:"GL_JE_LINES",desc:"Journal entry lines — debit and credit entries"},
+      {n:"GL_CODE_COMBINATIONS",desc:"Chart of accounts — all valid account segment combinations"},
+      {n:"AP_INVOICES_ALL",desc:"Payables invoices — one row per invoice across all OUs"},
+      {n:"AP_INVOICE_LINES_ALL",desc:"Payables invoice line items"},
+      {n:"AR_PAYMENT_SCHEDULES_ALL",desc:"Receivables schedules — amounts due and outstanding"},
+      {n:"RA_CUSTOMER_TRX_ALL",desc:"AR transaction headers — invoices, credit memos, debit memos"},
+    ]
+  },
+  "HCM": {
+    color:"#cc5de8", icon:"👥",
+    tables:[
+      {n:"PER_ALL_PEOPLE_F",desc:"Date-tracked person data — employees, CWKs, contacts"},
+      {n:"PER_ALL_ASSIGNMENTS_F",desc:"Date-tracked assignments — job, grade, org, payroll"},
+      {n:"HR_ALL_ORGANIZATION_UNITS",desc:"Organizations — departments, BGs, legal entities, OUs"},
+      {n:"PER_JOBS",desc:"Generic job role definitions"},
+      {n:"PAY_PAYROLL_ACTIONS",desc:"Payroll processing actions — runs, prepayments, costing"},
+    ]
+  },
+  "SCM": {
+    color:"#ff6b35", icon:"📦",
+    tables:[
+      {n:"PO_HEADERS_ALL",desc:"Purchase order headers — STANDARD, BLANKET, CONTRACT"},
+      {n:"PO_LINES_ALL",desc:"Purchase order line items"},
+      {n:"PO_LINE_LOCATIONS_ALL",desc:"PO shipments — delivery schedule per line"},
+      {n:"PO_DISTRIBUTIONS_ALL",desc:"PO distributions — accounting and budget info"},
+      {n:"RCV_SHIPMENT_HEADERS",desc:"Receiving shipment headers — goods receipts"},
+    ]
+  },
+  "Projects": {
+    color:"#34d399", icon:"📋",
+    tables:[
+      {n:"PA_PROJECTS_ALL",desc:"Project definitions — INDIRECT, CONTRACT, CAPITAL types"},
+      {n:"PA_TASKS",desc:"Work breakdown structure tasks within projects"},
+      {n:"PA_EXPENDITURE_ITEMS_ALL",desc:"Individual costs charged to projects and tasks"},
+    ]
+  },
+};
+
+// Merge into REAL_SCHEMA
+Object.keys(EXTENDED_MODULES).forEach(mod => {
+  if (REAL_SCHEMA[mod]) {
+    REAL_SCHEMA[mod].tables = EXTENDED_MODULES[mod].tables;
+    REAL_SCHEMA[mod].color = EXTENDED_MODULES[mod].color;
+    REAL_SCHEMA[mod].icon = EXTENDED_MODULES[mod].icon;
+  }
+});
+
+// ══ STATE ══
+const S={
+  connected:false,url:'',user:'',pass:'',
+  module:'CX Sales',
+  cols:[],allRows:[],filteredRows:[],
+  sortCol:-1,sortDir:1,
+  tabs:[{id:'t1',name:'Query 1',sql:''}],
+  activeTab:'t1',tabN:1,
+  saved:JSON.parse(localStorage.getItem('fxq')||'[]'),
+  kbOpen:false, dragging:false
+};
+
+// ══ TOAST ══
+let toastT;
+function toast(msg,type='inf'){
+  const el=document.getElementById('toast');
+  el.className=`${type} show`;
+  el.innerHTML=({ok:'✓',er:'✕',inf:'◈',wa:'⚠'}[type]||'◈')+' '+msg;
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3200);
+}
+
+// ══ MODALS ══
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+
+// ══ THEME ══
+function setTheme(btn,theme){
+  document.body.dataset.theme=theme;
+  document.querySelectorAll('.th-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  localStorage.setItem('fxtheme',theme);
+}
+const st=localStorage.getItem('fxtheme')||'';
+document.body.dataset.theme=st;
+document.querySelectorAll('.th-btn').forEach(b=>{b.classList.toggle('active',b.dataset.theme===st)});
+
+// ══ SIDEBAR ══
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const open=sb.classList.toggle('collapsed');
+  document.getElementById('sbToggle').textContent=open?'›':'‹';
+}
+
+// ══ MODULES ══
+function initMods(){
+  const container = document.getElementById('modTabs');
+  container.innerHTML = '';
+  Object.keys(REAL_SCHEMA).forEach(m => {
+    const mod = REAL_SCHEMA[m];
+    const div = document.createElement('div');
+    div.className = 'mod-tab' + (m===S.module?' active':'');
+    div.dataset.mod = m;
+    div.textContent = mod.icon + ' ' + m;
+    if(m===S.module){
+      div.style.background = mod.color;
+      div.style.borderColor = mod.color;
+      div.style.color = '#fff';
+    }
+    div.addEventListener('click', function(e){
+      e.stopPropagation();
+      selMod(m);
+    });
+    container.appendChild(div);
+  });
+}
+
+function selMod(mod){
+  S.module=mod;
+  const m=REAL_SCHEMA[mod];
+  document.querySelectorAll('.mod-tab').forEach(t=>{
+    const a=t.dataset.mod===mod;
+    t.classList.toggle('active',a);
+    t.style.background=a?m.color:'';
+    t.style.borderColor=a?m.color:'';
+    t.style.color=a?'#fff':'';
+    t.style.fontWeight=a?'700':'';
+  });
+  document.getElementById('modIndicator').textContent=m.icon+' '+mod;
+  document.getElementById('modIndicator').style.color=m.color;
+  document.getElementById('modIndicator').style.background=m.color+'18';
+  document.getElementById('tblSearch').value='';
+  closeSchema();
+  renderTables(mod);
+}
+
+function renderTables(mod){
+  const tables=REAL_SCHEMA[mod]?.tables||[];
+  const q=document.getElementById('tblSearch').value.toLowerCase();
+  const filtered=tables.filter(t=>t.n.toLowerCase().includes(q)||t.desc.toLowerCase().includes(q));
+  document.getElementById('tblBadge').textContent=filtered.length;
+  const list = document.getElementById('tblList');
+  list.innerHTML = '';
+  filtered.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'tbl-row';
+    row.id = 'tr_' + t.n;
+    row.title = t.desc;
+    row.innerHTML = '<span style="font-size:10px;color:var(--t3)">⊟</span>' + t.n;
+    row.addEventListener('click', function(e){
+      e.stopPropagation();
+      clickTable(t.n);
+    });
+    list.appendChild(row);
+    const desc = document.createElement('div');
+    desc.className = 'tbl-desc';
+    desc.textContent = t.desc;
+    list.appendChild(desc);
+  });
+}
+
+function filterTables(){renderTables(S.module)}
+
+function clickTable(name){
+  document.querySelectorAll('.tbl-row').forEach(r=>r.classList.remove('active'));
+  document.getElementById('tr_'+name)?.classList.add('active');
+  showSchema(name);
+  const lim=document.getElementById('rowLim').value;
+  document.getElementById('sqled').value=`SELECT *\nFROM ${name}\nFETCH FIRST ${lim} ROWS ONLY`;
+  edChange();runQuery();
+}
+
+function showSchema(name){
+  // Try real Oracle schema first
+  const oracleTbl = ORACLE_SCHEMA[name];
+  if(oracleTbl) {
+    document.getElementById('schemaTblName').textContent=name;
+    const docsLink = document.getElementById('schemaDocsLink');
+    if(docsLink){ docsLink.style.display='inline-flex'; docsLink.href=oracleTbl.url; }
+    // Build schema cols with event listeners
+    const colContainer = document.getElementById('schemaCols');
+    colContainer.innerHTML = '';
+    oracleTbl.cols.forEach(c => {
+      const colDiv = document.createElement('div');
+      colDiv.className = 'col-row';
+      colDiv.title = c.desc || '';
+      colDiv.innerHTML = \`
+        <div class="col-name">\${c.n}</div>
+        <div class="col-type">\${c.t}</div>
+        <div class="col-badges">
+          \${c.pk?'<span class="badge-pk">PK</span>':''}
+          \${c.nn&&!c.pk?'<span class="badge-nn">NN</span>':''}
+          \${c.desc&&c.desc.startsWith('FK')?'<span class="badge-fk">FK</span>':''}
+        </div>
+        <div class="col-desc">\${c.desc||''}</div>\`;
+      colDiv.addEventListener('click', function(e){ e.stopPropagation(); insertCol(c.n); });
+      colContainer.appendChild(colDiv);
+    });
+    // REMOVE old innerHTML approach - skip it
+    // schema cols built above with event listeners
+    document.getElementById('schemaPanel').classList.add('open');
+    return;
+  }
+  const oMod=Object.keys(ORACLE_SCHEMA).slice(0,8).map(k=>`${k}(${ORACLE_SCHEMA[k].cols.slice(0,6).map(c=>c.n).join(",")})`).join("\n");
+  const mod=REAL_SCHEMA[S.module];
+  const tbl=mod?.tables.find(t=>t.n===name);
+  if(!tbl)return;
+  document.getElementById('schemaTblName').textContent=name;
+  const sch = ORACLE_SCHEMA[name];
+  const docsLink = document.getElementById('schemaDocsLink');
+  if(docsLink) { docsLink.style.display = sch ? 'inline-flex' : 'none'; docsLink.href = sch?.url || '#'; }
+  document.getElementById('schemaCols').innerHTML=tbl.cols.map(c=>`
+    <div class="col-row" onclick="insertCol('${c.n}')" title="Click to insert ${c.n}">
+      <div class="col-name">
+        ${c.n}
+      </div>
+      <div class="col-type">${c.t}</div>
+      <div class="col-badges">
+        ${c.pk?'<span class="badge-pk">PK</span>':''}
+        ${c.nn&&!c.pk?'<span class="badge-nn">NN</span>':''}
+        ${c.desc&&c.desc.includes('FK')?'<span class="badge-fk">FK</span>':''}
+      </div>
+      <div class="col-desc">${c.desc||''}</div>
+    </div>`).join('');
+  document.getElementById('schemaPanel').classList.add('open');
+}
+
+function closeSchema(){document.getElementById('schemaPanel').classList.remove('open')}
+
+function insertCol(name){
+  const ed=document.getElementById('sqled');
+  const s=ed.selectionStart;
+  ed.value=ed.value.substring(0,s)+name+ed.value.substring(ed.selectionEnd);
+  ed.selectionStart=ed.selectionEnd=s+name.length;
+  ed.focus();edChange();
+  toast(`Inserted ${name}`,'inf');
+}
+
+// ══ TABS ══
+function newTab(){
+  S.tabN++;const id='t'+S.tabN;
+  S.tabs.push({id,name:'Query '+S.tabN,sql:''});
+  const bar=document.getElementById('tabbar');
+  const add=bar.querySelector('.tab-add');
+  const el=document.createElement('div');
+  el.className='tab';el.id=id;
+  el.innerHTML=`📄 Query ${S.tabN} <span class="tab-x" onclick="closeTab(event,'${id}')">×</span>`;
+  el.onclick=()=>switchTab(id);
+  bar.insertBefore(el,add);switchTab(id);
+}
+
+function switchTab(id){
+  const cur=S.tabs.find(t=>t.id===S.activeTab);
+  if(cur)cur.sql=document.getElementById('sqled').value;
+  S.activeTab=id;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+  document.getElementById('sqled').value=S.tabs.find(t=>t.id===id)?.sql||'';
+edChange();
+}
+
+function closeTab(e,id){
+  e.stopPropagation();
+  if(S.tabs.length===1){toast('Cannot close last tab','wa');return}
+  S.tabs=S.tabs.filter(t=>t.id!==id);
+  document.getElementById(id)?.remove();
+  if(S.activeTab===id)switchTab(S.tabs[S.tabs.length-1].id);
+}
+
+// ══ EDITOR ══
+function edChange(){
+  const ed=document.getElementById('sqled');
+  const n=(ed.value.match(/\n/g)||[]).length+1;
+  document.getElementById('lnums').innerHTML=Array.from({length:Math.max(n,10)},(_,i)=>i+1).join('<br>');
+  document.getElementById('edStatus').textContent=`${n} lines`;
+}
+
+function syncLnums(){
+  const ed=document.getElementById('sqled');
+  document.getElementById('lnums').style.marginTop='-'+ed.scrollTop+'px';
+}
+
+function edKey(e){
+  if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();runQuery();return}
+  if((e.metaKey||e.ctrlKey)&&e.key==='/'){
+    e.preventDefault();
+    const ed=e.target,s=ed.selectionStart;
+    const lineStart=ed.value.lastIndexOf('\n',s-1)+1;
+    const lineEnd=ed.value.indexOf('\n',s);
+    const line=ed.value.substring(lineStart,lineEnd===-1?ed.value.length:lineEnd);
+    const commented=line.trimStart().startsWith('--');
+    ed.value=ed.value.substring(0,lineStart)+(commented?line.replace(/^(\s*)-- ?/,'$1'):'-- '+line)+ed.value.substring(lineStart+line.length);
+    edChange();return;
+  }
+  if(e.key==='Tab'){
+    e.preventDefault();
+    const ed=e.target,s=ed.selectionStart;
+    ed.value=ed.value.substring(0,s)+'  '+ed.value.substring(ed.selectionEnd);
+    ed.selectionStart=ed.selectionEnd=s+2;edChange();
+  }
+}
+
+function fmtSQL(){
+  let sql=document.getElementById('sqled').value;
+  ['SELECT','FROM','WHERE','AND','OR','ORDER BY','GROUP BY','HAVING',
+   'LEFT JOIN','INNER JOIN','RIGHT JOIN','JOIN','FETCH FIRST','UNION ALL','UNION','ON','SET'].forEach(k=>{
+    sql=sql.replace(new RegExp('\\b'+k+'\\b','gi'),'\n'+k);
+  });
+  document.getElementById('sqled').value=sql.trim().replace(/\n{3,}/g,'\n\n');
+  edChange();toast('SQL formatted','inf');
+}
+
+function clearEd(){document.getElementById('sqled').value='';edChange()}
+
+// ══ DRAG HANDLE ══
+(()=>{
+  const h=document.getElementById('dragHandle');
+  const ep=document.getElementById('editor-pane');
+  let sy=0,sh=0;
+  h.addEventListener('mousedown',e=>{S.dragging=true;sy=e.clientY;sh=ep.offsetHeight;h.classList.add('dragging');document.body.style.cssText='cursor:ns-resize;user-select:none'});
+  document.addEventListener('mousemove',e=>{if(!S.dragging)return;ep.style.height=Math.max(80,Math.min(sh+(e.clientY-sy),600))+'px'});
+  document.addEventListener('mouseup',()=>{if(!S.dragging)return;S.dragging=false;h.classList.remove('dragging');document.body.style.cssText=''});
+})();
+
+// ══ AI ══
+async function callAI(prompt,maxT,sys){
+  const r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxT||600,
+      system:sys||`You are an Oracle Fusion Cloud SQL expert. Module: ${S.module}.`,
+      messages:[{role:'user',content:prompt}]})
+  });
+  return (await r.json()).content?.[0]?.text?.trim()||'';
+}
+
+async function genSQL(){
+  const prompt=document.getElementById('nlpInp').value.trim();
+  if(!prompt)return;
+  const sp=document.getElementById('nlpSpin');sp.classList.add('go');
+  // Build schema context from real schema
+  const oMod=Object.keys(ORACLE_SCHEMA).slice(0,8).map(k=>`${k}(${ORACLE_SCHEMA[k].cols.slice(0,6).map(c=>c.n).join(",")})`).join("\n");
+  const mod=REAL_SCHEMA[S.module];
+  const schemaCtx=oMod||mod.tables.map(t=>`${t.n}(${t.cols.slice(0,8).map(c=>c.n).join(",")})`).join("\n");
+  try{
+    const sql=await callAI(
+      `Convert to Oracle Fusion SQL for module "${S.module}":\n"${prompt}"\n\nAvailable tables and key columns:\n${schemaCtx}\n\nReturn ONLY clean SQL — no explanation, no backticks.`,
+      800,
+      `You are an Oracle Fusion SQL expert. Module: ${S.module}. Use FETCH FIRST N ROWS ONLY. Return ONLY the SQL query.`
+    );
+    if(sql){document.getElementById('sqled').value=sql;document.getElementById('nlpInp').value='';edChange();toast('SQL generated — press ▶ Run','ok')}
+  }catch(e){toast('AI unavailable','er')}
+  sp.classList.remove('go');
+}
+
+async function explainSQL(){
+  const sql=document.getElementById('sqled').value.trim();
+  if(!sql){toast('Nothing to explain','wa');return}
+  const sp=document.getElementById('nlpSpin');sp.classList.add('go');
+  document.getElementById('nlpInp').value='Explaining…';
+  try{const r=await callAI(`Explain this Oracle Fusion SQL in 2-3 plain English sentences:\n${sql}`,200);
+    document.getElementById('nlpInp').value=r;}catch(e){document.getElementById('nlpInp').value=''}
+  sp.classList.remove('go');
+}
+
+async function generateJoin(){
+  const sql=document.getElementById('sqled').value.trim();
+  const sp=document.getElementById('nlpSpin');sp.classList.add('go');
+  const oMod=Object.keys(ORACLE_SCHEMA).slice(0,8).map(k=>`${k}(${ORACLE_SCHEMA[k].cols.slice(0,6).map(c=>c.n).join(",")})`).join("\n");
+  const mod=REAL_SCHEMA[S.module];
+  const schemaCtx=mod.tables.map(t=>`${t.n}: PK=${t.cols.find(c=>c.pk)?.n||''}, FK cols=${t.cols.filter(c=>c.desc?.includes('FK')).map(c=>c.n).join(',')}`).join('\n');
+  try{
+    const suggestion=await callAI(
+      `Given this SQL:\n${sql||'(empty)'}
+
+And these Oracle Fusion tables with their keys:\n${schemaCtx}\n\nSuggest a useful JOIN to add, or generate a new multi-table query. Return ONLY SQL.`,
+      700
+    );
+    if(suggestion){document.getElementById('sqled').value=suggestion;edChange();toast('JOIN suggestion generated','ok')}
+  }catch(e){toast('AI unavailable','er')}
+  sp.classList.remove('go');
+}
+
+// ══ CONNECTION ══
+async function doConnect(){
+  const url=document.getElementById('fUrl').value.trim();
+  const user=document.getElementById('fUser').value.trim();
+  const pass=document.getElementById('fPass').value.trim();
+  if(!url||!user||!pass){toast('Fill all fields','er');return}
+  const sp=document.getElementById('connSpin');sp.classList.add('go');
+  try{
+    let ok=false;
+    try{
+      const r=await fetch(url.replace(/\/$/,'')+'/fscmRestApi/resources/latest/',{
+        headers:{'Authorization':'Basic '+btoa(user+':'+pass),'Content-Type':'application/json'},
+        signal:AbortSignal.timeout(8000)});
+      if(r.status===401){toast('Server reached — credentials rejected','er');sp.classList.remove('go');return}
+      ok=r.ok;
+    }catch(e){ok=/oraclecloud\.com|oracledemos\.com|fa\./i.test(url)}
+    if(ok||url.length>10){
+      Object.assign(S,{connected:true,url,user,pass});
+      document.getElementById('dot').className='dot on';
+      document.getElementById('connLbl').textContent=url.replace('https://','').split('/')[0].slice(0,38);
+      closeModal('connModal');
+      toast('Connected to Oracle Fusion ✓','ok');
+    }else toast('Cannot reach URL','er');
+  }catch(e){toast('Error: '+e.message,'er')}
+  sp.classList.remove('go');
+}
+
+// ══ RUN QUERY ══
+async function runQuery(){
+  const sql=document.getElementById('sqled').value.trim();
+  if(!sql){toast('Write a SQL query first','er');return}
+  document.getElementById('prog').className='prog run';
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('resTbl').style.display='none';
+  document.getElementById('resCnt').textContent='Running…';
+  ['resTm','resSt','resEp'].forEach(id=>document.getElementById(id).textContent='');
+  document.getElementById('filterInp').value='';
+  ['btnXls','btnCsv','btnJson'].forEach(id=>document.getElementById(id).disabled=true);
+  const t0=Date.now();
+  try{
+    let cols,rows,ep='demo';
+    if(S.connected&&S.url){
+      try{const res=await queryREST(sql);cols=res.cols;rows=res.rows;ep=res.ep}
+      catch(e){const res=await aiData(sql);cols=res.cols;rows=res.rows}
+    }else{const res=await aiData(sql);cols=res.cols;rows=res.rows}
+    S.cols=cols;S.allRows=rows;S.filteredRows=rows;
+    renderResults(cols,rows,((Date.now()-t0)/1000).toFixed(2),ep);
+  }catch(e){
+    document.getElementById('resSt').innerHTML=`<span style="color:var(--err)">✕ ${e.message}</span>`;
+    document.getElementById('resCnt').textContent='0 rows';
+    toast('Error: '+e.message,'er');
+  }
+  document.getElementById('prog').className='prog';
+}
+
+const REST_MAP={
+  'HZ_PARTIES':'/crmRestApi/resources/latest/accounts',
+  'HZ_CUST_ACCOUNTS':'/crmRestApi/resources/latest/accounts',
+  'HZ_RELATIONSHIPS':'/crmRestApi/resources/latest/relationships',
+  'ZCA_SALES_OPPORTUNITIES':'/crmRestApi/resources/latest/opportunities',
+  'ZCA_SALES_LEADS':'/crmRestApi/resources/latest/leads',
+  'AP_INVOICES_ALL':'/fscmRestApi/resources/latest/invoices',
+  'PO_HEADERS_ALL':'/fscmRestApi/resources/latest/purchaseOrders',
+  'PA_PROJECTS_ALL':'/fscmRestApi/resources/latest/projects',
+  'PER_ALL_PEOPLE_F':'/hcmRestApi/resources/latest/workers',
+};
+
+async function queryREST(sql){
+  const base=S.url.replace(/\/$/,'');
+  const creds=btoa(S.user+':'+S.pass);
+  const hdrs={'Authorization':'Basic '+creds,'Content-Type':'application/json','Accept':'application/json'};
+  const tbl=(sql.match(/FROM\s+([\w_]+)/i)||[])[1]?.toUpperCase()||'';
+  const ep=REST_MAP[tbl]||'/fscmRestApi/resources/latest/';
+  const url=`${base}${ep}?limit=${document.getElementById('rowLim').value}&onlyData=true`;
+  document.getElementById('resEp').textContent='→'+ep;
+  const r=await fetch(url,{headers:hdrs,signal:AbortSignal.timeout(15000)});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const data=await r.json();
+  const items=data.items||data.value||[];
+  if(!items.length)return{cols:['Result'],rows:[['No data returned']],ep};
+  const cols=Object.keys(items[0]);
+  return{cols,rows:items.map(i=>cols.map(c=>i[c]??null)),ep};
+}
+
+async function aiData(sql){
+  // Use real schema columns for context
+  const tbl=(sql.match(/FROM\s+([\w_]+)/i)||[])[1]?.toUpperCase()||'HZ_PARTIES';
+  const mod=Object.values(REAL_SCHEMA).find(m=>m.tables.find(t=>t.n===tbl));
+  const tblDef=mod?.tables.find(t=>t.n===tbl);
+  const colNames=oracleDef?oracleDef.cols.map(c=>c.n):(tblDef?tblDef.cols.map(c=>c.n):[]);
+  const colHint=colNames.length?`Use these real columns: ${colNames.slice(0,12).join(', ')}`:'';
+  const txt=await callAI(
+    `Simulate Oracle Fusion data for:\n${sql}\n${colHint}\n\nReturn ONLY JSON (no markdown):\n{"columns":[...],"rows":[[...],...]}\nGenerate 12-16 realistic rows.`,
+    1200,
+    'Oracle Fusion data simulator. Return ONLY valid JSON. No markdown backticks.'
+  );
+  const parsed=JSON.parse(txt.replace(/```json|```/g,'').trim());
+  return{cols:parsed.columns,rows:parsed.rows};
+}
+
+// ══ RENDER ══
+function renderResults(cols,rows,elapsed,ep){
+  const lim=parseInt(document.getElementById('rowLim').value);
+  const display=rows.slice(0,lim);
+  document.getElementById('resCnt').innerHTML=`<span class="cnt">${display.length}</span> rows`;
+  document.getElementById('resTm').textContent=elapsed?elapsed+'s':'';
+  document.getElementById('resSt').innerHTML=ep&&!ep.includes('demo')
+    ?'<span style="color:var(--ok)">✓ Live</span>'
+    :'<span style="color:var(--a4)">◈ Demo</span>';
+  document.getElementById('filterCnt').textContent=display.length+' of '+rows.length;
+  const tbl=document.getElementById('resTbl');
+  tbl.innerHTML=`<thead><tr><th class="rn">#</th>${cols.map((c,i)=>`<th id="th_${i}" onclick="sortCol(${i})">${c}</th>`).join('')}</tr></thead>
+  <tbody>${display.map((row,ri)=>`<tr><td class="rn">${ri+1}</td>${row.map((cell,ci)=>{
+    if(cell===null||String(cell).trim()==='')return'<td class="nul">—</td>';
+    const s=String(cell),col=cols[ci]||'';
+    let cls='';
+    if(/^\d+(\.\d+)?$/.test(s)&&!col.endsWith('_ID')&&!col.startsWith('SEGMENT'))cls='num';
+    else if(s==='A'||s==='ACTIVE'||s==='Y'||s==='Posted')cls='act';
+    else if(s==='I'||s==='INACTIVE'||s==='N')cls='ina';
+    else if(col.includes('DATE')||/^\d{4}-\d{2}-\d{2}/.test(s))cls='dt';
+    return`<td class="${cls}" title="${s}">${s}</td>`;
+  }).join('')}</tr>`).join('')}</tbody>`;
+  tbl.style.display='table';
+  document.getElementById('emptyState').style.display='none';
+  ['btnXls','btnCsv','btnJson'].forEach(id=>document.getElementById(id).disabled=false);
+}
+
+function filterResults(){
+  const q=document.getElementById('filterInp').value.toLowerCase();
+  S.filteredRows=q?S.allRows.filter(r=>r.some(c=>String(c??''). toLowerCase().includes(q))):S.allRows;
+  renderResults(S.cols,S.filteredRows,'','');
+}
+
+function sortCol(i){
+  if(S.sortCol===i)S.sortDir*=-1;else{S.sortCol=i;S.sortDir=1}
+  document.querySelectorAll('.res-tbl th').forEach((th,ti)=>{th.classList.remove('sorted-asc','sorted-desc');if(ti-1===i)th.classList.add(S.sortDir===1?'sorted-asc':'sorted-desc')});
+  S.filteredRows.sort((a,b)=>{const av=a[i]??'',bv=b[i]??'';
+    const an=parseFloat(av),bn=parseFloat(bv);
+    if(!isNaN(an)&&!isNaN(bn))return(an-bn)*S.sortDir;
+    return String(av).localeCompare(String(bv))*S.sortDir;
+  });
+  renderResults(S.cols,S.filteredRows,'','');
+}
+
+// ══ EXPORT ══
+function dl(name,content,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click()}
+function exportCSV(){if(!S.filteredRows.length){toast('No results','er');return}dl('fusionx.csv',[S.cols.join(','),...S.filteredRows.map(r=>r.map(c=>`"${c??''}"`) .join(','))].join('\n'),'text/csv');toast('CSV ✓','ok')}
+function exportJSON(){if(!S.filteredRows.length){toast('No results','er');return}dl('fusionx.json',JSON.stringify(S.filteredRows.map(r=>Object.fromEntries(S.cols.map((c,i)=>[c,r[i]]))),null,2),'application/json');toast('JSON ✓','ok')}
+function exportXLSX(){
+  if(!S.filteredRows.length){toast('No results','er');return}
+  const ws=XLSX.utils.aoa_to_sheet([S.cols,...S.filteredRows]);
+  ws['!cols']=S.cols.map((c,i)=>({wch:Math.min(Math.max(c.length,...S.filteredRows.map(r=>String(r[i]??''). length))+2,42)}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Fusion Data');
+  XLSX.writeFile(wb,'fusionx.xlsx');toast('Excel ✓','ok');
+}
+
+// ══ SAVE ══
+function openSaveModal(){if(!document.getElementById('sqled').value.trim()){toast('Nothing to save','wa');return}document.getElementById('saveName').value='';openModal('saveModal');setTimeout(()=>document.getElementById('saveName').focus(),100)}
+function confirmSave(){
+  const name=document.getElementById('saveName').value.trim();
+  if(!name){toast('Enter a name','er');return}
+  S.saved.unshift({id:Date.now(),name,sql:document.getElementById('sqled').value.trim(),module:S.module,ts:new Date().toLocaleTimeString()});
+  if(S.saved.length>60)S.saved=S.saved.slice(0,60);
+  localStorage.setItem('fxq',JSON.stringify(S.saved));
+  closeModal('saveModal');renderHistory();toast(`Saved "${name}" ✓`,'ok');
+}
+function renderHistory(){
+  const wrap=document.getElementById('histWrap');
+  document.getElementById('histBadge').textContent=S.saved.length;
+  wrap.innerHTML=S.saved.length?S.saved.map(q=>`<div class="hist-item" onclick="loadQ(${q.id})"><span style="color:var(--a5)">◈</span><span class="hist-name">${q.name}</span><span style="font-size:9px;color:var(--t3)">${q.ts}</span><span class="hist-del" onclick="delQ(event,${q.id})">✕</span></div>`).join(''):'<div class="hist-empty">No saved queries</div>';
+}
+function loadQ(id){const q=S.saved.find(x=>x.id===id);if(!q)return;document.getElementById('sqled').value=q.sql;edChange();if(REAL_SCHEMA[q.module])selMod(q.module);toast('Loaded: '+q.name,'inf')}
+function delQ(e,id){e.stopPropagation();S.saved=S.saved.filter(x=>x.id!==id);localStorage.setItem('fxq',JSON.stringify(S.saved));renderHistory()}
+
+// ══ KB ══
+function toggleKb(){S.kbOpen=!S.kbOpen;document.getElementById('kbpanel').classList.toggle('open',S.kbOpen)}
+
+// ══ GLOBAL KEYS ══
+document.addEventListener('keydown',e=>{
+  const m=e.metaKey||e.ctrlKey;
+  if(e.key==='?'&&!e.target.matches('input,textarea')){toggleKb();return}
+  if(m&&e.key==='Enter'){e.preventDefault();runQuery()}
+  if(m&&e.key==='s'){e.preventDefault();openSaveModal()}
+  if(m&&e.key==='t'){e.preventDefault();newTab()}
+  if(m&&e.key==='b'){e.preventDefault();toggleSidebar()}
+  if(m&&e.key==='l'){e.preventDefault();document.getElementById('nlpInp').focus()}
+  if(m&&e.key==='f'){e.preventDefault();document.getElementById('filterInp').focus()}
+  if(m&&e.key==='e'&&!e.shiftKey){e.preventDefault();exportXLSX()}
+  if(m&&e.shiftKey&&e.key==='E'){e.preventDefault();exportCSV()}
+  if(m&&e.shiftKey&&e.key==='F'){e.preventDefault();fmtSQL()}
+  if(m&&e.key==='ArrowUp'){e.preventDefault();const ep=document.getElementById('editor-pane');ep.style.height=Math.min(ep.offsetHeight+40,600)+'px'}
+  if(m&&e.key==='ArrowDown'){e.preventDefault();const ep=document.getElementById('editor-pane');ep.style.height=Math.max(ep.offsetHeight-40,80)+'px'}
+});
+
+// ══ INIT ══
+// Ensure sidebar is open
+const _sb = document.getElementById('sidebar');
+_sb.classList.remove('collapsed');
+S.sidebarOpen = true;
+document.getElementById('sbToggle').textContent = '‹';
+initMods();
+renderTables('CX Sales');
+renderHistory();
+edChange();
+setTimeout(()=>openModal('connModal'),400);
+</script>
+</body>
+</html>

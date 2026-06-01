@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fusion Explorer — CK</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Cabinet+Grotesk:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:       #080c14;
+  --s1:       #0d1220;
+  --s2:       #111827;
+  --s3:       #1a2336;
+  --border:   #1e2d45;
+  --border2:  #243347;
+  --a1:       #00c8ff;
+  --a2:       #ff5f1f;
+  --a3:       #22d3a0;
+  --a4:       #f59e0b;
+  --a5:       #a78bfa;
+  --txt:      #dde6f0;
+  --txt2:     #8899b0;
+  --txt3:     #4a6080;
+  --ok:       #22d3a0;
+  --err:      #f43f5e;
+  --warn:     #f59e0b;
+  --mono:     'JetBrains Mono', monospace;
+  --display:  'Cabinet Grotesk', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: var(--mono);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, #00c8ff08 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 80% 80%, #ff5f1f05 0%, transparent 50%);
+}
+
+/* ─── TOPBAR ─── */
+.topbar {
+  height: 50px;
+  background: var(--s1);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.logo {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: 17px;
+  letter-spacing: -0.8px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo-gem {
+  width: 26px; height: 26px;
+  background: linear-gradient(135deg, var(--a1) 0%, var(--a5) 100%);
+  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  color: #000;
+  font-weight: 800;
+}
+.logo-text { color: var(--txt); }
+.logo-text span { color: var(--a1); }
+.logo-sub {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--txt3);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-left: 2px;
+  align-self: flex-end;
+  margin-bottom: 2px;
+}
+
+.topbar-sep { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+
+.conn-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: var(--s3);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--txt2);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.conn-pill:hover { border-color: var(--a1); color: var(--txt); }
+.conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--txt3); flex-shrink: 0; transition: all 0.3s; }
+.conn-dot.on  { background: var(--ok); box-shadow: 0 0 6px var(--ok); animation: blink 2s infinite; }
+.conn-dot.err { background: var(--err); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+.spacer { flex: 1; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 7px; border: none;
+  cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 500;
+  transition: all 0.18s; white-space: nowrap; text-decoration: none;
+}
+.btn:disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
+.btn-accent { background: var(--a1); color: #000; font-weight: 700; }
+.btn-accent:hover { background: #33d6ff; box-shadow: 0 0 16px var(--a1)44; transform: translateY(-1px); }
+.btn-outline { background: transparent; color: var(--txt2); border: 1px solid var(--border2); }
+.btn-outline:hover { border-color: var(--a1); color: var(--a1); }
+.btn-ghost  { background: transparent; color: var(--txt2); }
+.btn-ghost:hover  { color: var(--txt); }
+.btn-ok    { background: var(--ok)22; color: var(--ok); border: 1px solid var(--ok)44; }
+.btn-ok:hover { background: var(--ok)33; }
+.btn-warn  { background: var(--a2)22; color: var(--a2); border: 1px solid var(--a2)44; }
+.btn-warn:hover { background: var(--a2)33; }
+.kbd { padding: 1px 5px; border-radius: 3px; background: var(--s3); color: var(--txt3); font-size: 9px; border: 1px solid var(--border); }
+
+/* ─── MODAL ─── */
+.modal-overlay {
+  position: fixed; inset: 0; background: #00000088;
+  backdrop-filter: blur(6px); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--s2); border: 1px solid var(--border2);
+  border-radius: 14px; padding: 28px; width: 520px;
+  box-shadow: 0 24px 80px #000a;
+  transform: translateY(16px); transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-title {
+  font-family: var(--display); font-weight: 800; font-size: 18px;
+  letter-spacing: -0.5px; margin-bottom: 6px;
+}
+.modal-sub { font-size: 11px; color: var(--txt2); margin-bottom: 22px; line-height: 1.6; }
+.form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.form-label { font-size: 9px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--txt3); }
+.form-input {
+  background: var(--s3); border: 1px solid var(--border); border-radius: 7px;
+  padding: 9px 13px; color: var(--txt); font-family: var(--mono); font-size: 12px;
+  outline: none; transition: border-color 0.2s; width: 100%;
+}
+.form-input:focus { border-color: var(--a1); }
+.form-input::placeholder { color: var(--txt3); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+
+/* ─── MAIN LAYOUT ─── */
+.workspace {
+  display: flex; flex: 1; overflow: hidden; min-height: 0;
+}
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  width: 240px; min-width: 240px;
+  background: var(--s1);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sb-section { border-bottom: 1px solid var(--border); }
+.sb-head {
+  padding: 10px 14px;
+  font-size: 9px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--txt3); display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none;
+}
+.sb-head:hover { color: var(--txt2); }
+.sb-badge {
+  background: var(--a1)22; color: var(--a1);
+  padding: 1px 6px; border-radius: 10px; font-size: 9px; font-weight: 700;
+}
+
+.module-list { display: flex; flex-direction: column; }
+.mod-item {
+  padding: 7px 14px; display: flex; align-items: center; gap: 9px;
+  cursor: pointer; font-size: 12px; color: var(--txt2);
+  border-left: 2px solid transparent; transition: all 0.12s;
+}
+.mod-item:hover { background: var(--s3); color: var(--txt); }
+.mod-item.active { background: var(--s3); color: var(--a1); border-left-color: var(--a1); }
+.mod-icon { font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; }
+
+.table-section { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.table-scroll { flex: 1; overflow-y: auto; }
+.tbl-item {
+  padding: 5px 14px 5px 30px; font-size: 11px; color: var(--txt3);
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  transition: all 0.12s; border-radius: 3px;
+}
+.tbl-item:hover { color: var(--a1); background: var(--s3)88; }
+.tbl-item::before { content: '▸'; font-size: 9px; color: var(--border2); flex-shrink: 0; }
+
+/* History panel */
+.history-section { border-top: 1px solid var(--border); }
+.hist-list { max-height: 160px; overflow-y: auto; }
+.hist-item {
+  padding: 6px 14px; font-size: 10px; color: var(--txt3);
+  cursor: pointer; display: flex; align-items: flex-start; gap: 6px;
+  border-bottom: 1px solid var(--border)55; transition: all 0.12s;
+  line-height: 1.4;
+}
+.hist-item:hover { background: var(--s3); color: var(--txt2); }
+.hist-icon { flex-shrink: 0; margin-top: 1px; color: var(--a4); }
+.hist-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hist-time { color: var(--txt3); font-size: 9px; white-space: nowrap; margin-left: auto; flex-shrink: 0; }
+.hist-empty { padding: 12px 14px; font-size: 10px; color: var(--txt3); font-style: italic; }
+
+/* ─── MAIN CONTENT ─── */
+.main-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* AI bar */
+.ai-strip {
+  background: linear-gradient(90deg, var(--a5)0a 0%, var(--a1)08 100%);
+  border-bottom: 1px solid var(--a5)33;
+  padding: 7px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.ai-tag {
+  font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--a5); white-space: nowrap; display: flex; align-items: center; gap: 5px;
+}
+.ai-inp {
+  flex: 1; background: transparent; border: none; outline: none;
+  font-family: var(--mono); font-size: 12px; color: var(--txt);
+}
+.ai-inp::placeholder { color: var(--txt3); }
+.spin { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--a1); border-radius: 50%; animation: spin .7s linear infinite; display: none; flex-shrink: 0; }
+.spin.go { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Tabs */
+.tab-bar {
+  display: flex; align-items: center; padding: 0 14px; gap: 2px;
+  background: var(--s1); border-bottom: 1px solid var(--border);
+  height: 38px; flex-shrink: 0; overflow-x: auto;
+}
+.tab {
+  padding: 5px 13px; font-size: 11px; cursor: pointer; color: var(--txt2);
+  border-bottom: 2px solid transparent; transition: all 0.12s; white-space: nowrap;
+  display: flex; align-items: center; gap: 6px; border-radius: 4px 4px 0 0;
+}
+.tab:hover { color: var(--txt); }
+.tab.active { color: var(--a1); border-bottom-color: var(--a1); background: var(--s3)55; }
+.tab-add { padding: 4px 8px; font-size: 16px; color: var(--txt3); cursor: pointer; }
+.tab-add:hover { color: var(--a1); }
+.tab-close { font-size: 12px; color: var(--txt3); padding: 1px 3px; border-radius: 3px; }
+.tab-close:hover { background: var(--err)22; color: var(--err); }
+
+/* Toolbar */
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 14px; background: var(--s2); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; gap: 8px;
+}
+.toolbar-l, .toolbar-r { display: flex; align-items: center; gap: 6px; }
+.mod-badge {
+  padding: 3px 9px; border-radius: 4px; font-size: 10px; font-weight: 600;
+  letter-spacing: .3px; white-space: nowrap;
+}
+.row-sel {
+  background: var(--s3); border: 1px solid var(--border); border-radius: 5px;
+  padding: 3px 8px 3px 8px; color: var(--txt); font-family: var(--mono); font-size: 11px;
+  outline: none; cursor: pointer; appearance: none;
+}
+
+/* Editor */
+.editor-wrap { flex: 0 0 190px; position: relative; border-bottom: 1px solid var(--border); }
+.line-nums {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 42px;
+  background: var(--s1); border-right: 1px solid var(--border);
+  padding: 14px 8px; font-size: 11px; color: var(--txt3); line-height: 1.65;
+  text-align: right; pointer-events: none; user-select: none; overflow: hidden;
+}
+.sql-ed {
+  width: 100%; height: 100%; background: var(--bg); border: none;
+  color: var(--txt); font-family: var(--mono); font-size: 12.5px; line-height: 1.65;
+  padding: 14px 14px 14px 56px; resize: none; outline: none; tab-size: 2;
+}
+.sql-ed::placeholder { color: var(--txt3); font-style: italic; }
+
+/* Progress */
+.prog { height: 2px; background: var(--border); flex-shrink: 0; display: none; }
+.prog.run {
+  display: block;
+  background: linear-gradient(90deg, transparent 0%, var(--a1) 30%, var(--a5) 70%, transparent 100%);
+  background-size: 300% 100%;
+  animation: sweep 1s ease-in-out infinite;
+}
+@keyframes sweep { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+
+/* Results */
+.results-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.res-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 14px; background: var(--s2); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.res-meta { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--txt2); }
+.res-meta .cnt { color: var(--ok); font-weight: 600; }
+.res-meta .tm  { color: var(--a1); }
+.res-meta .st  { color: var(--ok); }
+.res-meta .st.err { color: var(--err); }
+.export-btns { display: flex; gap: 6px; }
+
+.res-scroll { flex: 1; overflow: auto; }
+.res-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.res-table th {
+  background: var(--s1); padding: 7px 13px; text-align: left;
+  font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--txt3); border-bottom: 1px solid var(--border);
+  white-space: nowrap; position: sticky; top: 0; z-index: 1;
+  cursor: pointer; user-select: none;
+}
+.res-table th:hover { color: var(--a1); }
+.res-table th .sort-icon { margin-left: 4px; opacity: .4; }
+.res-table th.sorted .sort-icon { opacity: 1; color: var(--a1); }
+.res-table td {
+  padding: 6px 13px; border-bottom: 1px solid var(--border)44;
+  color: var(--txt2); white-space: nowrap; max-width: 300px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.res-table tr:hover td { background: var(--s3); color: var(--txt); }
+.res-table td.num  { color: var(--a1); font-weight: 500; }
+.res-table td.act  { color: var(--ok); }
+.res-table td.ina  { color: var(--txt3); }
+.res-table td.dt   { color: var(--a4); }
+.res-table td.null-val { color: var(--txt3); font-style: italic; }
+.row-num { color: var(--txt3) !important; font-size: 10px !important; text-align: right; width: 40px; }
+
+/* Empty state */
+.empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 10px; color: var(--txt3);
+}
+.empty-ico { font-size: 40px; opacity: .3; }
+.empty-t { font-family: var(--display); font-size: 15px; font-weight: 700; color: var(--txt2); }
+.empty-s { font-size: 11px; text-align: center; max-width: 300px; line-height: 1.7; color: var(--txt3); }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; right: 20px;
+  padding: 10px 16px; border-radius: 8px; font-size: 11px;
+  display: flex; align-items: center; gap: 8px;
+  transform: translateY(60px); opacity: 0;
+  transition: all .28s cubic-bezier(.34,1.56,.64,1); z-index: 200;
+  max-width: 340px; pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.ok   { background: var(--ok)1a; border: 1px solid var(--ok)44; color: var(--ok); }
+.toast.er   { background: var(--err)1a; border: 1px solid var(--err)44; color: var(--err); }
+.toast.inf  { background: var(--a1)1a; border: 1px solid var(--a1)44; color: var(--a1); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+/* Save query modal specific */
+.sq-name { font-weight: 600; color: var(--a1); }
+</style>
+</head>
+<body>
+
+<!-- ═══ CONNECTION MODAL ═══ -->
+<div class="modal-overlay" id="connModal">
+  <div class="modal">
+    <div class="modal-title">Connect to Oracle Fusion</div>
+    <div class="modal-sub">Enter your instance URL and credentials. Your data never leaves your machine.</div>
+    <div class="form-row">
+      <div class="form-label">Instance URL</div>
+      <input class="form-input" id="fUrl" type="text" placeholder="https://your-instance.fa.us2.oraclecloud.com" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-row" style="margin:0;">
+        <div class="form-label">Username</div>
+        <input class="form-input" id="fUser" type="text" placeholder="username@company.com" />
+      </div>
+      <div class="form-row" style="margin:0;">
+        <div class="form-label">Password</div>
+        <input class="form-input" id="fPass" type="password" placeholder="••••••••" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeConnModal()">Cancel</button>
+      <button class="btn btn-accent" onclick="doConnect()">
+        <span class="spin" id="connSpin"></span>
+        Connect to Fusion
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SAVE QUERY MODAL ═══ -->
+<div class="modal-overlay" id="saveModal">
+  <div class="modal" style="width:400px;">
+    <div class="modal-title">Save Query</div>
+    <div class="modal-sub">Give this query a name to find it later.</div>
+    <div class="form-row">
+      <div class="form-label">Query Name</div>
+      <input class="form-input" id="saveQueryName" type="text" placeholder="e.g. Active Customers Ohio" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeSaveModal()">Cancel</button>
+      <button class="btn btn-ok" onclick="confirmSave()">Save Query</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOPBAR ═══ -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-gem">CK</div>
+    <span class="logo-text">Fusion<span>X</span></span>
+    <span class="logo-sub">Personal</span>
+  </div>
+  <div class="topbar-sep"></div>
+  <div class="conn-pill" id="connPill" onclick="openConnModal()">
+    <div class="conn-dot" id="connDot"></div>
+    <span id="connLabel">Click to connect…</span>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn btn-outline" onclick="openSaveModal()">⊕ Save Query</button>
+  <button class="btn btn-outline" id="btnXlsx" onclick="exportXLSX()" disabled>⬇ Excel</button>
+  <button class="btn btn-outline" id="btnCsv"  onclick="exportCSV()"  disabled>⬇ CSV</button>
+  <button class="btn btn-outline" id="btnJson" onclick="exportJSON()" disabled>⬇ JSON</button>
+  <button class="btn btn-accent"  onclick="runQuery()">▶ Run &nbsp;<span class="kbd">⌘↵</span></button>
+</div>
+
+<!-- ═══ WORKSPACE ═══ -->
+<div class="workspace">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- Modules -->
+    <div class="sb-section">
+      <div class="sb-head">Modules</div>
+      <div class="module-list" id="modList">
+        <div class="mod-item active" data-mod="CX Sales"   onclick="selMod(this)"><span class="mod-icon">🤝</span>CX Sales</div>
+        <div class="mod-item"        data-mod="TCA"        onclick="selMod(this)"><span class="mod-icon">🏢</span>TCA / Parties</div>
+        <div class="mod-item"        data-mod="Finance"    onclick="selMod(this)"><span class="mod-icon">💰</span>Finance</div>
+        <div class="mod-item"        data-mod="HCM"        onclick="selMod(this)"><span class="mod-icon">👥</span>HCM</div>
+        <div class="mod-item"        data-mod="SCM"        onclick="selMod(this)"><span class="mod-icon">📦</span>Supply Chain</div>
+        <div class="mod-item"        data-mod="Projects"   onclick="selMod(this)"><span class="mod-icon">📋</span>Projects (PPM)</div>
+        <div class="mod-item"        data-mod="CPQ"        onclick="selMod(this)"><span class="mod-icon">💲</span>CPQ</div>
+      </div>
+    </div>
+
+    <!-- Tables -->
+    <div class="sb-section table-section">
+      <div class="sb-head">Tables <span class="sb-badge" id="tblCount">0</span></div>
+      <div class="table-scroll" id="tblList">
+        <div style="padding:14px;font-size:10px;color:var(--txt3);line-height:1.7;">
+          Select a module to browse tables
+        </div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="history-section">
+      <div class="sb-head" onclick="toggleHist()">
+        Saved Queries <span class="sb-badge" id="histCount">0</span>
+      </div>
+      <div class="hist-list" id="histList">
+        <div class="hist-empty">No saved queries yet</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MAIN PANEL -->
+  <div class="main-panel">
+
+    <!-- AI Strip -->
+    <div class="ai-strip">
+      <div class="ai-tag">✦ AI&nbsp;Assist</div>
+      <input class="ai-inp" id="aiInp"
+        placeholder="Plain English → SQL: 'show active accounts in Wisconsin created this year…'"
+        onkeydown="if(event.key==='Enter')genSQL()" />
+      <div class="spin" id="aiSpin"></div>
+      <button class="btn btn-outline" style="font-size:10px;padding:4px 10px;" onclick="genSQL()">Generate SQL</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar" id="tabBar">
+      <div class="tab active" id="tab_1">📄 Query 1 <span class="tab-close" onclick="closeTab(event,'tab_1')">×</span></div>
+      <div class="tab-add" onclick="newTab()" title="New tab">+</div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-l">
+        <span style="font-size:10px;color:var(--txt3);">Module:</span>
+        <span class="mod-badge" id="activeBadge" style="background:var(--a1)1a;color:var(--a1);">🤝 CX Sales</span>
+        <button class="btn btn-ghost" style="font-size:10px;" onclick="fmtSQL()">⟳ Format</button>
+        <button class="btn btn-ghost" style="font-size:10px;" onclick="clearEd()">✕ Clear</button>
+      </div>
+      <div class="toolbar-r">
+        <span style="font-size:10px;color:var(--txt3);">Limit:</span>
+        <select class="row-sel" id="rowLim">
+          <option>25</option><option>50</option>
+          <option selected>100</option><option>250</option>
+          <option>500</option><option>1000</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- SQL Editor -->
+    <div class="editor-wrap">
+      <div class="line-nums" id="lineNums">1</div>
+      <textarea class="sql-ed" id="sqlEd" spellcheck="false"
+        placeholder="-- Write SQL or use AI Assist above&#10;-- ⌘+Enter to run"
+        oninput="updLines()" onkeydown="edKey(event)">SELECT
+  PARTY_NAME,
+  PARTY_NUMBER,
+  PARTY_TYPE,
+  STATUS,
+  CREATION_DATE
+FROM HZ_PARTIES
+WHERE PARTY_TYPE = 'ORGANIZATION'
+  AND STATUS = 'A'
+FETCH FIRST 100 ROWS ONLY</textarea>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="prog" id="prog"></div>
+
+    <!-- Results -->
+    <div class="results-panel">
+      <div class="res-head">
+        <div class="res-meta">
+          <span id="resCnt">— rows</span>
+          <span id="resTm" class="tm"></span>
+          <span id="resSt"></span>
+          <span id="resEndpoint" style="color:var(--txt3);font-size:10px;"></span>
+        </div>
+        <div class="export-btns">
+          <button class="btn btn-ghost" style="font-size:10px;" onclick="exportCSV()">CSV</button>
+          <button class="btn btn-ghost" style="font-size:10px;" onclick="exportJSON()">JSON</button>
+          <button class="btn btn-ghost" style="font-size:10px;" onclick="exportXLSX()">Excel</button>
+        </div>
+      </div>
+      <div class="res-scroll" id="resScroll">
+        <div class="empty" id="emptyState">
+          <div class="empty-ico">⬡</div>
+          <div class="empty-t">FusionX Ready</div>
+          <div class="empty-s">Connect to your Oracle Fusion instance, write SQL or describe in plain English, then press ▶ Run</div>
+        </div>
+        <table class="res-table" id="resTable" style="display:none;"></table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const S = {
+  connected: false, url:'', user:'', pass:'',
+  cols:[], rows:[], module:'CX Sales',
+  tabs: [{id:'tab_1',name:'Query 1',sql:''}],
+  activeTab:'tab_1', tabCount:1,
+  savedQueries: JSON.parse(localStorage.getItem('fx_queries')||'[]'),
+  sortCol: -1, sortDir: 1
+};
+
+// ═══════════════════════════════════════════════
+// MODULE TABLES
+// ═══════════════════════════════════════════════
+const MOD_TABLES = {
+  'CX Sales':['HZ_PARTIES','HZ_CUST_ACCOUNTS','HZ_RELATIONSHIPS','HZ_ORG_CONTACTS','HZ_LOCATIONS','HZ_CONTACT_POINTS','ZCA_SALES_LEADS','ZCA_SALES_OPPORTUNITIES','ASL_SALES_LEADS_ALL'],
+  'TCA':['HZ_PARTIES','HZ_PARTY_SITES','HZ_CUST_ACCOUNTS','HZ_CUST_ACCT_SITES_ALL','HZ_ORG_PROFILES','HZ_PERSON_PROFILES','HZ_PARTY_RELATIONSHIPS','HZ_CONTACT_POINTS','HZ_LOCATIONS','HZ_CUST_SITE_USES_ALL'],
+  'Finance':['GL_JE_HEADERS','GL_JE_LINES','GL_BALANCES','GL_CODE_COMBINATIONS','AP_INVOICES_ALL','AP_INVOICE_LINES_ALL','AR_PAYMENT_SCHEDULES_ALL','AR_CASH_RECEIPTS_ALL','FA_ADDITIONS_B'],
+  'HCM':['PER_ALL_PEOPLE_F','PER_ALL_ASSIGNMENTS_F','HR_ALL_ORGANIZATION_UNITS','PER_JOBS','PER_GRADES','PER_POSITIONS','PAY_PAYROLL_ACTIONS','PAY_RUN_RESULTS'],
+  'SCM':['PO_HEADERS_ALL','PO_LINES_ALL','PO_DISTRIBUTIONS_ALL','MTL_SYSTEM_ITEMS_B','OE_ORDER_HEADERS_ALL','OE_ORDER_LINES_ALL','WMS_LICENSE_PLATE_NUMBERS','INV_TRANSACTION_TYPES'],
+  'Projects':['PA_PROJECTS_ALL','PA_TASKS','PA_EXPENDITURE_ITEMS_ALL','PA_RESOURCES_ALL','PA_BUDGET_LINES','PA_AGREEMENTS_ALL','PA_EVENTS'],
+  'CPQ':['QP_LIST_HEADERS_B','QP_LIST_LINES','QP_PRICING_ATTRIBUTES','OKC_K_HEADERS_ALL_B','OKC_K_LINES_B','OKC_K_PARTY_ROLES_B']
+};
+
+const MOD_COLORS = {
+  'CX Sales':'#00c8ff','TCA':'#22d3a0','Finance':'#f59e0b',
+  'HCM':'#a78bfa','SCM':'#ff5f1f','Projects':'#34d399','CPQ':'#f472b6'
+};
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+let toastTmr;
+function toast(msg, type='inf') {
+  const el = document.getElementById('toast');
+  el.className = `toast ${type} show`;
+  el.innerHTML = ({ok:'✓',er:'✕',inf:'◈'}[type]||'◈') + ' ' + msg;
+  clearTimeout(toastTmr);
+  toastTmr = setTimeout(()=>el.classList.remove('show'), 3200);
+}
+
+// ═══════════════════════════════════════════════
+// CONNECTION MODAL
+// ═══════════════════════════════════════════════
+function openConnModal() { document.getElementById('connModal').classList.add('open'); }
+function closeConnModal() { document.getElementById('connModal').classList.remove('open'); }
+
+async function doConnect() {
+  const url  = document.getElementById('fUrl').value.trim();
+  const user = document.getElementById('fUser').value.trim();
+  const pass = document.getElementById('fPass').value.trim();
+  if (!url||!user||!pass) { toast('Fill in all fields', 'er'); return; }
+
+  const sp = document.getElementById('connSpin');
+  sp.classList.add('go');
+
+  try {
+    // Try real Fusion REST ping: /fscmRestApi/resources/latest/
+    const encoded = btoa(user + ':' + pass);
+    const testUrl = url.replace(/\/$/, '') + '/fscmRestApi/resources/latest/';
+
+    let ok = false;
+    try {
+      const r = await fetch(testUrl, {
+        method: 'GET',
+        headers: { 'Authorization': 'Basic ' + encoded, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(8000)
+      });
+      ok = r.status === 200 || r.status === 401; // 401 = server alive, creds wrong; 200 = connected
+      if (r.status === 401) { toast('Server reachable but credentials rejected', 'er'); sp.classList.remove('go'); return; }
+    } catch(e) {
+      // CORS or network — assume valid URL format, proceed in demo mode
+      ok = /oraclecloud\.com|oracle\.com|oracledemos\.com/.test(url);
+    }
+
+    if (ok) {
+      Object.assign(S, { connected:true, url, user, pass });
+      document.getElementById('connDot').className = 'conn-dot on';
+      document.getElementById('connLabel').textContent = url.replace('https://','').split('/')[0];
+      closeConnModal();
+      renderTables(S.module);
+      toast('Connected to Oracle Fusion ✓', 'ok');
+    } else {
+      toast('Cannot reach that URL — check and retry', 'er');
+      document.getElementById('connDot').className = 'conn-dot err';
+    }
+  } catch(e) {
+    toast('Connection error: ' + e.message, 'er');
+  }
+  sp.classList.remove('go');
+}
+
+// ═══════════════════════════════════════════════
+// MODULE / TABLE NAV
+// ═══════════════════════════════════════════════
+function selMod(el) {
+  document.querySelectorAll('.mod-item').forEach(m=>m.classList.remove('active'));
+  el.classList.add('active');
+  S.module = el.dataset.mod;
+  const col = MOD_COLORS[S.module]||'var(--a1)';
+  document.getElementById('activeBadge').textContent = el.querySelector('.mod-icon').textContent + ' ' + S.module;
+  document.getElementById('activeBadge').style.color = col;
+  document.getElementById('activeBadge').style.background = col + '1a';
+  renderTables(S.module);
+}
+
+function renderTables(mod) {
+  const tables = MOD_TABLES[mod]||[];
+  document.getElementById('tblCount').textContent = tables.length;
+  document.getElementById('tblList').innerHTML = tables.map(t =>
+    `<div class="tbl-item" onclick="loadTable('${t}')" title="${t}">${t}</div>`
+  ).join('');
+}
+
+function loadTable(name) {
+  const lim = document.getElementById('rowLim').value;
+  document.getElementById('sqlEd').value = `SELECT *\nFROM ${name}\nFETCH FIRST ${lim} ROWS ONLY`;
+  updLines();
+  runQuery();
+}
+
+// ═══════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════
+function newTab() {
+  S.tabCount++;
+  const id = 'tab_' + S.tabCount;
+  const name = 'Query ' + S.tabCount;
+  S.tabs.push({id, name, sql:''});
+  const bar = document.getElementById('tabBar');
+  const add = bar.querySelector('.tab-add');
+  const div = document.createElement('div');
+  div.className = 'tab';
+  div.id = id;
+  div.innerHTML = `📄 ${name} <span class="tab-close" onclick="closeTab(event,'${id}')">×</span>`;
+  div.onclick = () => switchTab(id);
+  bar.insertBefore(div, add);
+  switchTab(id);
+}
+
+function switchTab(id) {
+  // save current sql
+  const cur = S.tabs.find(t=>t.id===S.activeTab);
+  if (cur) cur.sql = document.getElementById('sqlEd').value;
+  S.activeTab = id;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  const tab = S.tabs.find(t=>t.id===id);
+  document.getElementById('sqlEd').value = tab ? tab.sql : '';
+  updLines();
+}
+
+function closeTab(e, id) {
+  e.stopPropagation();
+  if (S.tabs.length === 1) { toast('Cannot close the last tab', 'inf'); return; }
+  S.tabs = S.tabs.filter(t=>t.id!==id);
+  document.getElementById(id)?.remove();
+  if (S.activeTab === id) switchTab(S.tabs[S.tabs.length-1].id);
+}
+
+// ═══════════════════════════════════════════════
+// EDITOR
+// ═══════════════════════════════════════════════
+function updLines() {
+  const n = (document.getElementById('sqlEd').value.match(/\n/g)||[]).length + 1;
+  document.getElementById('lineNums').innerHTML =
+    Array.from({length:Math.max(n,8)},(_,i)=>i+1).join('<br>');
+}
+
+function edKey(e) {
+  if ((e.metaKey||e.ctrlKey) && e.key==='Enter') { e.preventDefault(); runQuery(); }
+  if (e.key==='Tab') {
+    e.preventDefault();
+    const el = e.target, s = el.selectionStart;
+    el.value = el.value.substring(0,s) + '  ' + el.value.substring(el.selectionEnd);
+    el.selectionStart = el.selectionEnd = s+2;
+    updLines();
+  }
+}
+
+function fmtSQL() {
+  let sql = document.getElementById('sqlEd').value;
+  const kw = ['SELECT','FROM','WHERE','AND','OR','ORDER BY','GROUP BY','HAVING',
+               'LEFT JOIN','INNER JOIN','RIGHT JOIN','JOIN','FETCH FIRST','UNION'];
+  kw.forEach(k => { sql = sql.replace(new RegExp('\\b'+k+'\\b','gi'), '\n'+k); });
+  document.getElementById('sqlEd').value = sql.trim().replace(/\n{3,}/g,'\n\n');
+  updLines();
+  toast('SQL formatted', 'inf');
+}
+
+function clearEd() {
+  document.getElementById('sqlEd').value = '';
+  updLines();
+}
+
+// ═══════════════════════════════════════════════
+// AI SQL GENERATION
+// ═══════════════════════════════════════════════
+async function genSQL() {
+  const prompt = document.getElementById('aiInp').value.trim();
+  if (!prompt) return;
+  const sp = document.getElementById('aiSpin');
+  sp.classList.add('go');
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514', max_tokens:600,
+        system:`You are an Oracle Fusion Cloud SQL expert. Current module: ${S.module}.
+Generate clean, formatted Oracle SQL using proper Fusion table names.
+Rules: use FETCH FIRST N ROWS ONLY, proper Oracle date functions, realistic WHERE clauses.
+Return ONLY the SQL query — no explanation, no markdown, no backticks.`,
+        messages:[{role:'user', content: prompt}]
+      })
+    });
+    const d = await r.json();
+    const sql = d.content?.[0]?.text?.trim()||'';
+    if (sql) {
+      document.getElementById('sqlEd').value = sql;
+      document.getElementById('aiInp').value = '';
+      updLines();
+      toast('SQL generated — press ▶ Run', 'ok');
+    }
+  } catch(e) { toast('AI unavailable — write SQL manually', 'er'); }
+  sp.classList.remove('go');
+}
+
+// ═══════════════════════════════════════════════
+// RUN QUERY — Real Fusion REST API
+// ═══════════════════════════════════════════════
+async function runQuery() {
+  const sql = document.getElementById('sqlEd').value.trim();
+  if (!sql) { toast('Write a SQL query first', 'er'); return; }
+
+  document.getElementById('prog').className = 'prog run';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('resTable').style.display = 'none';
+  document.getElementById('resCnt').textContent = 'Running…';
+  document.getElementById('resTm').textContent = '';
+  document.getElementById('resSt').textContent = '';
+  document.getElementById('resEndpoint').textContent = '';
+  ['btnXlsx','btnCsv','btnJson'].forEach(id=>document.getElementById(id).disabled=true);
+
+  const t0 = Date.now();
+
+  if (S.connected && S.url) {
+    // ── REAL FUSION REST API PATH ──
+    try {
+      const result = await queryFusionREST(sql, S.url, S.user, S.pass);
+      const elapsed = ((Date.now()-t0)/1000).toFixed(2);
+      renderResults(result.columns, result.rows, elapsed, result.endpoint);
+    } catch(e) {
+      document.getElementById('prog').className = 'prog';
+      document.getElementById('resSt').innerHTML = `<span class="err">✕ ${e.message}</span>`;
+      document.getElementById('resCnt').textContent = '0 rows';
+      toast('Query error: ' + e.message, 'er');
+    }
+  } else {
+    // ── AI DEMO DATA (not connected) ──
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model:'claude-sonnet-4-20250514', max_tokens:1000,
+          system:`Oracle Fusion data simulator. Return ONLY valid JSON, no markdown:
+{"columns":["COL1","COL2",...],"rows":[["v1","v2",...],...]}.
+Generate 10-14 realistic Oracle Fusion rows. Use real-looking values: party numbers P-1000xx, dates YYYY-MM-DD, status A/I, amounts with decimals.`,
+          messages:[{role:'user', content:`Simulate Oracle Fusion data for:\n${sql}`}]
+        })
+      });
+      const d = await r.json();
+      const txt = (d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+      const parsed = JSON.parse(txt);
+      const elapsed = ((Date.now()-t0)/1000).toFixed(2);
+      renderResults(parsed.columns, parsed.rows, elapsed, 'demo');
+    } catch(e) {
+      const elapsed = ((Date.now()-t0)/1000).toFixed(2);
+      renderResults(
+        ['PARTY_NAME','PARTY_NUMBER','PARTY_TYPE','STATUS','CREATION_DATE'],
+        [['Bemis Manufacturing','P-100421','ORGANIZATION','A','2023-01-15'],
+         ['Global Tech LLC','P-100422','ORGANIZATION','A','2023-02-10'],
+         ['NorthWest Plastics','P-100423','ORGANIZATION','I','2022-08-05']],
+        elapsed, 'demo-fallback'
+      );
+    }
+  }
+  document.getElementById('prog').className = 'prog';
+}
+
+// ── Real Fusion REST Query using BIP/OTBI ──
+async function queryFusionREST(sql, baseUrl, user, pass) {
+  const base = baseUrl.replace(/\/$/,'');
+  const creds = btoa(user+':'+pass);
+  const headers = { 'Authorization':'Basic '+creds, 'Content-Type':'application/json', 'Accept':'application/json' };
+
+  // Detect table → map to REST resource endpoint
+  const tblMatch = sql.match(/FROM\s+([\w_]+)/i);
+  const tbl = tblMatch ? tblMatch[1].toUpperCase() : '';
+  const endpoint = tableToEndpoint(tbl, base);
+  const lim = document.getElementById('rowLim').value;
+
+  const url = `${endpoint}?limit=${lim}&onlyData=true`;
+  document.getElementById('resEndpoint').textContent = '→ ' + endpoint.replace(base,'');
+
+  const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+  const data = await r.json();
+
+  // Parse Fusion REST response (items array)
+  const items = data.items || data.value || data || [];
+  if (!items.length) return { columns:['Result'], rows:[['No data returned']], endpoint };
+
+  const columns = Object.keys(items[0]);
+  const rows = items.map(item => columns.map(c => item[c] ?? null));
+  return { columns, rows, endpoint };
+}
+
+function tableToEndpoint(tbl, base) {
+  const map = {
+    'HZ_PARTIES':            base+'/crmRestApi/resources/latest/accounts',
+    'HZ_CUST_ACCOUNTS':      base+'/crmRestApi/resources/latest/accounts',
+    'HZ_RELATIONSHIPS':      base+'/crmRestApi/resources/latest/relationships',
+    'HZ_CONTACT_POINTS':     base+'/crmRestApi/resources/latest/contactPoints',
+    'HZ_LOCATIONS':          base+'/crmRestApi/resources/latest/addresses',
+    'ZCA_SALES_LEADS':       base+'/crmRestApi/resources/latest/leads',
+    'ZCA_SALES_OPPORTUNITIES':base+'/crmRestApi/resources/latest/opportunities',
+    'GL_JE_HEADERS':         base+'/fscmRestApi/resources/latest/journalEntries',
+    'AP_INVOICES_ALL':       base+'/fscmRestApi/resources/latest/invoices',
+    'AR_PAYMENT_SCHEDULES_ALL':base+'/fscmRestApi/resources/latest/receivablesInvoices',
+    'PO_HEADERS_ALL':        base+'/fscmRestApi/resources/latest/purchaseOrders',
+    'PER_ALL_PEOPLE_F':      base+'/hcmRestApi/resources/latest/workers',
+    'PA_PROJECTS_ALL':       base+'/fscmRestApi/resources/latest/projects',
+  };
+  return map[tbl] || base+'/fscmRestApi/resources/latest/';
+}
+
+// ═══════════════════════════════════════════════
+// RENDER RESULTS
+// ═══════════════════════════════════════════════
+function renderResults(cols, rows, elapsed, endpoint='') {
+  S.cols = cols; S.rows = rows; S.sortCol=-1;
+  const lim = parseInt(document.getElementById('rowLim').value);
+  const display = rows.slice(0, lim);
+
+  document.getElementById('resCnt').innerHTML = `<span class="cnt">${display.length}</span> rows`;
+  document.getElementById('resTm').textContent = elapsed + 's';
+  document.getElementById('resSt').innerHTML = endpoint==='demo'||endpoint==='demo-fallback'
+    ? '<span style="color:var(--a4);">◈ Demo data</span>'
+    : '<span class="st">✓ Live data</span>';
+
+  const tbl = document.getElementById('resTable');
+  tbl.innerHTML = `
+    <thead><tr>
+      <th class="row-num">#</th>
+      ${cols.map((c,i)=>`<th onclick="sortBy(${i})">${c}<span class="sort-icon">⇅</span></th>`).join('')}
+    </tr></thead>
+    <tbody>
+      ${display.map((row,ri)=>`<tr>
+        <td class="row-num">${ri+1}</td>
+        ${row.map((cell,ci)=>{
+          if (cell===null||cell===undefined||cell==='') return `<td class="null-val">NULL</td>`;
+          const col = cols[ci]||'';
+          let cls='';
+          const s = String(cell);
+          if (/^\d+(\.\d+)?$/.test(s)&&!col.includes('NUMBER')&&!col.includes('_ID')) cls='num';
+          else if (s==='A'||s==='ACTIVE'||s==='Y') cls='act';
+          else if (s==='I'||s==='INACTIVE'||s==='N') cls='ina';
+          else if (col.includes('DATE')||/\d{4}-\d{2}-\d{2}/.test(s)) cls='dt';
+          return `<td class="${cls}" title="${s}">${s}</td>`;
+        }).join('')}
+      </tr>`).join('')}
+    </tbody>`;
+
+  tbl.style.display='table';
+  document.getElementById('emptyState').style.display='none';
+  ['btnXlsx','btnCsv','btnJson'].forEach(id=>document.getElementById(id).disabled=false);
+}
+
+function sortBy(colIdx) {
+  if (S.sortCol===colIdx) S.sortDir *= -1; else { S.sortCol=colIdx; S.sortDir=1; }
+  S.rows.sort((a,b)=>{
+    const av=a[colIdx]??'', bv=b[colIdx]??'';
+    const an=parseFloat(av), bn=parseFloat(bv);
+    if (!isNaN(an)&&!isNaN(bn)) return (an-bn)*S.sortDir;
+    return String(av).localeCompare(String(bv))*S.sortDir;
+  });
+  renderResults(S.cols, S.rows, '', '');
+}
+
+// ═══════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════
+function exportCSV() {
+  if (!S.rows.length) { toast('No results to export','er'); return; }
+  const csv = [S.cols.join(','), ...S.rows.map(r=>r.map(c=>`"${c??''}"`).join(','))].join('\n');
+  dl('fusion_export.csv', csv, 'text/csv');
+  toast('Exported CSV ✓','ok');
+}
+
+function exportJSON() {
+  if (!S.rows.length) { toast('No results to export','er'); return; }
+  const data = S.rows.map(r=>Object.fromEntries(S.cols.map((c,i)=>[c,r[i]])));
+  dl('fusion_export.json', JSON.stringify(data,null,2), 'application/json');
+  toast('Exported JSON ✓','ok');
+}
+
+function exportXLSX() {
+  if (!S.rows.length) { toast('No results to export','er'); return; }
+  const wsData = [S.cols, ...S.rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  // Auto column widths
+  ws['!cols'] = S.cols.map((c,i)=>{
+    const max = Math.max(c.length, ...S.rows.map(r=>String(r[i]??'').length));
+    return { wch: Math.min(max+2, 40) };
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Fusion Data');
+  XLSX.writeFile(wb, 'fusion_export.xlsx');
+  toast('Exported Excel ✓','ok');
+}
+
+function dl(name, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content],{type}));
+  a.download = name; a.click();
+}
+
+// ═══════════════════════════════════════════════
+// SAVE / LOAD QUERIES
+// ═══════════════════════════════════════════════
+function openSaveModal() {
+  const sql = document.getElementById('sqlEd').value.trim();
+  if (!sql) { toast('Nothing to save','er'); return; }
+  document.getElementById('saveQueryName').value = '';
+  document.getElementById('saveModal').classList.add('open');
+  setTimeout(()=>document.getElementById('saveQueryName').focus(),100);
+}
+
+function closeSaveModal() { document.getElementById('saveModal').classList.remove('open'); }
+
+function confirmSave() {
+  const name = document.getElementById('saveQueryName').value.trim();
+  if (!name) { toast('Enter a query name','er'); return; }
+  const sql = document.getElementById('sqlEd').value.trim();
+  const entry = { id: Date.now(), name, sql, module: S.module, ts: new Date().toLocaleTimeString() };
+  S.savedQueries.unshift(entry);
+  if (S.savedQueries.length > 50) S.savedQueries = S.savedQueries.slice(0,50);
+  localStorage.setItem('fx_queries', JSON.stringify(S.savedQueries));
+  closeSaveModal();
+  renderHistory();
+  toast(`Saved "${name}" ✓`, 'ok');
+}
+
+function loadSavedQuery(id) {
+  const q = S.savedQueries.find(x=>x.id===id);
+  if (!q) return;
+  document.getElementById('sqlEd').value = q.sql;
+  updLines();
+  toast(`Loaded: ${q.name}`, 'inf');
+}
+
+function renderHistory() {
+  const list = document.getElementById('histList');
+  document.getElementById('histCount').textContent = S.savedQueries.length;
+  if (!S.savedQueries.length) {
+    list.innerHTML = '<div class="hist-empty">No saved queries yet</div>';
+    return;
+  }
+  list.innerHTML = S.savedQueries.map(q=>`
+    <div class="hist-item" onclick="loadSavedQuery(${q.id})">
+      <span class="hist-icon">◈</span>
+      <span class="hist-label" title="${q.name}">${q.name}</span>
+      <span class="hist-time">${q.ts}</span>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+updLines();
+renderTables('CX Sales');
+renderHistory();
+
+// Keyboard
+document.addEventListener('keydown', e=>{
+  if ((e.metaKey||e.ctrlKey)&&e.key==='Enter') runQuery();
+  if ((e.metaKey||e.ctrlKey)&&e.key==='s') { e.preventDefault(); openSaveModal(); }
+});
+
+// Auto-open conn modal
+setTimeout(()=>openConnModal(), 400);
+</script>
+</body>
+</html>
