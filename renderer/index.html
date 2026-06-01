@@ -4960,6 +4960,9 @@ var CFG_TAXONOMY = {
         items:[
           {id:'fin_inv',  type:CFG_LIVE,  label:'AP Invoices',               icon:'📄', ep:'/fscmRestApi/resources/latest/invoices', params:'limit=100',
            desc:'Live AP invoices — vendor, amount, payment status, hold count, approval status'},
+          {id:'fin_pbuf', type:CFG_GUIDE, label:'Procurement & Spend BU Functions', icon:'🏢',
+           desc:'Assign the Payables (and Procurement) business functions to your Business Units — prerequisite for invoice and payment processing in each BU.',
+           guide:'Setup & Maintenance → Manage Business Unit → Assign Business Functions → enable Payables Invoicing and Payables Payment'},
           {id:'fin_invopt',type:CFG_GUIDE,label:'Invoice Options',           icon:'⚙',
            desc:'Prepayment payment terms, discount allocations, 2/3/4-way match tolerances, automatic tax controls.',
            guide:'Setup & Maintenance → Manage Invoice Options → configure per Business Unit'},
