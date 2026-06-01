@@ -5055,7 +5055,9 @@ async function cfgProbeEndpoints(){
             +'<td style="padding:5px 8px;font-family:var(--mono);font-size:9px;color:var(--t2)">'+r.ep+'</td>'
             +'<td style="padding:5px 8px;text-align:center;font-weight:700;color:'+sc+'">'+si+' '+(r.status==='ok'?'OK':r.status==='restricted'?'Restricted':r.status==='notfound'?'404':r.status==='pending'?'…':r.statusCode||'Err')+'</td>'
             +'<td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:'+(r.count>0?'#51cf66':'var(--t3)')+'">'+(r.count!=null?r.count:'—')+'</td>'
-            +'<td style="padding:5px 8px;font-size:9px;color:var(--t3)">'+roleInfo.role+'</td>'
+            +'<td style="padding:5px 8px;font-size:9px;color:var(--t3)">'+roleInfo.role
+            +(DSP_ENDPOINTS&&DSP_ENDPOINTS[r.ep]&&r.status==='notfound'?'<br><span style="color:#fcc419;font-size:8px">+ Data Security Policy: '+DSP_ENDPOINTS[r.ep].obj+'</span>':'')
+            +'</td>'
             +'</tr>';
         }).join('')
         +'</tbody></table></div>';
@@ -5148,7 +5150,7 @@ async function cfgProbeAccess(){
   }
 
   /* ── Step 1: Worker identity ── */
-  render('<div style="color:var(--t3);font-size:10px">Step 1/4 — fetching worker identity…</div>');
+  render('<div style="color:var(--t3);font-size:10px">Step 1/5 — fetching worker identity…</div>');
   var workerData=null, personId=null, displayName=username;
   /* Try to find the worker record by username */
   var wRes=await apiFetch(base+'/hcmRestApi/resources/latest/workers?q=PersonNumber='+encodeURIComponent(username)+'&fields=PersonId,PersonNumber,DisplayName,PrimaryPhoneNumber&limit=1');
@@ -5170,7 +5172,7 @@ async function cfgProbeAccess(){
   }
 
   /* ── Step 2: User account + roles via HCM userAccounts ── */
-  render('<div style="color:var(--t3);font-size:10px">Step 2/4 — fetching user account roles…</div>');
+  render('<div style="color:var(--t3);font-size:10px">Step 2/5 — fetching user account roles…</div>');
   var accountRoles=[], accountGUID=null;
   var uaRes=await apiFetch(base+'/hcmRestApi/resources/latest/userAccounts?q=Username='+encodeURIComponent(username)+'&fields=GUID,Username,PersonId&limit=1');
   if(!uaRes._status&&!uaRes._error&&uaRes.items&&uaRes.items.length){
@@ -5184,7 +5186,7 @@ async function cfgProbeAccess(){
   }
 
   /* ── Step 3: SCIM user lookup ── */
-  render('<div style="color:var(--t3);font-size:10px">Step 3/4 — checking SCIM identity…</div>');
+  render('<div style="color:var(--t3);font-size:10px">Step 3/5 — checking SCIM identity…</div>');
   var scimUser=null, scimGroups=[];
   var scimRes=await apiFetch(base+'/hcmRestApi/resources/latest/scim/v2/Users?filter=userName+eq+"'+username+'"');
   if(!scimRes._status&&!scimRes._error&&scimRes.Resources&&scimRes.Resources.length){
@@ -5193,7 +5195,7 @@ async function cfgProbeAccess(){
   }
 
   /* ── Step 4: quick endpoint access check (10 key endpoints) ── */
-  render('<div style="color:var(--t3);font-size:10px">Step 4/4 — checking endpoint access…</div>');
+  render('<div style="color:var(--t3);font-size:10px">Step 4/5 — checking endpoint access…</div>');
   var KEY_EPS=[
     {key:'businessUnits',  ep:'/fscmRestApi/resources/latest/businessUnits',  label:'Business Units',   role:'Financial Application Administrator'},
     {key:'legalEntities',  ep:'/fscmRestApi/resources/latest/legalEntities',   label:'Legal Entities',   role:'Application Implementation Consultant'},
@@ -5211,6 +5213,62 @@ async function cfgProbeAccess(){
       var r=await fetch(base+e.ep+'?limit=1',{headers:hdrs,signal:AbortSignal.timeout(6000)});
       return Object.assign({},e,{ok:r.ok,status:r.status});
     }catch(ex){return Object.assign({},e,{ok:false,status:0});}
+  }));
+
+  /* ── Step 5: DSP Lookup — query Oracle security catalog for data grants on 404 objects ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 5/5 — looking up data security policies…</div>');
+
+  /* Oracle Fusion knowledge base: DB object → {roles with grant, how to fix} */
+  var DSP_KB = {
+    'FUN_BUSINESS_UNITS_V': {
+      label: 'Business Units',
+      oracleRoles: ['ORA_FUN_BUSINESS_UNIT_ADMINISTRATOR','FUN_FINANCIAL_APPLICATION_ADMINISTRATOR_JOB'],
+      fixPath: 'Setup & Maintenance → Manage Business Unit → Assign Data Access Sets to user/role',
+      note: 'Job role alone is not enough. A Data Access Set must also be assigned that covers Business Units. Go to: Security Console → Users → [user] → Data Access → Add Business Unit access.'
+    },
+    'XLE_ENTITY_PROFILES': {
+      label: 'Legal Entities',
+      oracleRoles: ['ORA_XLE_LEGAL_ENTITY_CONFIGURATOR_JOB'],
+      fixPath: 'Setup & Maintenance → Manage Legal Entity → Legal Entity Data Role',
+      note: 'Assign the "Application Implementation Consultant" job role AND a data security policy for XLE_ENTITY_PROFILES covering the required legal entities.'
+    },
+    'GL_LEDGERS': {
+      label: 'GL Ledgers',
+      oracleRoles: ['ORA_GL_GENERAL_ACCOUNTANT_MANAGER_JOB','ORA_GL_FINANCIAL_ANALYST_JOB'],
+      fixPath: 'Setup & Maintenance → Manage Ledger → Assign user to Ledger Data Access Set',
+      note: 'General Accountant Manager role + Ledger Data Access Set assignment required.'
+    },
+    'FND_CURRENCIES': {
+      label: 'Currencies',
+      oracleRoles: ['ORA_FUN_FINANCIAL_APPLICATION_ADMINISTRATOR_JOB'],
+      fixPath: 'Setup & Maintenance → Manage Currencies → enable REST access',
+      note: 'Financial Application Administrator role needed. Also check: Setup & Maintenance → Manage Profile Options for REST access.'
+    },
+    'CN_COMP_PLANS': {
+      label: 'ICM Compensation Plans',
+      oracleRoles: ['ORA_CN_INCENTIVE_COMPENSATION_ANALYST_JOB','ORA_CN_INCENTIVE_COMPENSATION_MANAGER_JOB'],
+      fixPath: 'Security Console → Roles → Incentive Compensation Analyst → assign to user',
+      note: 'Must assign "Incentive Compensation Analyst" job role. Participants and earnings require the same role.'
+    }
+  };
+
+  /* Try querying Oracle's own data security policy REST API */
+  var dspQueryResults = {};
+  var failedEps = epResults.filter(function(e){ return !e.ok; });
+  await Promise.allSettled(failedEps.map(async function(e){
+    var obj = DSP_ENDPOINTS && DSP_ENDPOINTS[e.ep] ? DSP_ENDPOINTS[e.ep].obj : null;
+    if(!obj) return;
+    /* Try Oracle's dataSecurityPolicies or securityRoles API */
+    try{
+      var r = await fetch(base+'/fscmRestApi/resources/latest/dataSecurityPolicies?q=DatabaseObject=\''+obj+'\'&limit=10',
+        {headers: hdrs, signal: AbortSignal.timeout(5000)});
+      if(r.ok){
+        var d = await r.json();
+        dspQueryResults[obj] = {found: true, items: d.items||[]};
+      } else {
+        dspQueryResults[obj] = {found: false, status: r.status};
+      }
+    }catch(ex){ dspQueryResults[obj] = {found: false, error: ex.message}; }
   }));
 
   /* ── Render final report ── */
@@ -5286,17 +5344,74 @@ async function cfgProbeAccess(){
     }).join('')
     +'</tbody></table></div>';
 
+  /* Data security note — for endpoints where role is present but still 404 */
+  /* Oracle Fusion uses TWO access layers: (1) Functional Role + (2) Data Security Policy */
+  var DSP_ENDPOINTS={
+    '/fscmRestApi/resources/latest/businessUnits':  {obj:'FUN_BUSINESS_UNITS_V',   action:'Select Business Units'},
+    '/fscmRestApi/resources/latest/legalEntities':  {obj:'XLE_ENTITY_PROFILES',     action:'Select Legal Entities'},
+    '/fscmRestApi/resources/latest/ledgers':        {obj:'GL_LEDGERS',              action:'Select Ledgers'},
+    '/fscmRestApi/resources/latest/currencies':     {obj:'FND_CURRENCIES',          action:'Select Currencies'},
+    '/cxRestApi/resources/latest/incentiveCompensationPlans': {obj:'CN_COMP_PLANS', action:'View Compensation Plans'},
+  };
+
   /* Roles to request */
   var missing=epResults.filter(function(e){return!e.ok;});
   if(missing.length){
-    html+='<div style="background:#ff6b6b11;border:1px solid #ff6b6b33;border-radius:8px;padding:14px">'
-      +'<div style="font-size:11px;font-weight:800;color:var(--t1);margin-bottom:8px">📋 Roles to Request from Oracle Admin</div>'
-      +'<div style="display:flex;flex-direction:column;gap:4px">'
-      +[...new Set(missing.map(function(e){return e.role;}))].map(function(r){
-        return'<div style="font-size:10px;color:var(--t2);padding:4px 0;border-bottom:1px solid var(--b1)22">• '+r+'</div>';
+    html+='<div style="background:#ff6b6b11;border:1px solid #ff6b6b33;border-radius:8px;padding:14px;margin-bottom:12px">'
+      +'<div style="font-size:11px;font-weight:800;color:var(--t1);margin-bottom:10px">📋 Access Remediation Guide</div>'
+      /* Data security policy explanation */
+      +'<div style="background:#fcc41911;border:1px solid #fcc41933;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:10px">'
+      +'<div style="font-weight:700;color:#fcc419;margin-bottom:4px">⚠ Oracle Fusion uses TWO access layers</div>'
+      +'<div style="color:var(--t2);line-height:1.7">'
+      +'<strong>Layer 1 — Functional Role:</strong> Job role assigned via Security Console (e.g. Financial Application Administrator)<br>'
+      +'<strong>Layer 2 — Data Security Policy:</strong> Object-level grant required in addition to the role.<br>'
+      +'Having the role but still getting 404 = <span style="color:#fcc419;font-weight:700">Data Security Policy missing</span> for that object.'
+      +'</div></div>'
+      /* Per-endpoint breakdown */
+      +'<table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:10px">'
+      +'<thead><tr>'
+      +'<th style="text-align:left;padding:5px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">ENDPOINT</th>'
+      +'<th style="text-align:left;padding:5px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">FUNCTIONAL ROLE</th>'
+      +'<th style="text-align:left;padding:5px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">DATA SECURITY OBJECT</th>'
+      +'</tr></thead><tbody>'
+      +missing.map(function(e){
+        var dsp=DSP_ENDPOINTS[e.ep];
+        return'<tr style="border-bottom:1px solid var(--b1)22">'
+          +'<td style="padding:5px 8px;font-weight:700;color:var(--t1)">'+e.label+'</td>'
+          +'<td style="padding:5px 8px;color:var(--t3)">'+e.role+'</td>'
+          +'<td style="padding:5px 8px;font-family:var(--mono);font-size:9px;color:#fcc419">'+(dsp?dsp.obj:'—')+'</td>'
+          +'</tr>';
       }).join('')
+      +'</tbody></table>'
+      /* Per-object DSP knowledge base cards */
+      +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">'
+      +missing.map(function(e){
+        var dsp=DSP_ENDPOINTS&&DSP_ENDPOINTS[e.ep];
+        if(!dsp)return'';
+        var kb=DSP_KB&&DSP_KB[dsp.obj];
+        if(!kb)return'';
+        var liveResult=dspQueryResults&&dspQueryResults[dsp.obj];
+        var liveRoles=(liveResult&&liveResult.found&&liveResult.items.length)
+          ?liveResult.items.map(function(p){return p.GranteeName||p.RoleName||JSON.stringify(p);})
+          :null;
+        return'<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:12px 14px">'
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+          +'<span style="font-size:14px">🗄</span>'
+          +'<span style="font-size:11px;font-weight:800;color:var(--t1)">'+kb.label+'</span>'
+          +'<span style="font-size:9px;font-family:var(--mono);background:var(--b1);padding:2px 7px;border-radius:4px;color:#fcc419">'+dsp.obj+'</span>'
+          +'</div>'
+          /* Oracle seeded roles that have this grant */
+          +'<div style="font-size:9px;color:var(--t3);margin-bottom:6px"><strong style="color:var(--t2)">Roles with DSP grant:</strong> '
+          +(liveRoles?liveRoles.join(', '):kb.oracleRoles.join(', '))
+          +(liveRoles?'<span style="color:#51cf66;margin-left:4px">✅ live</span>':'<span style="color:var(--t3);margin-left:4px">(from knowledge base)</span>')
+          +'</div>'
+          /* Fix path */
+          +'<div style="font-size:9px;color:var(--t2);margin-bottom:4px">📍 <strong>Fix path:</strong> '+kb.fixPath+'</div>'
+          /* Note */
+          +'<div style="font-size:9px;color:var(--t3);background:var(--bg2);border-radius:4px;padding:6px 8px;line-height:1.6">'+kb.note+'</div>'
+          +'</div>';
+      }).filter(Boolean).join('')
       +'</div>'
-      +'<div style="font-size:9px;color:var(--t3);margin-top:8px">Ask your Oracle Fusion administrator to assign these Oracle Fusion Application roles/duty roles via: Setup & Maintenance → Manage Roles → User Role Assignment</div>'
       +'</div>';
   }
 
