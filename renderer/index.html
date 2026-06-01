@@ -3864,75 +3864,92 @@ function renderSentBody(){
    ─ Excel / CSV one-click download
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Module + Item definitions ── */
+/* ── Module + Item definitions (config objects only — no transactional or master data) ── */
 var CFG_MODS = {
   icm: {
     label:'ICM', color:'#ff6b6b', icon:'🎯',
     items:[
-      {id:'icm_plans',  label:'Compensation Plans',   icon:'📋', ep:ICM_EP.compPlans,    params:'limit=200',
-       desc:'Active and draft comp plans — name, status, dates, currency, elements'},
-      {id:'icm_parts',  label:'Participants',          icon:'👤', ep:ICM_EP.participants, params:'limit=300',
-       desc:'Enrolled participants with plan assignment, status, and quota'},
-      {id:'icm_earn',   label:'Earnings Records',      icon:'💰', ep:ICM_EP.earnings,     params:'limit=200',
-       desc:'Commission earnings by participant, plan element, and period'},
-      {id:'icm_roles',  label:'Compensation Roles',    icon:'🎭', ep:ICM_EP.roles,        params:'limit=100',
+      {id:'icm_plans',    label:'Compensation Plans',     icon:'📋', ep:ICM_EP.compPlans,   params:'limit=200',
+       desc:'Active and draft comp plans — name, status, effective dates, currency'},
+      {id:'icm_roles',    label:'Compensation Roles',     icon:'🎭', ep:ICM_EP.roles,       params:'limit=100',
        desc:'ICM role definitions linked to plans and job grades'},
-      {id:'icm_bus',    label:'Business Units',        icon:'🏢', ep:ICM_EP.buQuery,      params:'limit=100',
+      {id:'icm_bus',      label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,     params:'limit=100',
        desc:'Oracle Fusion Business Units configured for ICM processing'}
     ]
   },
   fin: {
     label:'Finance / GL', color:'#4dabf7', icon:'💰',
     items:[
-      {id:'fin_bus',    label:'Business Units',        icon:'🏢', ep:ICM_EP.buQuery,      params:'limit=100',
-       desc:'Finance BUs — name, ledger, currency, accounting calendar'},
-      {id:'fin_journ',  label:'GL Journals (Open)',    icon:'📔', ep:'/fscmRestApi/resources/latest/generalLedgerJournals', params:'limit=200',
-       desc:'Journal headers — status, period, source, total debit/credit'},
-      {id:'fin_inv',    label:'AP Invoices',           icon:'📄', ep:'/fscmRestApi/resources/latest/invoices',             params:'limit=200',
-       desc:'Payables invoices — vendor, amount, payment status, hold count'},
-      {id:'fin_tasks',  label:'Approval Workflow Tasks',icon:'✅',ep:'/fscmRestApi/resources/latest/approvalTasks',        params:'limit=100',
-       desc:'Pending approval tasks — finance, procurement, compensation'},
-      {id:'fin_cred',   label:'AR Transactions',       icon:'📑', ep:'/fscmRestApi/resources/latest/receivablesCreditMemos',params:'limit=100',
-       desc:'Accounts receivable invoices and credit memos by status'}
+      {id:'fin_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnits',                params:'limit=100',
+       desc:'Finance BUs — name, ledger assignment, currency, accounting calendar'},
+      {id:'fin_led',      label:'GL Ledgers',             icon:'📒', ep:'/fscmRestApi/resources/latest/ledgers',                      params:'limit=100',
+       desc:'Primary and secondary ledgers — currency, calendar, chart of accounts'},
+      {id:'fin_cal',      label:'Accounting Calendars',   icon:'📅', ep:'/fscmRestApi/resources/latest/accountingCalendars',          params:'limit=200',
+       desc:'GL period definitions — open, closed, permanently closed status'},
+      {id:'fin_bank',     label:'Banks',                  icon:'🏦', ep:'/fscmRestApi/resources/latest/banks',                        params:'limit=100',
+       desc:'Internal banks configured and linked to GL cash accounts'},
+      {id:'fin_bacct',    label:'Bank Accounts',          icon:'💳', ep:'/fscmRestApi/resources/latest/internalBankAccounts',         params:'limit=100',
+       desc:'Internal bank accounts used for AP disbursements and receipts'}
     ]
   },
   scm: {
     label:'SCM', color:'#fcc419', icon:'📦',
     items:[
-      {id:'scm_sup',    label:'Supplier Master',       icon:'🏭', ep:'/fscmRestApi/resources/latest/suppliers',            params:'limit=300',
-       desc:'Supplier master — name, type, enabled flag, payment terms'},
-      {id:'scm_po',     label:'Purchase Orders',       icon:'📋', ep:'/fscmRestApi/resources/latest/purchaseOrders',       params:'limit=200',
-       desc:'PO headers — supplier, status, total value, ordered date'},
-      {id:'scm_acct',   label:'CRM Accounts',          icon:'🤝', ep:'/crmRestApi/resources/latest/accounts',              params:'limit=200',
-       desc:'Customer and supplier accounts in Oracle CRM'},
-      {id:'scm_appr',   label:'PO Approval Tasks',     icon:'✅', ep:'/fscmRestApi/resources/latest/approvalTasks',        params:'limit=100',
-       desc:'Procurement workflow tasks awaiting buyer/manager action'}
+      {id:'scm_invorg',   label:'Inventory Organizations',icon:'🏭', ep:'/fscmRestApi/resources/latest/inventoryOrganizations',       params:'limit=200',
+       desc:'Manufacturing plants, distribution centers, and warehouse orgs'},
+      {id:'scm_uom',      label:'Units of Measure',       icon:'📏', ep:'/fscmRestApi/resources/latest/unitOfMeasures',              params:'limit=200',
+       desc:'UOM classes, base units, and conversion rules'},
+      {id:'scm_carrier',  label:'Shipping Carriers',      icon:'🚚', ep:'/fscmRestApi/resources/latest/shippingCarriers',            params:'limit=100',
+       desc:'Third-party freight carriers and shipping methods'},
+      {id:'scm_costorg',  label:'Cost Organizations',     icon:'💲', ep:'/fscmRestApi/resources/latest/costOrganizations',           params:'limit=100',
+       desc:'Cost accounting organizations for inventory valuation'},
+      {id:'scm_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnits',               params:'limit=100',
+       desc:'SCM-enabled Oracle Fusion Business Units'}
     ]
   },
   hcm: {
     label:'HCM', color:'#da77f2', icon:'👥',
     items:[
-      {id:'hcm_wkr',    label:'Worker Roster',         icon:'👥', ep:ICM_EP.workers,      params:'limit=300',
-       desc:'Active workers — type, department, worker number, assignment'},
-      {id:'hcm_icp',    label:'ICM Participants',      icon:'🎯', ep:ICM_EP.participants, params:'limit=300',
-       desc:'Workers enrolled in incentive compensation plans'},
-      {id:'hcm_roles',  label:'Compensation Roles',    icon:'🎭', ep:ICM_EP.roles,        params:'limit=100',
-       desc:'Compensation role definitions mapped to job grades'},
-      {id:'hcm_bus',    label:'Business Units',        icon:'🏢', ep:ICM_EP.buQuery,      params:'limit=100',
-       desc:'HCM-enabled business units and organizational structure'}
+      {id:'hcm_bus',      label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,     params:'limit=100',
+       desc:'HCM-enabled business units and organizational structure'},
+      {id:'hcm_dept',     label:'Departments',            icon:'🏬', ep:'/hcmRestApi/resources/latest/departments',                  params:'limit=300',
+       desc:'Organizational units (departments) — hierarchy and manager assignment'},
+      {id:'hcm_loc',      label:'Locations',              icon:'📍', ep:'/hcmRestApi/resources/latest/locations',                    params:'limit=300',
+       desc:'Physical office and work locations configured in HCM'},
+      {id:'hcm_jobs',     label:'Jobs',                   icon:'💼', ep:'/hcmRestApi/resources/latest/jobs',                         params:'limit=300',
+       desc:'Job definitions — family, function, and benchmark mapping'},
+      {id:'hcm_grades',   label:'Grades',                 icon:'🎖', ep:'/hcmRestApi/resources/latest/grades',                       params:'limit=200',
+       desc:'Grade structure — salary bands and progression levels'},
+      {id:'hcm_ldg',      label:'Legislative Data Groups',icon:'⚖', ep:'/hcmRestApi/resources/latest/legislativeDataGroups',         params:'limit=100',
+       desc:'Country-specific payroll regulatory partitions'}
     ]
   },
   om: {
     label:'Order Mgmt', color:'#69db7c', icon:'🛒',
     items:[
-      {id:'om_acct',    label:'Customer Accounts',     icon:'🏢', ep:'/crmRestApi/resources/latest/accounts',              params:'limit=300',
-       desc:'Customer master for order management — status, party type'},
-      {id:'om_inv',     label:'AR Transactions',       icon:'📄', ep:'/fscmRestApi/resources/latest/receivablesCreditMemos',params:'limit=200',
-       desc:'Accounts receivable invoices and open credit memos'},
-      {id:'om_tasks',   label:'Order Approvals',       icon:'✅', ep:'/fscmRestApi/resources/latest/approvalTasks',        params:'limit=100',
-       desc:'Order workflow approval tasks pending action'},
-      {id:'om_bus',     label:'Business Units',        icon:'🏢', ep:ICM_EP.buQuery,      params:'limit=100',
-       desc:'Order management-enabled Oracle Fusion BUs'}
+      {id:'om_bus',       label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,     params:'limit=100',
+       desc:'Order management-enabled Oracle Fusion Business Units'},
+      {id:'om_pl',        label:'Price Lists',            icon:'🏷', ep:'/fscmRestApi/resources/latest/priceLists',                  params:'limit=200',
+       desc:'Price list headers — currency, effective dates, pricing type'},
+      {id:'om_ps',        label:'Pricing Strategies',     icon:'📊', ep:'/fscmRestApi/resources/latest/pricingStrategies',           params:'limit=100',
+       desc:'Pricing strategy definitions — waterfall and discount rules'},
+      {id:'om_src',       label:'Source Order Systems',   icon:'🔗', ep:'/fscmRestApi/resources/latest/sourceOrderSystems',          params:'limit=100',
+       desc:'External systems registered to import orders into Oracle OM'},
+      {id:'om_artxn',     label:'AR Transaction Types',   icon:'📄', ep:'/fscmRestApi/resources/latest/receivablesTransactionTypes', params:'limit=100',
+       desc:'Invoice, Credit Memo, and Debit Memo types defined in AR'}
+    ]
+  },
+  cx: {
+    label:'CX', color:'#38b6ff', icon:'🤝',
+    items:[
+      {id:'cx_bus',       label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,     params:'limit=100',
+       desc:'CX Sales-enabled Oracle Fusion Business Units'},
+      {id:'cx_terr',      label:'Sales Territories',      icon:'🗺', ep:'/crmRestApi/resources/latest/territories',                  params:'limit=200',
+       desc:'Territory definitions — hierarchy, owner, and coverage rules'},
+      {id:'cx_roles',     label:'Resource Roles',         icon:'🎭', ep:'/crmRestApi/resources/latest/roles',                        params:'limit=100',
+       desc:'CRM resource role definitions for salesforce assignments'},
+      {id:'cx_assign',    label:'Assignment Rules',       icon:'⚙', ep:'/crmRestApi/resources/latest/assignmentRules',              params:'limit=100',
+       desc:'Lead and opportunity auto-assignment rule sets'}
     ]
   }
 };
