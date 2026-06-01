@@ -400,7 +400,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
   <div class="field"><label>Instance URL</label><input id="fUrl" type="text" placeholder="https://your-instance.fa.us2.oraclecloud.com"/></div>
   <div class="grid2m">
     <div class="field" style="margin:0"><label>Username</label><input id="fUser" type="text" placeholder="user@company.com"/></div>
-    <div class="field" style="margin:0"><label>Password</label><input id="fPass" type="password" placeholder="password"/></div>
+    <div class="field" style="margin:0">
+      <label>Password <span style="font-size:9px;color:var(--t3);font-weight:400">(shared across demo pod users)</span></label>
+      <input id="fPass" type="password" placeholder="Enter once — reused for all profiles on this URL"/>
+    </div>
   </div>
   <div class="field" style="margin-top:10px">
     <label>Anthropic API Key (NLP → SQL)</label>
@@ -416,6 +419,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
       <option value="fin">💰 FIN_IMPL — Finance &amp; GL</option>
       <option value="hcm">👥 HCM_IMPL — Human Capital Mgmt</option>
       <option value="cx">🤝 CX — Sales Cloud</option>
+      <option value="icm">🎯 ICM Only — Incentive Compensation (Amy.Compadmin)</option>
     </select>
   </div>
   <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
@@ -3155,6 +3159,14 @@ var PERSONAS=[
 ];
 var sentMod='overview';
 
+/* ── ICM OrgId helper — appends OrgId filter when Amy.Compadmin / ICM profile ── */
+function icmParams(base){
+  var p=base||'';
+  var oid=(typeof ST!=='undefined')&&ST.orgId?ST.orgId:'';
+  if(oid){p=(p?p+'&':'')+'q=OrgId='+oid;}
+  return p||'limit=200';
+}
+
 /* ── XHR fetch — differentiates access-denied from real errors ── */
 /* sentFetch — single page, no query string by default (matches icmFetch behaviour) */
 function sentFetch(ep,params,cb){
@@ -3480,7 +3492,7 @@ function sentRenderICM(body,color){
   function checkDone(){if(++doneCount<totalFetches)return;dsActivity(activity.length?activity:[{s:'o',title:'All compensation processes running normally',sub:'No critical alerts detected',val:''}]);}
 
   /* Participants */
-  sentFetch(ICM_EP.participants,'limit=200',function(d,e){
+  sentFetch(ICM_EP.participants,icmParams('limit=200'),function(d,e){
     if(e==='__restricted__'){dsKPILock('icm_p','ICM Analyst role');checkDone();return;}
     if(e||!d){dsKPIFill('icm_p','—',e,'',color);checkDone();return;}
     var active=d.filter(function(i){return(i.ParticipantStatus||i.Status||'').toLowerCase()==='active';});
@@ -3508,7 +3520,7 @@ function sentRenderICM(body,color){
   });
 
   /* Plans */
-  sentFetch(ICM_EP.compPlans,'limit=100',function(d,e){
+  sentFetch(ICM_EP.compPlans,icmParams('limit=100'),function(d,e){
     if(e==='__restricted__'){dsKPILock('icm_pl','ICM Analyst role');checkDone();return;}
     if(e||!d){dsKPIFill('icm_pl','—',e,'',color);checkDone();return;}
     var active=d.filter(function(i){return(i.PlanStatus||i.Status||'').toLowerCase()==='active';});
@@ -3518,7 +3530,7 @@ function sentRenderICM(body,color){
   });
 
   /* Earnings */
-  sentFetch(ICM_EP.earnings,'limit=200',function(d,e){
+  sentFetch(ICM_EP.earnings,icmParams('limit=200'),function(d,e){
     if(e==='__restricted__'){dsKPILock('icm_e','ICM Analyst role');checkDone();return;}
     if(e||!d){dsKPIFill('icm_e','—',e,'',color);checkDone();return;}
     var total=d.reduce(function(s,i){return s+(parseFloat(i.EarnedIncentive||i.earnedIncentive||0));},0);
@@ -3598,7 +3610,7 @@ function sentRenderCFO(body,color){
     chk();
   });
 
-  sentFetch(ICM_EP.buQuery,'limit=100',function(d,e){
+  sentFetch(ICM_EP.buQuery,icmParams('limit=100'),function(d,e){
     if(e==='__restricted__'){dsKPILock('cfo_b','BU Admin');chk();return;}
     if(e||!d){dsKPIFill('cfo_b','—',e,'',color);chk();return;}
     dsKPIFill('cfo_b',dsNum(d.length),'connected BUs','ok',color);
@@ -3735,7 +3747,7 @@ function sentRenderHCM(body,color){
     activity.push({s:'o',title:d.length+' workers loaded — '+emp+' employees',sub:depts.length+' departments · '+new Date().toLocaleTimeString(),val:''});
     chk();
   });
-  sentFetch(ICM_EP.participants,'limit=200',function(d,e){
+  sentFetch(ICM_EP.participants,icmParams('limit=200'),function(d,e){
     if(e==='__restricted__'){dsKPILock('hcm_i','ICM Analyst');chk();return;}
     if(e||!d){dsKPIFill('hcm_i','—',e,'',color);chk();return;}
     var a=d.filter(function(i){return(i.ParticipantStatus||i.Status||'').toLowerCase()==='active';}).length;
@@ -6788,21 +6800,29 @@ function cfgPrintRolesReport(){
 
   window._LP = function(i, instant){
     var p = loadP()[i]; if(!p) return;
+    /* On demo pods all users share the same password — inherit from current connection
+       if this profile has no stored password but the instance URL matches */
+    var sameInstance = (typeof ST!=='undefined') && ST.url &&
+      ST.url.replace(/\/$/,'') === (p.url||'').replace(/\/$/,'');
+    var effectivePass = p.pass || (sameInstance && ST.pass ? ST.pass : '');
     /* Always fill modal fields */
     function sv(id,v){var e=document.getElementById(id);if(e)e.value=v||'';}
-    sv('fUrl',p.url); sv('fUser',p.user); sv('fPass',p.pass||'');
+    sv('fUrl',p.url); sv('fUser',p.user); sv('fPass',effectivePass);
     sv('fApiKey',p.apiKey||''); sv('fProfName',p.name);
     var roleEl=document.getElementById('fRole');
     if(roleEl) roleEl.value = p.role||'';
-    /* Activate the connection immediately */
+    /* Activate immediately */
     if(typeof ST!=='undefined'){
-      Object.assign(ST,{conn:true, url:p.url, user:p.user, pass:p.pass||'', apiKey:p.apiKey||ST.apiKey||''});
+      Object.assign(ST,{conn:true, url:p.url, user:p.user, pass:effectivePass,
+        apiKey:p.apiKey||ST.apiKey||'', orgId:p.orgId||''});
     }
     updateConnUI(p.url, p.user, p.role||'');
     cfgFilterModsByRole(p.role||'');
     render();
     if(instant){ closeModal('connModal'); }
-    if(typeof toast==='function') toast((instant?'Switched to: ':'Loaded: ')+p.name+(p.role?' ['+p.role.toUpperCase()+']':''),'ok');
+    var msg=(instant?'Switched to: ':'Loaded: ')+p.name+(p.role?' ['+p.role.toUpperCase()+']':'');
+    if(!effectivePass) msg+=' — enter password to connect';
+    if(typeof toast==='function') toast(msg,'ok');
   };
 
   window._DP=function(i){
@@ -6844,9 +6864,12 @@ function cfgPrintRolesReport(){
   });
 
   // Seed profiles — two users on the same demo instance with different access roles
+  /* Demo pod profiles — all users share the same instance password.
+     Store password on first profile; subsequent profiles on the same URL inherit it automatically. */
   var SEED=[
-    {"name":"John Dunbar Demo", "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"John.Dunbar","pass":"J8?cZ2f#","apiKey":"YOUR_ANTHROPIC_API_KEY","role":""},
-    {"name":"SCM_IMPL Demo",   "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"SCM_IMPL",   "pass":"Welcome1","apiKey":"YOUR_ANTHROPIC_API_KEY","role":"scm"}
+    {"name":"John Dunbar Demo",  "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"John.Dunbar",   "pass":"","apiKey":"YOUR_ANTHROPIC_API_KEY","role":""},
+    {"name":"Amy Compadmin ICM", "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"Amy.Compadmin","pass":"","apiKey":"YOUR_ANTHROPIC_API_KEY","role":"icm","orgId":"300000046987012"},
+    {"name":"SCM_IMPL Demo",     "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"SCM_IMPL",     "pass":"","apiKey":"YOUR_ANTHROPIC_API_KEY","role":"scm"}
   ];
   var hasSeed=false;
   for(var ki=0;ki<KEYS.length;ki++){
