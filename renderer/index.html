@@ -719,7 +719,7 @@ const ICM_EP = {
   earnings:      "/cxRestApi/resources/latest/incentiveCompensationEarnings",
   workers:       "/hcmRestApi/resources/latest/workers",
   invoices:      "/fscmRestApi/resources/latest/invoices",
-  buQuery:       "/fscmRestApi/resources/latest/businessUnits",
+  buQuery:       "/hcmRestApi/resources/latest/businessUnits",
 };
 
 /* ═══════════════════════════════════════
@@ -1031,8 +1031,8 @@ const REST_MAP={
   FND_BPM_TASK_TL:"/fscmRestApi/resources/latest/approvalTasks",
   /* ── CONFIG EXTRACT — Oracle Fusion config table → REST endpoint mappings ── */
   // Enterprise
-  FUN_ALL_BUSINESS_UNITS_V:"/fscmRestApi/resources/latest/businessUnits",
-  FUN_BUSINESS_UNITS_V:"/fscmRestApi/resources/latest/businessUnits",
+  FUN_ALL_BUSINESS_UNITS_V:"/hcmRestApi/resources/latest/businessUnits",
+  FUN_BUSINESS_UNITS_V:"/hcmRestApi/resources/latest/businessUnits",
   XLE_ENTITY_PROFILES:"/fscmRestApi/resources/latest/legalEntities",
   XLE_LEGAL_ENTITIES:"/fscmRestApi/resources/latest/legalEntities",
   FND_CURRENCIES:"/fscmRestApi/resources/latest/currencies",
@@ -3895,7 +3895,7 @@ var CFG_MODS = {
   fin: {
     label:'Finance / GL', color:'#4dabf7', icon:'💰',
     items:[
-      {id:'fin_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnits',                params:'limit=100',
+      {id:'fin_bus',      label:'Business Units',         icon:'🏢', ep:'/hcmRestApi/resources/latest/businessUnits',                params:'limit=100',
        desc:'Finance BUs — name, ledger assignment, currency, accounting calendar'},
       {id:'fin_led',      label:'GL Ledgers',             icon:'📒', ep:'/fscmRestApi/resources/latest/ledgers',                      params:'limit=100',
        desc:'Primary and secondary ledgers — currency, calendar, chart of accounts'},
@@ -3918,7 +3918,7 @@ var CFG_MODS = {
        desc:'Third-party freight carriers and shipping methods'},
       {id:'scm_costorg',  label:'Cost Organizations',     icon:'💲', ep:'/fscmRestApi/resources/latest/costOrganizations',           params:'limit=100',
        desc:'Cost accounting organizations for inventory valuation'},
-      {id:'scm_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnits',               params:'limit=100',
+      {id:'scm_bus',      label:'Business Units',         icon:'🏢', ep:'/hcmRestApi/resources/latest/businessUnits',               params:'limit=100',
        desc:'SCM-enabled Oracle Fusion Business Units'}
     ]
   },
@@ -5020,8 +5020,8 @@ initCfg=function(){
 /* Complete Oracle Fusion REST endpoint registry */
 var ORACLE_EP = {
   /* Enterprise / Common */
-  /* businessUnits: accessible to SCM_IMPL / Supply Chain Application Administrator */
-  businessUnits:       '/fscmRestApi/resources/latest/businessUnits',
+  /* businessUnits: Oracle Fusion BUs live under HCM Enterprise Structures — hcmRestApi path */
+  businessUnits:       '/hcmRestApi/resources/latest/businessUnits',
   /* legalEntities: needs Application Implementation Consultant or Setup Admin */
   legalEntities:       '/fscmRestApi/resources/latest/legalEntities',
   currencies:          '/fscmRestApi/resources/latest/currencies',
@@ -5487,7 +5487,7 @@ var BRIEF_PERSONAS = [
        extract:function(d){var a=d.filter(function(i){return(i.PlanStatus||i.Status||'').toLowerCase()==='active';});return{val:a.length,sub:a.slice(0,2).map(function(p){return p.PlanName||p.planName||'';}).join(', ').substring(0,40),status:a.length>0?'ok':'warn'};}},
       {label:'Earnings Records',    ep:'/cxRestApi/resources/latest/incentiveCompensationEarnings', params:'limit=100',
        extract:function(d){var t=d.reduce(function(s,i){return s+(parseFloat(i.EarnedIncentive||i.earnedIncentive||0));},0);return{val:d.length,sub:'$'+(t/1e6).toFixed(2)+'M total earned',status:d.length>0?'ok':''};}},
-      {label:'Business Units',      ep:'/fscmRestApi/resources/latest/businessUnits', params:'limit=100',
+      {label:'Business Units',      ep:'/hcmRestApi/resources/latest/businessUnits', params:'limit=100',
        extract:function(d){return{val:d.length,sub:d.slice(0,2).map(function(b){return b.BusinessUnitName||b.businessUnitName||'';}).join(', ').substring(0,40),status:'ok'};}}
     ]
   },
@@ -5508,7 +5508,7 @@ var BRIEF_PERSONAS = [
        extract:function(d){var un=d.filter(function(i){return(i.PaymentStatus||i.PaymentStatusFlag||'').toString().toUpperCase().indexOf('UNPAID')>=0;});var tot=un.reduce(function(s,i){return s+(i.InvoiceAmount||0);},0);return{val:un.length,sub:'$'+(tot/1e6).toFixed(1)+'M unpaid',status:tot>1e6?'err':tot>200000?'warn':'ok'};}},
       {label:'On Hold',            ep:'/fscmRestApi/resources/latest/invoices', params:'limit=200',
        extract:function(d){var h=d.filter(function(i){return(i.HoldCount||i.holdCount||0)>0;});return{val:h.length,sub:h.length>0?'Blocking payment run':'Clear',status:h.length>5?'warn':h.length>0?'':'ok'};}},
-      {label:'Business Units',     ep:'/fscmRestApi/resources/latest/businessUnits', params:'limit=100',
+      {label:'Business Units',     ep:'/hcmRestApi/resources/latest/businessUnits', params:'limit=100',
        extract:function(d){return{val:d.length,sub:'Connected BUs',status:'ok'};}}
     ]
   },
@@ -5571,7 +5571,7 @@ var BRIEF_PERSONAS = [
        extract:function(d){var a=d.filter(function(i){return(i.ParticipantStatus||i.Status||'').toLowerCase()==='active';}).length;return{val:a,sub:'active in comp plans',status:a>0?'ok':'warn'};}},
       {label:'Comp Roles Defined', ep:'/fscmRestApi/resources/latest/incentiveCompensationRoles', params:'limit=100',
        extract:function(d){return{val:d.length,sub:'ICM roles',status:d.length>0?'ok':'warn'};}},
-      {label:'Business Units',     ep:'/fscmRestApi/resources/latest/businessUnits', params:'limit=100',
+      {label:'Business Units',     ep:'/hcmRestApi/resources/latest/businessUnits', params:'limit=100',
        extract:function(d){return{val:d.length,sub:'BUs in scope',status:'ok'};}}
     ]
   }
@@ -5969,8 +5969,7 @@ cfgRunAudit=function(){
 /* Oracle Fusion role required per endpoint */
 var ENDPOINT_ROLES = {
   /* Enterprise / Common — primary paths */
-  '/fscmRestApi/resources/latest/businessUnits':                  {role:'SCM_IMPL / Supply Chain Application Administrator', module:'Enterprise'},
-  '/fscmRestApi/resources/latest/businessUnitsLOV':               {role:'Any authenticated user (LOV)', module:'Enterprise'},
+  '/hcmRestApi/resources/latest/businessUnits':                  {role:'Human Resources Specialist / Any HCM user', module:'Enterprise (HCM)'},
   '/fscmRestApi/resources/latest/legalEntities':                  {role:'Application Implementation Consultant', module:'Enterprise'},
   '/fscmRestApi/resources/latest/legalEntitiesForProcurement':    {role:'SCM_IMPL / Procurement Application Administrator', module:'Enterprise'},
   '/fscmRestApi/resources/latest/currencies':                     {role:'Financial Application Administrator', module:'Enterprise'},
