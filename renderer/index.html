@@ -731,7 +731,7 @@ const ICM_EP = {
   icmTransactions: "/fscmRestApi/resources/latest/incentiveCompensationTransactions",
   workers:         "/hcmRestApi/resources/latest/workers",
   invoices:        "/fscmRestApi/resources/latest/invoices",
-  buQuery:         "/fscmRestApi/resources/latest/businessUnitsLOV",
+  buQuery:         "/fscmRestApi/resources/latest/businessUnitsLOV",  /* ❌ 404 on demo pods — kept for reference */
 };
 
 /* ═══════════════════════════════════════
@@ -3028,6 +3028,8 @@ var LIB = [
 /* ─── CONFIG MODULE — Oracle Fusion Setup & Configuration SQL ─── */
 ,{mod:'Config',tag:'cfg',t:'Business Units — Full Setup',d:'All Oracle Fusion Business Units with status, currency, and type.',
   sql:'SELECT BU_ID, BU_NAME, SHORT_CODE, DEFAULT_CURRENCY_CODE, DATE_FROM, DATE_TO\nFROM FUN_ALL_BUSINESS_UNITS_V\nWHERE STATUS = \'A\'\nORDER BY BU_NAME'}
+,{mod:'Config',tag:'cfg',t:'Business Units ↔ Legal Entity ↔ Ledger',d:'Maps each BU to its primary ledger and default legal entity (Oracle Fusion setup joins).',
+  sql:'SELECT\n  bu.BU_NAME AS "Business Unit",\n  bu.BU_ID AS "BU ID",\n  gl.NAME AS "Primary Ledger",\n  bu.PRIMARY_LEDGER_ID AS "Ledger ID",\n  xep.NAME AS "Legal Entity",\n  xep.LEGAL_ENTITY_IDENTIFIER AS "LE Identifier",\n  bu.DEFAULT_CURRENCY_CODE AS "Currency"\nFROM FUN_ALL_BUSINESS_UNITS_V bu\nLEFT JOIN GL_LEDGERS gl ON bu.PRIMARY_LEDGER_ID = gl.LEDGER_ID\nLEFT JOIN XLE_ENTITY_PROFILES xep ON bu.LEGAL_ENTITY_ID = xep.LEGAL_ENTITY_ID\nWHERE SYSDATE BETWEEN bu.DATE_FROM AND NVL(bu.DATE_TO, SYSDATE + 1)\nORDER BY bu.BU_NAME'}
 ,{mod:'Config',tag:'cfg',t:'Legal Entities',d:'All legal entities registered in Oracle Fusion.',
   sql:'SELECT LEGAL_ENTITY_ID, NAME, LEGAL_ENTITY_IDENTIFIER, COUNTRY\nFROM XLE_ENTITY_PROFILES\nORDER BY NAME\nFETCH FIRST 100 ROWS ONLY'}
 ,{mod:'Config',tag:'cfg',t:'Currencies Enabled',d:'All active currencies configured in Oracle Fusion.',
@@ -3914,14 +3916,13 @@ var CFG_MODS = {
        desc:'ICM formula expressions used in rate tables and plan elements'},
       {id:'icm_pg',       label:'Pay Groups',             icon:'💳', ep:ICM_EP.payGroups,       params:'limit=100',
        desc:'Pay group definitions — frequency, currency, payment calendar'},
-      {id:'icm_bus',      label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,         params:'limit=200',
-       desc:'Oracle Fusion Business Units (LOV — accessible without Financial App Admin)'}
+      /* Business Units: no accessible REST endpoint on demo pods. BU = OrgId 300000046987012 from participants */
     ]
   },
   fin: {
     label:'Finance / GL', color:'#4dabf7', icon:'💰',
     items:[
-      {id:'fin_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnitsLOV',             params:'limit=200',
+      {id:'fin_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/finBusinessUnitsLOV',             params:'limit=200',
        desc:'Finance BUs — name, ledger assignment, currency, accounting calendar'},
       {id:'fin_led',      label:'GL Ledgers',             icon:'📒', ep:'/fscmRestApi/resources/latest/ledgers',                      params:'limit=100',
        desc:'Primary and secondary ledgers — currency, calendar, chart of accounts'},
@@ -3944,7 +3945,7 @@ var CFG_MODS = {
        desc:'Third-party freight carriers and shipping methods'},
       {id:'scm_costorg',  label:'Cost Organizations',     icon:'💲', ep:'/fscmRestApi/resources/latest/costOrganizations',           params:'limit=100',
        desc:'Cost accounting organizations for inventory valuation'},
-      {id:'scm_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnitsLOV',            params:'limit=200',
+      {id:'scm_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/finBusinessUnitsLOV',            params:'limit=200',
        desc:'SCM-enabled Oracle Fusion Business Units'}
     ]
   },
@@ -5535,12 +5536,21 @@ initCfg=function(){
 /* Complete Oracle Fusion REST endpoint registry */
 var ORACLE_EP = {
   /* Enterprise / Common */
-  /* businessUnits: requires Financial Application Administrator (John.Dunbar has Assignable, not Active)
-     businessUnitsLOV: read-only LOV variant, lighter role requirement — use this in snapshots */
-  businessUnits:       '/fscmRestApi/resources/latest/businessUnits',
-  businessUnitsLOV:    '/fscmRestApi/resources/latest/businessUnitsLOV',
-  /* legalEntities: requires Application Implementation Consultant — confirmed 404 for John.Dunbar */
-  legalEntities:       '/fscmRestApi/resources/latest/legalEntities',
+  /* Business Units — 4 endpoint variants, different role requirements:
+     businessUnits       → Financial Application Administrator
+     businessUnitsLOV    → 404 on demo pods
+     finBusinessUnitsLOV → Finance/SCM LOV (from Oracle SCM REST docs 25D) ← try this
+     buQuery (ICM_EP)    → LOV, same 404 issue */
+  businessUnits:          '/fscmRestApi/resources/latest/businessUnits',
+  businessUnitsLOV:       '/fscmRestApi/resources/latest/businessUnitsLOV',
+  finBusinessUnitsLOV:    '/fscmRestApi/resources/latest/finBusinessUnitsLOV',
+  /* Legal Entities — 3 variants:
+     legalEntities       → Application Implementation Consultant
+     legalEntitiesLOV    → dedicated LOV (lighter role per Oracle docs 26A)
+     p2pLegalEntities    → P2P variant, procurement roles */
+  legalEntities:          '/fscmRestApi/resources/latest/legalEntities',
+  legalEntitiesLOV:       '/fscmRestApi/resources/latest/legalEntitiesLOV',
+  p2pLegalEntities:       '/fscmRestApi/resources/latest/purchaseToPayLegalEntitiesLOV',
   currencies:          '/fscmRestApi/resources/latest/currencies',
   locations:           '/hcmRestApi/resources/latest/locations',               /* ✅ confirmed */
   inventoryOrgs:       '/fscmRestApi/resources/latest/inventoryOrganizations', /* ✅ confirmed */
@@ -5605,7 +5615,12 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Setup',
         items:[
-          {id:'snap_bu',  label:'Business Units (LOV)',        ep:ORACLE_EP.businessUnitsLOV,  params:'limit=200'}, /* ✅ LOV fallback */
+          /* Business Units — finBusinessUnitsLOV (Finance/SCM LOV, Oracle SCM REST 25D) */
+          {id:'snap_bu',  label:'Business Units (Fin LOV)',    ep:ORACLE_EP.finBusinessUnitsLOV, params:'onlyData=true&limit=100'},
+          /* Legal Entities — legalEntitiesLOV (dedicated LOV, Oracle Financials 26A) */
+          {id:'snap_le',  label:'Legal Entities (LOV)',        ep:ORACLE_EP.legalEntitiesLOV,    params:'onlyData=true&limit=100'},
+          /* P2P Legal Entities — procurement roles accessible */
+          {id:'snap_p2p', label:'P2P Legal Entities (LOV)',    ep:ORACLE_EP.p2pLegalEntities,    params:'onlyData=true&limit=200'},
           {id:'snap_loc', label:'Locations',                   ep:ORACLE_EP.locations,          params:'limit=200'}, /* ✅ */
           {id:'snap_inv', label:'Inventory Organizations',     ep:ORACLE_EP.inventoryOrgs,      params:'limit=100'}, /* ✅ */
         ]
@@ -5633,7 +5648,7 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Structures',
         items:[
-          {id:'hsnap_bu',  label:'Business Units (LOV)',       ep:ORACLE_EP.businessUnitsLOV,  params:'limit=200'}, /* ✅ LOV fallback */
+          /* Business Units: REST API not accessible on demo pods — identify BU via worker/location org data */
           {id:'hsnap_loc', label:'Locations',                  ep:ORACLE_EP.locations,          params:'limit=200'}, /* ✅ */
         ]
       },
@@ -5664,7 +5679,7 @@ var CONFIG_SNAPSHOT = {
         items:[
           {id:'ssnap_inv', label:'Inventory Organizations',    ep:ORACLE_EP.inventoryOrgs,      params:'limit=100'}, /* ✅ */
           {id:'ssnap_loc', label:'Locations',                  ep:ORACLE_EP.locations,          params:'limit=200'}, /* ✅ */
-          {id:'ssnap_bu',  label:'Business Units (LOV)',       ep:ORACLE_EP.businessUnitsLOV,   params:'limit=200'}, /* ✅ LOV */
+          /* Business Units: use OrgId from Inventory Orgs or Cost Orgs to identify BU */
         ]
       },
       {
@@ -5696,7 +5711,7 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Reference',
         items:[
-          {id:'fsnap_bu',  label:'Business Units (LOV)',       ep:ORACLE_EP.businessUnitsLOV,   params:'limit=200'}, /* ✅ LOV */
+          /* Business Units: not accessible via REST on demo pods — identify from AP Invoices BU field */
           {id:'fsnap_inv2',label:'Inventory Organizations',    ep:ORACLE_EP.inventoryOrgs,      params:'limit=100'}, /* ✅ */
         ]
       }
@@ -5709,7 +5724,7 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Setup',
         items:[
-          {id:'csnap_bu',  label:'Business Units (LOV)',       ep:ORACLE_EP.businessUnitsLOV,   params:'limit=200'}, /* ✅ LOV */
+          /* Business Units: not accessible via REST — BU identified from CRM Accounts org field */
           {id:'csnap_loc', label:'Locations',                  ep:ORACLE_EP.locations,          params:'limit=200'}, /* ✅ */
           {id:'csnap_acc', label:'CRM Accounts',               ep:ORACLE_EP.accounts,           params:'limit=200'}, /* ✅ */
         ]
@@ -5740,7 +5755,7 @@ var CONFIG_SNAPSHOT = {
           {id:'isnap_rol', label:'ICM Roles',                  ep:ORACLE_EP.icmRoles,          params:'limit=100'}, /* ✅ */
           {id:'isnap_pm',  label:'Performance Measures',       ep:ORACLE_EP.perfMeasures,      params:'limit=100'}, /* fscmRestApi ✅ */
           {id:'isnap_exp', label:'Expressions',                ep:ORACLE_EP.expressions,       params:'limit=100'}, /* fscmRestApi ✅ */
-          {id:'isnap_bu',  label:'Business Units (LOV)',        ep:ORACLE_EP.businessUnitsLOV,  params:'limit=200'}, /* ✅ */
+          /* Business Units: ICM-Optimizer approach — validate via OrgId=300000046987012 in participants */
         ]
       },
       {
@@ -6506,6 +6521,9 @@ var ENDPOINT_ROLES = {
   /* Enterprise / Common — primary paths */
   '/fscmRestApi/resources/latest/businessUnits':                  {role:'Financial Application Administrator (Active, not just Assignable)', module:'Enterprise'},
   '/fscmRestApi/resources/latest/businessUnitsLOV':               {role:'Any authenticated Oracle user', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/finBusinessUnitsLOV':            {role:'Finance/SCM user (Oracle SCM REST 25D LOV)', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/legalEntitiesLOV':               {role:'Any authenticated Oracle user (LOV)', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/purchaseToPayLegalEntitiesLOV':  {role:'Procurement Manager / AP Manager', module:'Finance P2P'},
   '/fscmRestApi/resources/latest/legalEntities':                  {role:'Application Implementation Consultant', module:'Enterprise'},
   '/fscmRestApi/resources/latest/legalEntities':                  {role:'Application Implementation Consultant', module:'Enterprise'},
   '/fscmRestApi/resources/latest/legalEntitiesForProcurement':    {role:'SCM_IMPL / Procurement Application Administrator', module:'Enterprise'},
