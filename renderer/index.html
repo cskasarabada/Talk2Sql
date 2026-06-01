@@ -622,6 +622,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
       <div class="ct"    data-m="icm"  onclick="cfgSetMod('icm')">🎯 ICM</div>
     </div>
     <div style="display:flex;gap:5px;padding:0 10px;align-items:center">
+      <button class="btn b-ghost"  id="btnProbeEps"  onclick="cfgProbeEndpoints()" style="font-size:10px">🛰 Probe URLs</button>
       <button class="btn b-blue"  id="btnCfgAudit"   onclick="cfgRunAudit()"    style="font-size:10px">🔍 Audit Module</button>
       <button class="btn b-blue"  id="btnCfgExtract" onclick="cfgExtract()"     style="font-size:10px">⚡ Extract</button>
       <button class="btn b-out"   id="btnCfgXls"     onclick="cfgExportXls()"   style="font-size:10px" disabled>↓ Excel</button>
@@ -4941,6 +4942,175 @@ Object.keys(CFG_TAXONOMY).forEach(function(modKey){
 
 /* Change default module to OM */
 cfgMod='om';
+
+/* ══════════════════════════════════════════════════════════════
+   ENDPOINT PROBE — validates all ORACLE_EP URLs with limit=1
+   Groups by API base, discovers Oracle version, colour-codes results
+   ══════════════════════════════════════════════════════════════ */
+async function cfgProbeEndpoints(){
+  if(!ST.conn||!ST.url){openModal('connModal');return;}
+  var hd=document.getElementById('cfg-result-hd');
+  var body=document.getElementById('cfg-result-body');
+  var base=ST.url.replace(/\/$/,'');
+  var creds=btoa(ST.user+':'+ST.pass);
+
+  /* ── Step 1: discover Oracle version ── */
+  var oraVersion='latest';
+  var versionBases=[
+    base+'/fscmRestApi/resources/',
+    base+'/hcmRestApi/resources/'
+  ];
+  for(var vi=0;vi<versionBases.length;vi++){
+    try{
+      var vr=await fetch(versionBases[vi],{headers:{'Authorization':'Basic '+creds,'Accept':'application/json'},signal:AbortSignal.timeout(5000)});
+      if(vr.ok){
+        var vd=await vr.json();
+        /* Oracle returns {"items":[{"version":"11.13.18.05",...}]} */
+        var items=vd.items||[];
+        if(items.length&&items[0].version){oraVersion=items[0].version;break;}
+      }
+    }catch(e){}
+  }
+
+  /* ── Step 2: collect all unique endpoints from ORACLE_EP + CONFIG_SNAPSHOT ── */
+  var epSet={};
+  Object.keys(ORACLE_EP).forEach(function(k){ epSet[ORACLE_EP[k]]=k; });
+  /* Also add snapshot endpoints not in ORACLE_EP */
+  var snap=CONFIG_SNAPSHOT[cfgMod];
+  if(snap) snap.groups.forEach(function(g){g.items.forEach(function(it){if(!epSet[it.ep])epSet[it.ep]='(snapshot)';});});
+
+  var eps=Object.keys(epSet).filter(function(e){return e&&e.indexOf('/')===0;});
+
+  /* Show loading state */
+  if(hd){
+    hd.style.display='flex';
+    hd.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+      +'<span class="ds-spin" style="width:12px;height:12px;border-width:2px"></span>'
+      +'<span style="font-size:12px;font-weight:800;color:var(--t1)">🛰 Probing '+eps.length+' endpoints…</span>'
+      +'<span id="probe-ver" style="font-size:9px;background:var(--b1);padding:2px 8px;border-radius:8px;color:var(--t3)">Oracle version: '+oraVersion+'</span>'
+      +'</div>';
+  }
+  if(body) body.innerHTML='<div style="flex:1;overflow:auto;min-height:0;padding:16px">'
+    +'<div id="probe-rows" style="display:flex;flex-direction:column;gap:3px"></div></div>';
+
+  /* ── Step 3: probe each endpoint in parallel ── */
+  var results=[];
+  var done=0;
+
+  function renderProbeRows(){
+    var rows=document.getElementById('probe-rows');if(!rows)return;
+    /* Group by API base */
+    var groups={};
+    results.forEach(function(r){
+      var grp=r.apiBase||'other';
+      if(!groups[grp])groups[grp]={label:grp,items:[]};
+      groups[grp].items.push(r);
+    });
+    var html='';
+    /* Version + base URL info banner */
+    html+='<div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:10px">'
+      +'<div style="font-weight:700;color:var(--t1);margin-bottom:4px">🌐 Oracle Fusion Instance</div>'
+      +'<div style="color:var(--t3)">Base URL: <span style="color:var(--t1);font-family:var(--mono)">'+(ST.url||'')+'</span></div>'
+      +'<div style="color:var(--t3);margin-top:2px">API Version: <span style="color:#51cf66;font-family:var(--mono);font-weight:700">'+oraVersion+'</span></div>'
+      +'<div style="color:var(--t3);margin-top:4px;font-size:9px">Standard paths: '
+      +'<span style="font-family:var(--mono)">/fscmRestApi/resources/'+oraVersion+'/</span> (ERP/SCM) · '
+      +'<span style="font-family:var(--mono)">/hcmRestApi/resources/'+oraVersion+'/</span> (HCM) · '
+      +'<span style="font-family:var(--mono)">/crmRestApi/resources/'+oraVersion+'/</span> (CRM) · '
+      +'<span style="font-family:var(--mono)">/cxRestApi/resources/'+oraVersion+'/</span> (ICM)'
+      +'</div></div>';
+    /* Summary counts */
+    var ok=results.filter(function(r){return r.status==='ok';}).length;
+    var restricted=results.filter(function(r){return r.status==='restricted';}).length;
+    var notFound=results.filter(function(r){return r.status==='notfound';}).length;
+    var pending=results.filter(function(r){return r.status==='pending';}).length;
+    html+='<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+      +'<div style="background:#51cf6622;border:1px solid #51cf6644;border-radius:6px;padding:6px 12px;font-size:10px;font-weight:700;color:#51cf66">✅ Accessible: '+ok+'</div>'
+      +'<div style="background:#fcc41922;border:1px solid #fcc41944;border-radius:6px;padding:6px 12px;font-size:10px;font-weight:700;color:#fcc419">🔒 Restricted: '+restricted+'</div>'
+      +'<div style="background:#ff8c4222;border:1px solid #ff8c4244;border-radius:6px;padding:6px 12px;font-size:10px;font-weight:700;color:#ff8c42">🔍 Not Found: '+notFound+'</div>'
+      +(pending?'<div style="background:var(--b1)22;border:1px solid var(--b1);border-radius:6px;padding:6px 12px;font-size:10px;color:var(--t3)">⏳ Pending: '+pending+'</div>':'')
+      +'</div>';
+    Object.keys(groups).sort().forEach(function(grp){
+      var g=groups[grp];
+      html+='<div style="margin-bottom:12px">'
+        +'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--b1)">'+grp+'</div>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:10px">'
+        +'<thead><tr>'
+        +'<th style="text-align:left;padding:4px 8px;color:var(--t3);font-weight:700;font-size:8px;letter-spacing:1px;border-bottom:1px solid var(--b1)">KEY</th>'
+        +'<th style="text-align:left;padding:4px 8px;color:var(--t3);font-weight:700;font-size:8px;letter-spacing:1px;border-bottom:1px solid var(--b1)">ENDPOINT PATH</th>'
+        +'<th style="text-align:center;padding:4px 8px;color:var(--t3);font-weight:700;font-size:8px;letter-spacing:1px;border-bottom:1px solid var(--b1)">STATUS</th>'
+        +'<th style="text-align:right;padding:4px 8px;color:var(--t3);font-weight:700;font-size:8px;letter-spacing:1px;border-bottom:1px solid var(--b1)">RECORDS</th>'
+        +'<th style="text-align:left;padding:4px 8px;color:var(--t3);font-weight:700;font-size:8px;letter-spacing:1px;border-bottom:1px solid var(--b1)">ROLE NEEDED</th>'
+        +'</tr></thead><tbody>'
+        +g.items.map(function(r){
+          var sc='',si='';
+          if(r.status==='ok'){sc='#51cf66';si='✅';}
+          else if(r.status==='restricted'){sc='#fcc419';si='🔒';}
+          else if(r.status==='notfound'){sc='#ff8c42';si='🔍';}
+          else if(r.status==='pending'){sc='var(--t3)';si='⏳';}
+          else{sc='#ff6b6b';si='❌';}
+          var roleInfo=ENDPOINT_ROLES[r.ep]||{role:'—',module:'—'};
+          return'<tr style="border-bottom:1px solid var(--b1)22">'
+            +'<td style="padding:5px 8px;color:var(--t3);font-family:var(--mono);font-size:9px">'+r.key+'</td>'
+            +'<td style="padding:5px 8px;font-family:var(--mono);font-size:9px;color:var(--t2)">'+r.ep+'</td>'
+            +'<td style="padding:5px 8px;text-align:center;font-weight:700;color:'+sc+'">'+si+' '+(r.status==='ok'?'OK':r.status==='restricted'?'Restricted':r.status==='notfound'?'404':r.status==='pending'?'…':r.statusCode||'Err')+'</td>'
+            +'<td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:'+(r.count>0?'#51cf66':'var(--t3)')+'">'+(r.count!=null?r.count:'—')+'</td>'
+            +'<td style="padding:5px 8px;font-size:9px;color:var(--t3)">'+roleInfo.role+'</td>'
+            +'</tr>';
+        }).join('')
+        +'</tbody></table></div>';
+    });
+    rows.innerHTML=html;
+  }
+
+  var probePromises=eps.map(function(ep){
+    /* Determine API base group */
+    var apiBase='other';
+    var m=ep.match(/^\/(fscmRestApi|hcmRestApi|crmRestApi|cxRestApi|logisticsRestApi|omcRestApi)/);
+    if(m) apiBase=m[1];
+    var r={ep:ep,key:epSet[ep]||ep,apiBase:apiBase,status:'pending',count:null};
+    results.push(r);
+    return fetch(base+ep+'?limit=1',{
+      headers:{'Authorization':'Basic '+creds,'Accept':'application/json'},
+      signal:AbortSignal.timeout(10000)
+    }).then(function(resp){
+      if(resp.status===401||resp.status===403){r.status='restricted';}
+      else if(resp.status===404){r.status='notfound';}
+      else if(resp.ok){
+        return resp.json().then(function(d){
+          var items=d.items||d.value||[];
+          r.count=Array.isArray(items)?items.length:0;
+          /* If hasMore=true there are more records — show ✅ with 1+ indicator */
+          if(d.hasMore||d.count)r.count='1+';
+          r.status='ok';
+        });
+      } else {r.status='error';r.statusCode=resp.status;}
+    }).catch(function(e){
+      r.status=(e.name==='AbortError'?'timeout':'error');
+    }).finally(function(){
+      done++;
+      renderProbeRows();
+      if(hd){
+        var sp=hd.querySelector('.ds-spin');
+        if(done===eps.length&&sp){sp.style.display='none';}
+        var lbl=hd.querySelector('span:nth-child(2)');
+        if(lbl)lbl.textContent='🛰 Endpoint Probe — '+done+'/'+eps.length+' checked';
+      }
+    });
+  });
+
+  await Promise.allSettled(probePromises);
+
+  /* Update header to show final state */
+  if(hd){
+    var ok2=results.filter(function(r){return r.status==='ok';}).length;
+    hd.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:12px;font-weight:800;color:var(--t1)">🛰 Endpoint Probe Complete</span>'
+      +'<span style="font-size:9px;background:#51cf6622;color:#51cf66;padding:2px 8px;border-radius:8px">'+ok2+'/'+eps.length+' accessible</span>'
+      +'<span style="font-size:9px;background:var(--b1);padding:2px 8px;border-radius:8px;color:var(--t3)">Oracle: '+oraVersion+'</span>'
+      +'</div>'
+      +'<button class="btn b-ghost" onclick="cfgSetMod(cfgMod)" style="font-size:10px">← Back</button>';
+  }
+}
 
 /* ── AUDIT VIEW — shows full taxonomy with health status ── */
 function cfgRunAudit(){
