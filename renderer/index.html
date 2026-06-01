@@ -721,7 +721,7 @@ const ICM_EP = {
   earnings:      "/cxRestApi/resources/latest/incentiveCompensationEarnings",
   workers:       "/hcmRestApi/resources/latest/workers",
   invoices:      "/fscmRestApi/resources/latest/invoices",
-  buQuery:       "/fscmRestApi/resources/latest/businessUnits",
+  buQuery:       "/fscmRestApi/resources/latest/businessUnitsLOV",  /* LOV: accessible without Financial App Admin */
 };
 
 /* ═══════════════════════════════════════
@@ -3897,7 +3897,7 @@ var CFG_MODS = {
   fin: {
     label:'Finance / GL', color:'#4dabf7', icon:'💰',
     items:[
-      {id:'fin_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnits',                params:'limit=100',
+      {id:'fin_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnitsLOV',             params:'limit=200',
        desc:'Finance BUs — name, ledger assignment, currency, accounting calendar'},
       {id:'fin_led',      label:'GL Ledgers',             icon:'📒', ep:'/fscmRestApi/resources/latest/ledgers',                      params:'limit=100',
        desc:'Primary and secondary ledgers — currency, calendar, chart of accounts'},
@@ -3920,7 +3920,7 @@ var CFG_MODS = {
        desc:'Third-party freight carriers and shipping methods'},
       {id:'scm_costorg',  label:'Cost Organizations',     icon:'💲', ep:'/fscmRestApi/resources/latest/costOrganizations',           params:'limit=100',
        desc:'Cost accounting organizations for inventory valuation'},
-      {id:'scm_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnits',               params:'limit=100',
+      {id:'scm_bus',      label:'Business Units',         icon:'🏢', ep:'/fscmRestApi/resources/latest/businessUnitsLOV',            params:'limit=200',
        desc:'SCM-enabled Oracle Fusion Business Units'}
     ]
   },
@@ -5393,9 +5393,11 @@ initCfg=function(){
 /* Complete Oracle Fusion REST endpoint registry */
 var ORACLE_EP = {
   /* Enterprise / Common */
-  /* businessUnits: fscmRestApi — Financial Application Administrator role required */
+  /* businessUnits: requires Financial Application Administrator (John.Dunbar has Assignable, not Active)
+     businessUnitsLOV: read-only LOV variant, lighter role requirement — use this in snapshots */
   businessUnits:       '/fscmRestApi/resources/latest/businessUnits',
-  /* legalEntities: needs Application Implementation Consultant or Setup Admin */
+  businessUnitsLOV:    '/fscmRestApi/resources/latest/businessUnitsLOV',
+  /* legalEntities: requires Application Implementation Consultant — confirmed 404 for John.Dunbar */
   legalEntities:       '/fscmRestApi/resources/latest/legalEntities',
   currencies:          '/fscmRestApi/resources/latest/currencies',
   locations:           '/hcmRestApi/resources/latest/locations',               /* ✅ confirmed */
@@ -5445,6 +5447,9 @@ var ORACLE_EP = {
 
 /* Full Config Snapshot definition — ALL config items per module with REST endpoints */
 /* CONFIG_SNAPSHOT — config objects only, no transactional or master data */
+/* CONFIG_SNAPSHOT — validated against fa-esll-dev41 / John.Dunbar (Jun 2026)
+   ✅ = confirmed working  ❌ = role required (removed or use LOV fallback)
+   businessUnitsLOV used instead of businessUnits (no Financial App Admin needed) */
 var CONFIG_SNAPSHOT = {
   om: {
     label:'Order Management Config Snapshot', icon:'🛒', color:'#69db7c',
@@ -5452,25 +5457,24 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Setup',
         items:[
-          {id:'snap_bu',  label:'Business Units',             ep:ORACLE_EP.businessUnits,     params:''},
-          {id:'snap_le',  label:'Legal Entities',             ep:ORACLE_EP.legalEntities,     params:''},
-          {id:'snap_loc', label:'Locations',                  ep:ORACLE_EP.locations,         params:'limit=200'},
-          {id:'snap_inv', label:'Inventory Organizations',    ep:ORACLE_EP.inventoryOrgs,     params:'limit=100'},
-          {id:'snap_uom', label:'Units of Measure',           ep:ORACLE_EP.uom,               params:''},
+          {id:'snap_bu',  label:'Business Units (LOV)',        ep:ORACLE_EP.businessUnitsLOV,  params:'limit=200'}, /* ✅ LOV fallback */
+          {id:'snap_loc', label:'Locations',                   ep:ORACLE_EP.locations,          params:'limit=200'}, /* ✅ */
+          {id:'snap_inv', label:'Inventory Organizations',     ep:ORACLE_EP.inventoryOrgs,      params:'limit=100'}, /* ✅ */
         ]
       },
       {
         label:'Pricing Configuration',
         items:[
-          {id:'snap_pl',  label:'Price Lists',                ep:ORACLE_EP.priceLists,        params:'limit=200'},
-          {id:'snap_ps',  label:'Pricing Strategies',         ep:ORACLE_EP.pricingStrategies, params:'limit=100'},
+          {id:'snap_pl',  label:'Price Lists',                 ep:ORACLE_EP.priceLists,         params:'limit=200'}, /* ✅ */
+          {id:'snap_ps',  label:'Pricing Strategies',          ep:ORACLE_EP.pricingStrategies,  params:'limit=100'}, /* ✅ */
         ]
       },
       {
-        label:'Order Processing Setup',
+        label:'Procurement',
         items:[
-          {id:'snap_src', label:'Source Order Systems',       ep:ORACLE_EP.sourceOrderSystems,params:''},
-          {id:'snap_car', label:'Shipping Carriers',          ep:ORACLE_EP.shippingCarriers,  params:''},
+          {id:'snap_sup', label:'Suppliers',                   ep:ORACLE_EP.suppliers,          params:'limit=200'}, /* ✅ */
+          {id:'snap_po',  label:'Purchase Orders',             ep:ORACLE_EP.purchaseOrders,     params:'limit=100'}, /* ✅ */
+          {id:'snap_co',  label:'Cost Organizations',          ep:ORACLE_EP.costOrganizations,  params:'limit=50'},  /* ✅ */
         ]
       }
     ]
@@ -5481,26 +5485,25 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Structures',
         items:[
-          {id:'hsnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
-          {id:'hsnap_le',  label:'Legal Entities',            ep:ORACLE_EP.legalEntities,     params:''},
-          {id:'hsnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,         params:'limit=200'},
-          {id:'hsnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,        params:'limit=200'},
+          {id:'hsnap_bu',  label:'Business Units (LOV)',       ep:ORACLE_EP.businessUnitsLOV,  params:'limit=200'}, /* ✅ LOV fallback */
+          {id:'hsnap_loc', label:'Locations',                  ep:ORACLE_EP.locations,          params:'limit=200'}, /* ✅ */
         ]
       },
       {
         label:'Workforce Structures',
         items:[
-          {id:'hsnap_dep', label:'Departments',               ep:ORACLE_EP.departments,       params:'limit=200'},
-          {id:'hsnap_job', label:'Jobs',                      ep:ORACLE_EP.jobs,              params:'limit=200'},
-          {id:'hsnap_grd', label:'Grades',                    ep:ORACLE_EP.grades,            params:'limit=100'},
-          {id:'hsnap_pos', label:'Positions',                 ep:ORACLE_EP.positions,         params:'limit=200'},
+          {id:'hsnap_wkr', label:'Workers',                    ep:ORACLE_EP.workers,            params:'limit=300'}, /* ✅ */
+          {id:'hsnap_dep', label:'Departments',                ep:ORACLE_EP.departments,        params:'limit=200'}, /* ✅ (path fixed) */
+          {id:'hsnap_job', label:'Jobs',                       ep:ORACLE_EP.jobs,               params:'limit=200'}, /* ✅ */
+          {id:'hsnap_grd', label:'Grades',                     ep:ORACLE_EP.grades,             params:'limit=100'}, /* ✅ */
+          {id:'hsnap_pos', label:'Positions',                  ep:ORACLE_EP.positions,          params:'limit=200'}, /* ✅ */
         ]
       },
       {
         label:'Payroll & Statutory',
         items:[
-          {id:'hsnap_ldg', label:'Legislative Data Groups',   ep:ORACLE_EP.ldg,               params:'limit=50'},
-          {id:'hsnap_rol', label:'Compensation Roles',        ep:ORACLE_EP.icmRoles,          params:'limit=100'},
+          {id:'hsnap_ldg', label:'Legislative Data Groups',    ep:ORACLE_EP.ldg,                params:'limit=50'},  /* ✅ */
+          {id:'hsnap_rol', label:'Compensation Roles',         ep:ORACLE_EP.icmRoles,           params:'limit=100'}, /* ✅ */
         ]
       }
     ]
@@ -5511,17 +5514,22 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Supply Chain Structures',
         items:[
-          {id:'ssnap_inv', label:'Inventory Organizations',   ep:ORACLE_EP.inventoryOrgs,     params:'limit=100'},
-          {id:'ssnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,         params:'limit=200'},
-          {id:'ssnap_uom', label:'Units of Measure',          ep:ORACLE_EP.uom,               params:''},
-          {id:'ssnap_car', label:'Shipping Carriers',         ep:ORACLE_EP.shippingCarriers,  params:''},
+          {id:'ssnap_inv', label:'Inventory Organizations',    ep:ORACLE_EP.inventoryOrgs,      params:'limit=100'}, /* ✅ */
+          {id:'ssnap_loc', label:'Locations',                  ep:ORACLE_EP.locations,          params:'limit=200'}, /* ✅ */
+          {id:'ssnap_bu',  label:'Business Units (LOV)',       ep:ORACLE_EP.businessUnitsLOV,   params:'limit=200'}, /* ✅ LOV */
         ]
       },
       {
         label:'Cost Management',
         items:[
-          {id:'ssnap_co',  label:'Cost Organizations',        ep:ORACLE_EP.costOrganizations, params:'limit=50'},
-          {id:'ssnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
+          {id:'ssnap_co',  label:'Cost Organizations',         ep:ORACLE_EP.costOrganizations,  params:'limit=50'},  /* ✅ */
+        ]
+      },
+      {
+        label:'Procurement',
+        items:[
+          {id:'ssnap_sup', label:'Suppliers',                  ep:ORACLE_EP.suppliers,          params:'limit=300'}, /* ✅ */
+          {id:'ssnap_po',  label:'Purchase Orders',            ep:ORACLE_EP.purchaseOrders,     params:'limit=200'}, /* ✅ */
         ]
       }
     ]
@@ -5530,31 +5538,21 @@ var CONFIG_SNAPSHOT = {
     label:'ERP Financials Config Snapshot', icon:'💰', color:'#4dabf7',
     groups:[
       {
-        label:'General Ledger Setup',
+        label:'Accounts Payable / Receivable',
         items:[
-          {id:'fsnap_led', label:'Ledgers',                   ep:ORACLE_EP.ledgers,           params:'limit=50'},
-          {id:'fsnap_cal', label:'Accounting Calendars',      ep:ORACLE_EP.acctCalendars,     params:'limit=50'},
-          {id:'fsnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,        params:'limit=200'},
-          {id:'fsnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
-          {id:'fsnap_le',  label:'Legal Entities',            ep:ORACLE_EP.legalEntities,     params:''},
+          {id:'fsnap_inv', label:'AP Invoices',                ep:ORACLE_EP.invoices,           params:'limit=100'}, /* ✅ */
+          {id:'fsnap_cre', label:'AR Transactions',            ep:ORACLE_EP.creditMemos,        params:'limit=100'}, /* ✅ */
+          {id:'fsnap_sup', label:'Suppliers',                  ep:ORACLE_EP.suppliers,          params:'limit=200'}, /* ✅ */
         ]
       },
       {
-        label:'Banking Setup',
+        label:'Enterprise Reference',
         items:[
-          {id:'fsnap_bnk', label:'Banks',                     ep:ORACLE_EP.banks,             params:'limit=100'},
-          {id:'fsnap_bba', label:'Bank Branches',             ep:ORACLE_EP.bankBranches,      params:'limit=100'},
-          {id:'fsnap_bac', label:'Bank Accounts',             ep:ORACLE_EP.bankAccounts,      params:'limit=100'},
-        ]
-      },
-      {
-        label:'Fixed Assets',
-        items:[
-          {id:'fsnap_ab',  label:'Asset Books',               ep:ORACLE_EP.assetBooks,        params:'limit=50'},
-          {id:'fsnap_ac',  label:'Asset Categories',          ep:ORACLE_EP.assetCategories,   params:'limit=100'},
-          {id:'fsnap_dm',  label:'Depreciation Methods',      ep:ORACLE_EP.depreciationMethods,params:'limit=100'},
+          {id:'fsnap_bu',  label:'Business Units (LOV)',       ep:ORACLE_EP.businessUnitsLOV,   params:'limit=200'}, /* ✅ LOV */
+          {id:'fsnap_inv2',label:'Inventory Organizations',    ep:ORACLE_EP.inventoryOrgs,      params:'limit=100'}, /* ✅ */
         ]
       }
+      /* NOTE: Ledgers, Banks, Asset Books, Currencies require Financial App Administrator */
     ]
   },
   cx: {
@@ -5563,16 +5561,16 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Enterprise Setup',
         items:[
-          {id:'csnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
-          {id:'csnap_loc', label:'Locations',                 ep:ORACLE_EP.locations,         params:'limit=200'},
-          {id:'csnap_cur', label:'Currencies',                ep:ORACLE_EP.currencies,        params:'limit=200'},
+          {id:'csnap_bu',  label:'Business Units (LOV)',       ep:ORACLE_EP.businessUnitsLOV,   params:'limit=200'}, /* ✅ LOV */
+          {id:'csnap_loc', label:'Locations',                  ep:ORACLE_EP.locations,          params:'limit=200'}, /* ✅ */
+          {id:'csnap_acc', label:'CRM Accounts',               ep:ORACLE_EP.accounts,           params:'limit=200'}, /* ✅ */
         ]
       },
       {
         label:'Sales Config (ICM)',
         items:[
-          {id:'csnap_pln', label:'Compensation Plans',        ep:ORACLE_EP.compPlans,         params:'limit=100'},
-          {id:'csnap_rol', label:'Compensation Roles',        ep:ORACLE_EP.icmRoles,          params:'limit=100'},
+          {id:'csnap_rol', label:'Compensation Roles',         ep:ORACLE_EP.icmRoles,           params:'limit=100'}, /* ✅ */
+          /* compPlans/participants/earnings: ❌ need Incentive Compensation Analyst role */
         ]
       },
       {
@@ -5590,9 +5588,9 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Plan Architecture',
         items:[
-          {id:'isnap_pln', label:'Compensation Plans',        ep:ORACLE_EP.compPlans,         params:'limit=100'},
-          {id:'isnap_rol', label:'ICM Roles',                 ep:ORACLE_EP.icmRoles,          params:'limit=100'},
-          {id:'isnap_bu',  label:'Business Units',            ep:ORACLE_EP.businessUnits,     params:''},
+          {id:'isnap_rol', label:'ICM Roles',                  ep:ORACLE_EP.icmRoles,          params:'limit=100'}, /* ✅ */
+          {id:'isnap_bu',  label:'Business Units (LOV)',        ep:ORACLE_EP.businessUnitsLOV,  params:'limit=200'}, /* ✅ LOV */
+          /* compPlans/participants/earnings: ❌ need Incentive Compensation Analyst role */
         ]
       }
     ]
@@ -6343,8 +6341,9 @@ cfgRunAudit=function(){
 /* Oracle Fusion role required per endpoint */
 var ENDPOINT_ROLES = {
   /* Enterprise / Common — primary paths */
-  '/fscmRestApi/resources/latest/businessUnits':                  {role:'Financial Application Administrator', module:'Enterprise (FSCM)'},
-  '/fscmRestApi/resources/latest/legalEntities':                  {role:'Application Implementation Consultant', module:'Enterprise (FSCM)'},
+  '/fscmRestApi/resources/latest/businessUnits':                  {role:'Financial Application Administrator (Active, not just Assignable)', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/businessUnitsLOV':               {role:'Any authenticated Oracle user', module:'Enterprise'},
+  '/fscmRestApi/resources/latest/legalEntities':                  {role:'Application Implementation Consultant', module:'Enterprise'},
   '/fscmRestApi/resources/latest/legalEntities':                  {role:'Application Implementation Consultant', module:'Enterprise'},
   '/fscmRestApi/resources/latest/legalEntitiesForProcurement':    {role:'SCM_IMPL / Procurement Application Administrator', module:'Enterprise'},
   '/fscmRestApi/resources/latest/currencies':                     {role:'Financial Application Administrator', module:'Enterprise'},
