@@ -715,13 +715,19 @@ const MODS = {
    ICM REST ENDPOINT MAP
 ═══════════════════════════════════════ */
 const ICM_EP = {
-  compPlans:     "/cxRestApi/resources/latest/incentiveCompensationPlans",
-  participants:  "/cxRestApi/resources/latest/incentiveCompensationParticipants",
-  roles:         "/fscmRestApi/resources/latest/incentiveCompensationRoles",
-  earnings:      "/cxRestApi/resources/latest/incentiveCompensationEarnings",
-  workers:       "/hcmRestApi/resources/latest/workers",
-  invoices:      "/fscmRestApi/resources/latest/invoices",
-  buQuery:       "/fscmRestApi/resources/latest/businessUnitsLOV",  /* LOV: accessible without Financial App Admin */
+  /* ICM — all fscmRestApi, confirmed in ICM-Optimizer E2E (MicroPlan AI) flow */
+  compPlans:       "/fscmRestApi/resources/latest/incentiveCompensationPlans",
+  participants:    "/fscmRestApi/resources/latest/incentiveCompensationParticipants",
+  roles:           "/fscmRestApi/resources/latest/incentiveCompensationRoles",
+  earnings:        "/fscmRestApi/resources/latest/incentiveCompensationEarnings",
+  payGroups:       "/fscmRestApi/resources/latest/incentiveCompensationPayGroups",
+  perfMeasures:    "/fscmRestApi/resources/latest/incentiveCompensationPerformanceMeasures",
+  expressions:     "/fscmRestApi/resources/latest/incentiveCompensationExpressions",
+  ruleHierarchies: "/fscmRestApi/resources/latest/incentiveCompensationRuleHierarchies",
+  icmTransactions: "/fscmRestApi/resources/latest/incentiveCompensationTransactions",
+  workers:         "/hcmRestApi/resources/latest/workers",
+  invoices:        "/fscmRestApi/resources/latest/invoices",
+  buQuery:         "/fscmRestApi/resources/latest/businessUnitsLOV",
 };
 
 /* ═══════════════════════════════════════
@@ -1020,15 +1026,15 @@ const REST_MAP={
   PO_HEADERS_ALL:"/fscmRestApi/resources/latest/purchaseOrders",
   PER_ALL_PEOPLE_F:"/hcmRestApi/resources/latest/workers",
   // ICM tables → mapped to their Oracle REST equivalents
-  CN_COMP_PLANS_ALL_VL:"/cxRestApi/resources/latest/incentiveCompensationPlans",
-  CN_COMP_PLANS_ALL_B:"/cxRestApi/resources/latest/incentiveCompensationPlans",
-  CN_SRP_COMP_PLANS_ALL:"/cxRestApi/resources/latest/incentiveCompensationPlans",
-  CN_SRP_PARTICIPANTS_ALL:"/cxRestApi/resources/latest/incentiveCompensationParticipants",
-  CN_SRP_PARTICIPANT_HDR_RO_V:"/cxRestApi/resources/latest/incentiveCompensationParticipants",
-  CN_SRP_PARTICIPANT_DETAILS_ALL:"/cxRestApi/resources/latest/incentiveCompensationParticipants",
-  CN_TP_EARNINGS_ALL:"/cxRestApi/resources/latest/incentiveCompensationEarnings",
-  CN_SRP_SUBLEDGER_ALL:"/cxRestApi/resources/latest/incentiveCompensationEarnings",
-  CN_SRP_PER_FORM_METRICS_ALL:"/cxRestApi/resources/latest/incentiveCompensationEarnings",
+  CN_COMP_PLANS_ALL_VL:"/fscmRestApi/resources/latest/incentiveCompensationPlans",
+  CN_COMP_PLANS_ALL_B:"/fscmRestApi/resources/latest/incentiveCompensationPlans",
+  CN_SRP_COMP_PLANS_ALL:"/fscmRestApi/resources/latest/incentiveCompensationPlans",
+  CN_SRP_PARTICIPANTS_ALL:"/fscmRestApi/resources/latest/incentiveCompensationParticipants",
+  CN_SRP_PARTICIPANT_HDR_RO_V:"/fscmRestApi/resources/latest/incentiveCompensationParticipants",
+  CN_SRP_PARTICIPANT_DETAILS_ALL:"/fscmRestApi/resources/latest/incentiveCompensationParticipants",
+  CN_TP_EARNINGS_ALL:"/fscmRestApi/resources/latest/incentiveCompensationEarnings",
+  CN_SRP_SUBLEDGER_ALL:"/fscmRestApi/resources/latest/incentiveCompensationEarnings",
+  CN_SRP_PER_FORM_METRICS_ALL:"/fscmRestApi/resources/latest/incentiveCompensationEarnings",
   FND_BPM_TASK_B:"/fscmRestApi/resources/latest/approvalTasks",
   FND_BPM_TASK_TL:"/fscmRestApi/resources/latest/approvalTasks",
   /* ── CONFIG EXTRACT — Oracle Fusion config table → REST endpoint mappings ── */
@@ -3773,9 +3779,9 @@ function sentRenderOverview(body,color){
      compute:function(d){var op=d.filter(function(i){return(i.Status||'').toUpperCase()==='OPEN';}).length;return{val:dsNum(d.length),sub:op+' open',status:'ok',count:d.length};}},
     {kid:'ov_wkr',name:'HCM Workers',ep:'/hcmRestApi/resources/latest/workers',params:'limit=100',
      compute:function(d){return{val:dsNum(d.length),sub:'workforce',status:'ok',count:d.length};}},
-    {kid:'ov_icp',name:'ICM Participants',ep:'/cxRestApi/resources/latest/incentiveCompensationParticipants',params:'limit=100',
+    {kid:'ov_icp',name:'ICM Participants',ep:'/fscmRestApi/resources/latest/incentiveCompensationParticipants',params:'limit=100',
      compute:function(d){var a=d.filter(function(i){return(i.ParticipantStatus||i.Status||'').toLowerCase()==='active';}).length;return{val:dsNum(a),sub:a+' active / '+d.length+' total',status:a>0?'ok':'warn',count:d.length};}},
-    {kid:'ov_pln',name:'Comp Plans',ep:'/cxRestApi/resources/latest/incentiveCompensationPlans',params:'limit=100',
+    {kid:'ov_pln',name:'Comp Plans',ep:'/fscmRestApi/resources/latest/incentiveCompensationPlans',params:'limit=100',
      compute:function(d){var a=d.filter(function(i){return(i.PlanStatus||i.Status||'').toLowerCase()==='active';}).length;return{val:dsNum(a),sub:'active plans',status:a>0?'ok':'warn',count:a};}}
   ];
 
@@ -3799,7 +3805,7 @@ function sentRenderCIO(body,color){
     {kid:'cio_fscm',name:'FSCM Finance',ep:'/fscmRestApi/resources/latest/invoices'},
     {kid:'cio_hcm', name:'HCM People',  ep:'/hcmRestApi/resources/latest/workers'},
     {kid:'cio_crm', name:'CRM Sales',   ep:'/crmRestApi/resources/latest/accounts'},
-    {kid:'cio_icm', name:'ICM Comp',    ep:'/cxRestApi/resources/latest/incentiveCompensationParticipants'},
+    {kid:'cio_icm', name:'ICM Comp',    ep:'/fscmRestApi/resources/latest/incentiveCompensationParticipants'},
     {kid:'cio_scm', name:'SCM / PO',    ep:'/fscmRestApi/resources/latest/purchaseOrders'}
   ];
   body.innerHTML=dsDash(p,
@@ -3886,12 +3892,18 @@ var CFG_MODS = {
   icm: {
     label:'ICM', color:'#ff6b6b', icon:'🎯',
     items:[
-      {id:'icm_plans',    label:'Compensation Plans',     icon:'📋', ep:ICM_EP.compPlans,   params:'limit=200',
-       desc:'Active and draft comp plans — name, status, effective dates, currency'},
-      {id:'icm_roles',    label:'Compensation Roles',     icon:'🎭', ep:ICM_EP.roles,       params:'limit=100',
+      {id:'icm_plans',    label:'Compensation Plans',     icon:'📋', ep:ICM_EP.compPlans,       params:'limit=200',
+       desc:'Active and draft comp plans — fscmRestApi (confirmed via ICM-Optimizer E2E)'},
+      {id:'icm_roles',    label:'Compensation Roles',     icon:'🎭', ep:ICM_EP.roles,           params:'limit=100',
        desc:'ICM role definitions linked to plans and job grades'},
-      {id:'icm_bus',      label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,     params:'limit=100',
-       desc:'Oracle Fusion Business Units configured for ICM processing'}
+      {id:'icm_pm',       label:'Performance Measures',   icon:'📊', ep:ICM_EP.perfMeasures,    params:'limit=100',
+       desc:'Performance measures — credit categories, date ranges'},
+      {id:'icm_expr',     label:'Expressions',            icon:'🧮', ep:ICM_EP.expressions,     params:'limit=100',
+       desc:'ICM formula expressions used in rate tables and plan elements'},
+      {id:'icm_pg',       label:'Pay Groups',             icon:'💳', ep:ICM_EP.payGroups,       params:'limit=100',
+       desc:'Pay group definitions — frequency, currency, payment calendar'},
+      {id:'icm_bus',      label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,         params:'limit=200',
+       desc:'Oracle Fusion Business Units (LOV — accessible without Financial App Admin)'}
     ]
   },
   fin: {
@@ -5199,7 +5211,7 @@ async function cfgProbeAccess(){
   var KEY_EPS=[
     {key:'businessUnits',  ep:'/fscmRestApi/resources/latest/businessUnits',  label:'Business Units',   role:'Financial Application Administrator'},
     {key:'legalEntities',  ep:'/fscmRestApi/resources/latest/legalEntities',   label:'Legal Entities',   role:'Application Implementation Consultant'},
-    {key:'compPlans',      ep:'/cxRestApi/resources/latest/incentiveCompensationPlans', label:'ICM Comp Plans', role:'Incentive Compensation Analyst'},
+    {key:'compPlans',      ep:'/fscmRestApi/resources/latest/incentiveCompensationPlans', label:'ICM Comp Plans', role:'Incentive Compensation Analyst'},
     {key:'ledgers',        ep:'/fscmRestApi/resources/latest/ledgers',          label:'GL Ledgers',       role:'General Accountant Manager'},
     {key:'inventoryOrgs',  ep:'/fscmRestApi/resources/latest/inventoryOrganizations', label:'Inventory Orgs', role:'Inventory Manager'},
     {key:'workers',        ep:'/hcmRestApi/resources/latest/workers',           label:'Workers',          role:'Human Resources Specialist'},
@@ -5219,36 +5231,38 @@ async function cfgProbeAccess(){
   render('<div style="color:var(--t3);font-size:10px">Step 5/5 — looking up data security policies…</div>');
 
   /* Oracle Fusion knowledge base: DB object → {roles with grant, how to fix} */
+  /* DSP Knowledge Base — exact steps per Oracle DB object
+     Each entry requires BOTH: (1) job role assigned + (2) data access row in Manage Data Access for Users */
   var DSP_KB = {
     'FUN_BUSINESS_UNITS_V': {
       label: 'Business Units',
-      oracleRoles: ['ORA_FUN_BUSINESS_UNIT_ADMINISTRATOR','FUN_FINANCIAL_APPLICATION_ADMINISTRATOR_JOB'],
-      fixPath: 'Setup & Maintenance → Manage Business Unit → Assign Data Access Sets to user/role',
-      note: 'Job role alone is not enough. A Data Access Set must also be assigned that covers Business Units. Go to: Security Console → Users → [user] → Data Access → Add Business Unit access.'
+      oracleRoles: ['ORA_FUN_FINANCIAL_APPLICATION_ADMINISTRATOR_JOB'],
+      fixPath: 'Setup & Maintenance → Manage Data Access for Users',
+      note: 'Add row: User=JOHN.DUNBAR · Role=Financial Application Administrator · Security Context=Business unit · Value=US1 Business Unit (or your BU name). Changes take 5-15 min to propagate — re-run Probe Access after saving.'
     },
     'XLE_ENTITY_PROFILES': {
       label: 'Legal Entities',
-      oracleRoles: ['ORA_XLE_LEGAL_ENTITY_CONFIGURATOR_JOB'],
-      fixPath: 'Setup & Maintenance → Manage Legal Entity → Legal Entity Data Role',
-      note: 'Assign the "Application Implementation Consultant" job role AND a data security policy for XLE_ENTITY_PROFILES covering the required legal entities.'
+      oracleRoles: ['ORA_XLE_LEGAL_ENTITY_CONFIGURATOR_JOB','ORA_ASM_APPLICATION_IMPLEMENTATION_CONSULTANT_JOB'],
+      fixPath: 'Setup & Maintenance → Manage Data Access for Users',
+      note: 'Add row: User=JOHN.DUNBAR · Role=Application Implementation Consultant · Security Context=Legal entity · Value=your legal entity name. Also ensure the job role is assigned in Security Console.'
     },
     'GL_LEDGERS': {
       label: 'GL Ledgers',
-      oracleRoles: ['ORA_GL_GENERAL_ACCOUNTANT_MANAGER_JOB','ORA_GL_FINANCIAL_ANALYST_JOB'],
-      fixPath: 'Setup & Maintenance → Manage Ledger → Assign user to Ledger Data Access Set',
-      note: 'General Accountant Manager role + Ledger Data Access Set assignment required.'
+      oracleRoles: ['ORA_GL_GENERAL_ACCOUNTANT_MANAGER_JOB'],
+      fixPath: 'Setup & Maintenance → Manage Data Access for Users',
+      note: 'Add row: User=JOHN.DUNBAR · Role=General Accountant Manager · Security Context=Ledger · Value=your primary ledger name. Requires General Accountant Manager job role assigned first in Security Console.'
     },
     'FND_CURRENCIES': {
       label: 'Currencies',
       oracleRoles: ['ORA_FUN_FINANCIAL_APPLICATION_ADMINISTRATOR_JOB'],
-      fixPath: 'Setup & Maintenance → Manage Currencies → enable REST access',
-      note: 'Financial Application Administrator role needed. Also check: Setup & Maintenance → Manage Profile Options for REST access.'
+      fixPath: 'Setup & Maintenance → Manage Data Access for Users',
+      note: 'Add row: User=JOHN.DUNBAR · Role=Financial Application Administrator · Security Context=Business unit · Value=US1 Business Unit. Same data access row as Business Units.'
     },
     'CN_COMP_PLANS': {
       label: 'ICM Compensation Plans',
-      oracleRoles: ['ORA_CN_INCENTIVE_COMPENSATION_ANALYST_JOB','ORA_CN_INCENTIVE_COMPENSATION_MANAGER_JOB'],
-      fixPath: 'Security Console → Roles → Incentive Compensation Analyst → assign to user',
-      note: 'Must assign "Incentive Compensation Analyst" job role. Participants and earnings require the same role.'
+      oracleRoles: ['ORA_CN_INCENTIVE_COMPENSATION_ANALYST_JOB'],
+      fixPath: 'Setup & Maintenance → Manage Data Access for Users',
+      note: 'Add row: User=JOHN.DUNBAR · Role=Incentive Compensation Analyst · Security Context=Business unit · Value=US1 Business Unit. ✅ You already created this row — wait 5-15 min then re-run Probe Access.'
     }
   };
 
@@ -5314,9 +5328,10 @@ async function cfgProbeAccess(){
       }).join('')
       +'</div>';
   } else {
-    html+='<div style="background:#fcc41911;border:1px solid #fcc41944;border-radius:6px;padding:12px 14px;font-size:10px;color:#fcc419">'
-      +'⚠ Role list not accessible — userAccounts API requires IT Security Manager or HCM Admin role.<br>'
-      +'<span style="color:var(--t3)">Access inferred from endpoint probe below.</span>'
+    html+='<div style="background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:12px 14px;font-size:10px">'
+      +'<div style="font-weight:700;color:var(--t2);margin-bottom:4px">ℹ Role list API not available for this user</div>'
+      +'<div style="color:var(--t3);line-height:1.7">Reading assigned roles via <code style="font-size:9px;background:var(--b1);padding:1px 4px;border-radius:3px">userAccounts</code> API requires <strong>IT Security Manager</strong> or <strong>HCM Application Administrator</strong> role — John.Dunbar doesn\'t have those.<br>'
+      +'This is normal and does not affect the endpoint probes below.</div>'
       +'</div>';
   }
   html+='</div>';
@@ -5351,7 +5366,7 @@ async function cfgProbeAccess(){
     '/fscmRestApi/resources/latest/legalEntities':  {obj:'XLE_ENTITY_PROFILES',     action:'Select Legal Entities'},
     '/fscmRestApi/resources/latest/ledgers':        {obj:'GL_LEDGERS',              action:'Select Ledgers'},
     '/fscmRestApi/resources/latest/currencies':     {obj:'FND_CURRENCIES',          action:'Select Currencies'},
-    '/cxRestApi/resources/latest/incentiveCompensationPlans': {obj:'CN_COMP_PLANS', action:'View Compensation Plans'},
+    '/fscmRestApi/resources/latest/incentiveCompensationPlans': {obj:'CN_COMP_PLANS', action:'View Compensation Plans'},
   };
 
   /* Roles to request */
@@ -5550,12 +5565,18 @@ var ORACLE_EP = {
   pricingStrategies:   '/fscmRestApi/resources/latest/pricingStrategies',      /* ✅ confirmed */
   /* sourceOrderSystems: accessible to SCM_IMPL / Order Administrator */
   sourceOrderSystems:  '/fscmRestApi/resources/latest/sourceOrderSystems',
-  /* CRM / ICM */
-  accounts:            '/crmRestApi/resources/latest/accounts',
-  compPlans:           '/cxRestApi/resources/latest/incentiveCompensationPlans',
-  participants:        '/cxRestApi/resources/latest/incentiveCompensationParticipants',
-  earnings:            '/cxRestApi/resources/latest/incentiveCompensationEarnings',
-  icmRoles:            '/fscmRestApi/resources/latest/incentiveCompensationRoles',
+  /* CRM */
+  accounts:            '/crmRestApi/resources/latest/accounts',                            /* ✅ */
+  /* ICM — all fscmRestApi, confirmed via ICM-Optimizer E2E (MicroPlan AI) */
+  compPlans:           '/fscmRestApi/resources/latest/incentiveCompensationPlans',          /* ✅ fscmRestApi */
+  participants:        '/fscmRestApi/resources/latest/incentiveCompensationParticipants',   /* ✅ fscmRestApi */
+  earnings:            '/fscmRestApi/resources/latest/incentiveCompensationEarnings',       /* ✅ fscmRestApi */
+  icmRoles:            '/fscmRestApi/resources/latest/incentiveCompensationRoles',          /* ✅ */
+  payGroups:           '/fscmRestApi/resources/latest/incentiveCompensationPayGroups',      /* ✅ fscmRestApi */
+  perfMeasures:        '/fscmRestApi/resources/latest/incentiveCompensationPerformanceMeasures', /* ✅ */
+  expressions:         '/fscmRestApi/resources/latest/incentiveCompensationExpressions',    /* ✅ */
+  ruleHierarchies:     '/fscmRestApi/resources/latest/incentiveCompensationRuleHierarchies',/* ✅ */
+  icmTransactions:     '/fscmRestApi/resources/latest/incentiveCompensationTransactions',   /* ✅ */
   /* GL */
   glJournals:          '/fscmRestApi/resources/latest/generalLedgerJournals',
 };
@@ -5703,9 +5724,24 @@ var CONFIG_SNAPSHOT = {
       {
         label:'Plan Architecture',
         items:[
+          {id:'isnap_pln', label:'Compensation Plans',         ep:ORACLE_EP.compPlans,         params:'limit=100'}, /* fscmRestApi ✅ */
           {id:'isnap_rol', label:'ICM Roles',                  ep:ORACLE_EP.icmRoles,          params:'limit=100'}, /* ✅ */
-          {id:'isnap_bu',  label:'Business Units (LOV)',        ep:ORACLE_EP.businessUnitsLOV,  params:'limit=200'}, /* ✅ LOV */
-          /* compPlans/participants/earnings: ❌ need Incentive Compensation Analyst role */
+          {id:'isnap_pm',  label:'Performance Measures',       ep:ORACLE_EP.perfMeasures,      params:'limit=100'}, /* fscmRestApi ✅ */
+          {id:'isnap_exp', label:'Expressions',                ep:ORACLE_EP.expressions,       params:'limit=100'}, /* fscmRestApi ✅ */
+          {id:'isnap_bu',  label:'Business Units (LOV)',        ep:ORACLE_EP.businessUnitsLOV,  params:'limit=200'}, /* ✅ */
+        ]
+      },
+      {
+        label:'Participants & Pay',
+        items:[
+          {id:'isnap_par', label:'Participants',               ep:ORACLE_EP.participants,      params:'limit=200'}, /* fscmRestApi ✅ */
+          {id:'isnap_pg',  label:'Pay Groups',                 ep:ORACLE_EP.payGroups,         params:'limit=100'}, /* fscmRestApi ✅ */
+        ]
+      },
+      {
+        label:'Rules & Credit',
+        items:[
+          {id:'isnap_rh',  label:'Rule Hierarchies',           ep:ORACLE_EP.ruleHierarchies,   params:'limit=100'}, /* fscmRestApi ✅ */
         ]
       }
     ]
@@ -5968,11 +6004,11 @@ var BRIEF_PERSONAS = [
       'Quota attainment flash — who is behind?'
     ],
     kpis:[
-      {label:'Active Participants', ep:'/cxRestApi/resources/latest/incentiveCompensationParticipants', params:'limit=100',
+      {label:'Active Participants', ep:'/fscmRestApi/resources/latest/incentiveCompensationParticipants', params:'limit=100',
        extract:function(d){var a=d.filter(function(i){return(i.ParticipantStatus||i.Status||'').toLowerCase()==='active';}).length;return{val:a,sub:'of '+d.length+' enrolled',status:a>0?'ok':'warn'};}},
-      {label:'Active Comp Plans',   ep:'/cxRestApi/resources/latest/incentiveCompensationPlans', params:'limit=100',
+      {label:'Active Comp Plans',   ep:'/fscmRestApi/resources/latest/incentiveCompensationPlans', params:'limit=100',
        extract:function(d){var a=d.filter(function(i){return(i.PlanStatus||i.Status||'').toLowerCase()==='active';});return{val:a.length,sub:a.slice(0,2).map(function(p){return p.PlanName||p.planName||'';}).join(', ').substring(0,40),status:a.length>0?'ok':'warn'};}},
-      {label:'Earnings Records',    ep:'/cxRestApi/resources/latest/incentiveCompensationEarnings', params:'limit=100',
+      {label:'Earnings Records',    ep:'/fscmRestApi/resources/latest/incentiveCompensationEarnings', params:'limit=100',
        extract:function(d){var t=d.reduce(function(s,i){return s+(parseFloat(i.EarnedIncentive||i.earnedIncentive||0));},0);return{val:d.length,sub:'$'+(t/1e6).toFixed(2)+'M total earned',status:d.length>0?'ok':''};}},
       {label:'Business Units',      ep:'/fscmRestApi/resources/latest/businessUnits', params:'limit=100',
        extract:function(d){return{val:d.length,sub:d.slice(0,2).map(function(b){return b.BusinessUnitName||b.businessUnitName||'';}).join(', ').substring(0,40),status:'ok'};}}
@@ -6054,7 +6090,7 @@ var BRIEF_PERSONAS = [
     kpis:[
       {label:'Active Workers',     ep:'/hcmRestApi/resources/latest/workers', params:'limit=100',
        extract:function(d){var emp=d.filter(function(i){return(i.WorkerType||'').toLowerCase().indexOf('emp')>=0;}).length||d.length;return{val:d.length,sub:emp+' employees',status:'ok'};}},
-      {label:'ICM Participants',   ep:'/cxRestApi/resources/latest/incentiveCompensationParticipants', params:'limit=100',
+      {label:'ICM Participants',   ep:'/fscmRestApi/resources/latest/incentiveCompensationParticipants', params:'limit=100',
        extract:function(d){var a=d.filter(function(i){return(i.ParticipantStatus||i.Status||'').toLowerCase()==='active';}).length;return{val:a,sub:'active in comp plans',status:a>0?'ok':'warn'};}},
       {label:'Comp Roles Defined', ep:'/fscmRestApi/resources/latest/incentiveCompensationRoles', params:'limit=100',
        extract:function(d){return{val:d.length,sub:'ICM roles',status:d.length>0?'ok':'warn'};}},
@@ -6502,10 +6538,16 @@ var ENDPOINT_ROLES = {
   /* CRM */
   '/crmRestApi/resources/latest/accounts':                        {role:'Sales Administrator', module:'CX Sales'},
   /* ICM */
-  '/cxRestApi/resources/latest/incentiveCompensationPlans':       {role:'Incentive Compensation Analyst', module:'ICM'},
-  '/cxRestApi/resources/latest/incentiveCompensationParticipants':{role:'Incentive Compensation Analyst', module:'ICM'},
-  '/cxRestApi/resources/latest/incentiveCompensationEarnings':    {role:'Incentive Compensation Analyst', module:'ICM'},
-  '/fscmRestApi/resources/latest/incentiveCompensationRoles':     {role:'Incentive Compensation Administrator', module:'ICM'},
+  /* ICM — fscmRestApi paths (confirmed working via ICM-Optimizer E2E) */
+  '/fscmRestApi/resources/latest/incentiveCompensationPlans':              {role:'Incentive Compensation Analyst', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationParticipants':       {role:'Incentive Compensation Analyst', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationEarnings':           {role:'Incentive Compensation Analyst', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationRoles':              {role:'Incentive Compensation Administrator', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationPayGroups':          {role:'Incentive Compensation Analyst', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationPerformanceMeasures':{role:'Incentive Compensation Analyst', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationExpressions':        {role:'Incentive Compensation Analyst', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationRuleHierarchies':    {role:'Incentive Compensation Manager', module:'ICM'},
+  '/fscmRestApi/resources/latest/incentiveCompensationTransactions':       {role:'Incentive Compensation Analyst', module:'ICM'},
 };
 
 /* Snapshot result tracker — populated by cfgRunSnapshot */
