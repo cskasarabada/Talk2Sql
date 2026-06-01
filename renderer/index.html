@@ -622,7 +622,8 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
       <div class="ct"    data-m="icm"  onclick="cfgSetMod('icm')">🎯 ICM</div>
     </div>
     <div style="display:flex;gap:5px;padding:0 10px;align-items:center">
-      <button class="btn b-ghost"  id="btnProbeEps"  onclick="cfgProbeEndpoints()" style="font-size:10px">🛰 Probe URLs</button>
+      <button class="btn b-ghost"  id="btnProbeEps"   onclick="cfgProbeEndpoints()"  style="font-size:10px">🛰 Probe URLs</button>
+      <button class="btn b-ghost"  id="btnProbeAccess" onclick="cfgProbeAccess()"   style="font-size:10px">🔑 Probe Access</button>
       <button class="btn b-blue"  id="btnCfgAudit"   onclick="cfgRunAudit()"    style="font-size:10px">🔍 Audit Module</button>
       <button class="btn b-blue"  id="btnCfgExtract" onclick="cfgExtract()"     style="font-size:10px">⚡ Extract</button>
       <button class="btn b-out"   id="btnCfgXls"     onclick="cfgExportXls()"   style="font-size:10px" disabled>↓ Excel</button>
@@ -5112,6 +5113,208 @@ async function cfgProbeEndpoints(){
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   ACCESS PROBE — queries Oracle identity APIs to show the
+   connected user's assigned roles, duties, and data access
+   ══════════════════════════════════════════════════════════════ */
+async function cfgProbeAccess(){
+  if(!ST.conn||!ST.url){openModal('connModal');return;}
+  var hd=document.getElementById('cfg-result-hd');
+  var body=document.getElementById('cfg-result-body');
+  var base=ST.url.replace(/\/$/,'');
+  var creds=btoa(ST.user+':'+ST.pass);
+  var hdrs={'Authorization':'Basic '+creds,'Accept':'application/json'};
+  var username=ST.user;
+
+  if(hd){
+    hd.style.display='flex';
+    hd.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+      +'<span class="ds-spin" style="width:12px;height:12px;border-width:2px"></span>'
+      +'<span style="font-size:12px;font-weight:800;color:var(--t1)">🔑 Probing access for <span style="color:var(--a1)">'+username+'</span>…</span>'
+      +'</div>';
+  }
+  if(body) body.innerHTML='<div style="flex:1;overflow:auto;min-height:0;padding:16px"><div id="access-probe-content"></div></div>';
+
+  var out=document.getElementById('access-probe-content');
+  function render(html){ if(out) out.innerHTML=html; }
+
+  /* ── helper: fetch with timeout ── */
+  async function apiFetch(url){
+    try{
+      var r=await fetch(url,{headers:hdrs,signal:AbortSignal.timeout(8000)});
+      if(!r.ok) return {_status:r.status};
+      return await r.json();
+    }catch(e){ return {_error:e.message}; }
+  }
+
+  /* ── Step 1: Worker identity ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 1/4 — fetching worker identity…</div>');
+  var workerData=null, personId=null, displayName=username;
+  /* Try to find the worker record by username */
+  var wRes=await apiFetch(base+'/hcmRestApi/resources/latest/workers?q=PersonNumber='+encodeURIComponent(username)+'&fields=PersonId,PersonNumber,DisplayName,PrimaryPhoneNumber&limit=1');
+  if(!wRes._status&&!wRes._error&&wRes.items&&wRes.items.length){
+    workerData=wRes.items[0];
+    personId=workerData.PersonId;
+    displayName=workerData.DisplayName||username;
+  }
+  /* Fallback: search by first name from username (John.Dunbar → John) */
+  if(!workerData && username.indexOf('.')>0){
+    var parts=username.split('.');
+    var fn=parts[0],ln=parts[1];
+    var wRes2=await apiFetch(base+'/hcmRestApi/resources/latest/workers?q=FirstName='+fn+';LastName='+ln+'&fields=PersonId,PersonNumber,DisplayName&limit=1');
+    if(!wRes2._status&&!wRes2._error&&wRes2.items&&wRes2.items.length){
+      workerData=wRes2.items[0];
+      personId=workerData.PersonId;
+      displayName=workerData.DisplayName||username;
+    }
+  }
+
+  /* ── Step 2: User account + roles via HCM userAccounts ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 2/4 — fetching user account roles…</div>');
+  var accountRoles=[], accountGUID=null;
+  var uaRes=await apiFetch(base+'/hcmRestApi/resources/latest/userAccounts?q=Username='+encodeURIComponent(username)+'&fields=GUID,Username,PersonId&limit=1');
+  if(!uaRes._status&&!uaRes._error&&uaRes.items&&uaRes.items.length){
+    accountGUID=uaRes.items[0].GUID||uaRes.items[0].guid;
+    if(accountGUID){
+      var rolesRes=await apiFetch(base+'/hcmRestApi/resources/latest/userAccounts/'+accountGUID+'/userAccountRoles?limit=200');
+      if(!rolesRes._status&&!rolesRes._error&&rolesRes.items){
+        accountRoles=rolesRes.items;
+      }
+    }
+  }
+
+  /* ── Step 3: SCIM user lookup ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 3/4 — checking SCIM identity…</div>');
+  var scimUser=null, scimGroups=[];
+  var scimRes=await apiFetch(base+'/hcmRestApi/resources/latest/scim/v2/Users?filter=userName+eq+"'+username+'"');
+  if(!scimRes._status&&!scimRes._error&&scimRes.Resources&&scimRes.Resources.length){
+    scimUser=scimRes.Resources[0];
+    scimGroups=(scimUser.groups||[]);
+  }
+
+  /* ── Step 4: quick endpoint access check (10 key endpoints) ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 4/4 — checking endpoint access…</div>');
+  var KEY_EPS=[
+    {key:'businessUnits',  ep:'/fscmRestApi/resources/latest/businessUnits',  label:'Business Units',   role:'Financial Application Administrator'},
+    {key:'legalEntities',  ep:'/fscmRestApi/resources/latest/legalEntities',   label:'Legal Entities',   role:'Application Implementation Consultant'},
+    {key:'compPlans',      ep:'/cxRestApi/resources/latest/incentiveCompensationPlans', label:'ICM Comp Plans', role:'Incentive Compensation Analyst'},
+    {key:'ledgers',        ep:'/fscmRestApi/resources/latest/ledgers',          label:'GL Ledgers',       role:'General Accountant Manager'},
+    {key:'inventoryOrgs',  ep:'/fscmRestApi/resources/latest/inventoryOrganizations', label:'Inventory Orgs', role:'Inventory Manager'},
+    {key:'workers',        ep:'/hcmRestApi/resources/latest/workers',           label:'Workers',          role:'Human Resources Specialist'},
+    {key:'suppliers',      ep:'/fscmRestApi/resources/latest/suppliers',        label:'Suppliers',        role:'Procurement Manager'},
+    {key:'priceLists',     ep:'/fscmRestApi/resources/latest/priceLists',       label:'Price Lists',      role:'Pricing Manager'},
+    {key:'accounts',       ep:'/crmRestApi/resources/latest/accounts',          label:'CRM Accounts',     role:'Sales Administrator'},
+    {key:'icmRoles',       ep:'/fscmRestApi/resources/latest/incentiveCompensationRoles', label:'ICM Roles', role:'Incentive Compensation Administrator'},
+  ];
+  var epResults=await Promise.all(KEY_EPS.map(async function(e){
+    try{
+      var r=await fetch(base+e.ep+'?limit=1',{headers:hdrs,signal:AbortSignal.timeout(6000)});
+      return Object.assign({},e,{ok:r.ok,status:r.status});
+    }catch(ex){return Object.assign({},e,{ok:false,status:0});}
+  }));
+
+  /* ── Render final report ── */
+  var hasRoles=accountRoles.length>0;
+  var hasScim=scimUser!=null;
+
+  var html='';
+
+  /* User identity card */
+  html+='<div style="background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:16px;margin-bottom:16px;display:flex;gap:16px;align-items:center">'
+    +'<div style="font-size:36px">👤</div>'
+    +'<div>'
+    +'<div style="font-size:15px;font-weight:800;color:var(--t1)">'+displayName+'</div>'
+    +'<div style="font-size:11px;color:var(--t3);font-family:var(--mono);margin-top:2px">'+username+'</div>'
+    +(personId?'<div style="font-size:9px;color:var(--t3);margin-top:2px">Person ID: '+personId+'</div>':'')
+    +(accountGUID?'<div style="font-size:9px;color:var(--t3)">Account GUID: '+accountGUID+'</div>':'')
+    +'<div style="font-size:9px;color:var(--t3);margin-top:4px">Instance: '+base.replace('https://','')+'</div>'
+    +'</div>'
+    +'</div>';
+
+  /* Oracle Roles panel */
+  html+='<div style="margin-bottom:16px">'
+    +'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--b1)">Oracle Assigned Roles</div>';
+  if(hasRoles){
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px">'
+      +accountRoles.map(function(r){
+        var rn=r.RoleName||r.roleName||r.Role||r.role||JSON.stringify(r);
+        var rc=r.RoleCode||r.roleCode||'';
+        var rm=r.RoleCategory||r.roleCategory||'';
+        return'<div style="background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:8px 12px">'
+          +'<div style="font-size:10px;font-weight:700;color:var(--t1)">'+rn+'</div>'
+          +(rc?'<div style="font-size:8px;color:var(--t3);font-family:var(--mono)">'+rc+'</div>':'')
+          +(rm?'<div style="font-size:8px;color:var(--t3)">'+rm+'</div>':'')
+          +'</div>';
+      }).join('')
+      +'</div>';
+  } else if(scimGroups.length){
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px">'
+      +scimGroups.map(function(g){
+        return'<div style="background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:8px 12px">'
+          +'<div style="font-size:10px;font-weight:700;color:var(--t1)">'+(g.display||g.value||JSON.stringify(g))+'</div>'
+          +'<div style="font-size:8px;color:var(--t3)">SCIM Group</div></div>';
+      }).join('')
+      +'</div>';
+  } else {
+    html+='<div style="background:#fcc41911;border:1px solid #fcc41944;border-radius:6px;padding:12px 14px;font-size:10px;color:#fcc419">'
+      +'⚠ Role list not accessible — userAccounts API requires IT Security Manager or HCM Admin role.<br>'
+      +'<span style="color:var(--t3)">Access inferred from endpoint probe below.</span>'
+      +'</div>';
+  }
+  html+='</div>';
+
+  /* Endpoint access summary */
+  html+='<div style="margin-bottom:16px">'
+    +'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--b1)">Key Endpoint Access (10 probes)</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr>'
+    +'<th style="text-align:left;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">MODULE</th>'
+    +'<th style="text-align:left;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">ENDPOINT</th>'
+    +'<th style="text-align:center;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">ACCESS</th>'
+    +'<th style="text-align:left;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">ROLE NEEDED</th>'
+    +'</tr></thead><tbody>'
+    +epResults.map(function(e){
+      var ok=e.ok, sc=e.status;
+      var si=ok?'✅':sc===401||sc===403?'🔒':'🔍';
+      var cl=ok?'#51cf66':sc===401||sc===403?'#fcc419':'#ff8c42';
+      var st=ok?'Accessible':sc===401||sc===403?'Restricted':'Role required ('+sc+')';
+      return'<tr style="border-bottom:1px solid var(--b1)22">'
+        +'<td style="padding:5px 8px;font-weight:700;color:var(--t1)">'+e.label+'</td>'
+        +'<td style="padding:5px 8px;font-family:var(--mono);font-size:9px;color:var(--t3)">'+e.ep+'</td>'
+        +'<td style="padding:5px 8px;text-align:center;font-weight:700;color:'+cl+'">'+si+' '+st+'</td>'
+        +'<td style="padding:5px 8px;font-size:9px;color:var(--t3)">'+e.role+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table></div>';
+
+  /* Roles to request */
+  var missing=epResults.filter(function(e){return!e.ok;});
+  if(missing.length){
+    html+='<div style="background:#ff6b6b11;border:1px solid #ff6b6b33;border-radius:8px;padding:14px">'
+      +'<div style="font-size:11px;font-weight:800;color:var(--t1);margin-bottom:8px">📋 Roles to Request from Oracle Admin</div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px">'
+      +[...new Set(missing.map(function(e){return e.role;}))].map(function(r){
+        return'<div style="font-size:10px;color:var(--t2);padding:4px 0;border-bottom:1px solid var(--b1)22">• '+r+'</div>';
+      }).join('')
+      +'</div>'
+      +'<div style="font-size:9px;color:var(--t3);margin-top:8px">Ask your Oracle Fusion administrator to assign these Oracle Fusion Application roles/duty roles via: Setup & Maintenance → Manage Roles → User Role Assignment</div>'
+      +'</div>';
+  }
+
+  render(html);
+
+  /* Update header */
+  if(hd){
+    var accessible=epResults.filter(function(e){return e.ok;}).length;
+    hd.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:12px;font-weight:800;color:var(--t1)">🔑 Access Report — '+displayName+'</span>'
+      +(hasRoles?'<span style="font-size:9px;background:#51cf6622;color:#51cf66;padding:2px 8px;border-radius:8px">'+accountRoles.length+' roles found</span>'
+        :'<span style="font-size:9px;background:#fcc41922;color:#fcc419;padding:2px 8px;border-radius:8px">Role API restricted</span>')
+      +'<span style="font-size:9px;background:var(--b1);padding:2px 8px;border-radius:8px;color:var(--t3)">'+accessible+'/10 endpoints accessible</span>'
+      +'</div>'
+      +'<button class="btn b-ghost" onclick="cfgSetMod(cfgMod)" style="font-size:10px">← Back</button>';
+  }
+}
+
 /* ── AUDIT VIEW — shows full taxonomy with health status ── */
 function cfgRunAudit(){
   var mod=CFG_TAXONOMY[cfgMod];
@@ -5201,7 +5404,7 @@ var ORACLE_EP = {
   uom:                 '/fscmRestApi/resources/latest/unitOfMeasures',
   /* HCM — confirmed working */
   workers:             '/hcmRestApi/resources/latest/workers',                 /* ✅ confirmed */
-  departments:         '/hcmRestApi/resources/latest/organizationDepartments',
+  departments:         '/hcmRestApi/resources/latest/departments',
   jobs:                '/hcmRestApi/resources/latest/jobs',
   grades:              '/hcmRestApi/resources/latest/grades',
   positions:           '/hcmRestApi/resources/latest/positions',
@@ -5463,9 +5666,10 @@ async function cfgRunSnapshot(){
         +'<div style="font-size:8px;color:var(--t3);margin-top:2px">Role needed — see Roles Report</div>';
     } else if(err==='__not_found__'){
       failed++;
+      var roleInfo2=ENDPOINT_ROLES[item.ep]||{role:'Application Administrator'};
       card.innerHTML='<div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:3px">'+item.label+'</div>'
-        +'<div style="font-size:9px;color:#ff8c42">🔍 Endpoint not found (404)</div>'
-        +'<div style="font-size:8px;color:var(--t3);margin-top:2px">Path may differ in this Fusion version</div>';
+        +'<div style="font-size:9px;color:#ff8c42">🔍 Role required (404)</div>'
+        +'<div style="font-size:8px;color:var(--t3);margin-top:2px">Needs: <span style="color:#fcc419">'+roleInfo2.role+'</span></div>';
     } else if(err||!data){
       failed++;
       card.innerHTML='<div style="font-size:10px;font-weight:700;color:var(--t2);margin-bottom:3px">'+item.label+'</div>'
@@ -6151,7 +6355,7 @@ var ENDPOINT_ROLES = {
   /* HCM */
   '/hcmRestApi/resources/latest/workers':                         {role:'Human Resources Specialist', module:'HCM'},
   '/hcmRestApi/resources/latest/departments':                     {role:'Human Resources Specialist', module:'HCM'},
-  '/hcmRestApi/resources/latest/organizationDepartments':         {role:'Human Resources Specialist', module:'HCM'},
+  '/hcmRestApi/resources/latest/departments':         {role:'Human Resources Specialist', module:'HCM'},
   '/hcmRestApi/resources/latest/jobs':                            {role:'Human Resources Specialist', module:'HCM'},
   '/hcmRestApi/resources/latest/grades':                          {role:'Human Resources Specialist', module:'HCM'},
   '/hcmRestApi/resources/latest/positions':                       {role:'Human Resources Specialist', module:'HCM'},
@@ -6168,7 +6372,8 @@ var ENDPOINT_ROLES = {
   /* AP/AR */
   '/fscmRestApi/resources/latest/invoices':                       {role:'Accounts Payable Manager', module:'AP'},
   '/fscmRestApi/resources/latest/receivablesCreditMemos':         {role:'Accounts Receivable Manager', module:'AR'},
-  '/fscmRestApi/resources/latest/approvalTasks':                  {role:'Any workflow participant role', module:'Workflow'},
+  '/fscmRestApi/resources/latest/approvalTasks':                  {role:'FND_MANAGE_APPROVAL_TASKS / workflow participant', module:'Workflow'},
+  '/fscmRestApi/resources/latest/generalLedgerJournals':          {role:'General Ledger Manager / Journal Entry User', module:'Finance GL'},
   /* SCM */
   '/fscmRestApi/resources/latest/suppliers':                      {role:'Procurement Manager', module:'SCM Procurement'},
   '/fscmRestApi/resources/latest/purchaseOrders':                 {role:'Buyer', module:'SCM Procurement'},
