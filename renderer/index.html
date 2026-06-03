@@ -954,7 +954,8 @@ function clearEd(){document.getElementById("sqled").value="";updateLines();}
 /* True only when a real Anthropic key is present — rejects empty, the seed placeholder, and obvious non-keys */
 function aiKeyOK(){
   var k=(ST.apiKey||'').trim();
-  return !!k && k.indexOf('YOUR_')!==0 && k!=='YOUR_ANTHROPIC_API_KEY' && /^sk-ant-/.test(k);
+  /* accept any reasonably-long real key; only reject empty + the seed placeholder */
+  return !!k && k.indexOf('YOUR_')!==0 && k!=='YOUR_ANTHROPIC_API_KEY' && k.length>=20;
 }
 async function callAI(prompt,maxT,sys){
   return new Promise((resolve,reject)=>{
@@ -984,7 +985,12 @@ async function callAI(prompt,maxT,sys){
 async function genSQL(){
   var prompt=document.getElementById("nlpInp").value.trim();
   if(!prompt){toast("Type a description first","wa");return;}
-  if(!aiKeyOK()){toast("Add a valid Anthropic API key (sk-ant-…) in Connection settings","er");openModal("connModal");return;}
+  if(!aiKeyOK()){
+    toast("Generate SQL uses Claude — paste your Anthropic key (sk-ant-…) to enable it","wa");
+    openModal("connModal");
+    setTimeout(function(){var f=document.getElementById('fApiKey');if(f){f.focus();f.style.boxShadow='0 0 0 2px var(--a1)';f.placeholder='Paste your sk-ant-… key here to enable AI';setTimeout(function(){f.style.boxShadow='';},2600);}},140);
+    return;
+  }
   var sp=document.getElementById("nlpSpin");sp.classList.add("go");
   var mod=MODS[ST.mod];
   var ctx=mod.tables.map(tn=>{var t=SCH[tn];return tn+"("+(t?t.cols.slice(0,6).map(c=>c.n).join(","):"")+")";}).join("\n");
@@ -3197,7 +3203,8 @@ var PERSONAS=[
   {id:'scm',     label:'SCM · Procure',   color:'#fcc419',icon:'📦',role:'Procurement Manager / Buyer'},
   {id:'hcm',     label:'HCM · HR',        color:'#da77f2',icon:'👥',role:'Human Resources Specialist'},
   {id:'icm',     label:'ICM · Sales Comp',color:'#ff6b6b',icon:'🎯',role:'Incentive Compensation Analyst'},
-  {id:'cio',     label:'CIO · ERP Health',color:'#74c0fc',icon:'🖥',role:'Any — tests all endpoint reach'}
+  {id:'cio',     label:'CIO · ERP Health',color:'#74c0fc',icon:'🖥',role:'Any — tests all endpoint reach'},
+  {id:'cfgcov',  label:'⚙ Config Coverage',color:'#4dabf7',icon:'⚙',role:'All Config-scoped objects (Pillar 4)'}
 ];
 var sentMod='overview';
 
@@ -3927,8 +3934,69 @@ function renderSentBody(){
     case'hcm':      sentRenderHCM(body,p.color);break;
     case'icm':      sentRenderICM(body,p.color);break;
     case'cio':      sentRenderCIO(body,p.color);break;
+    case'cfgcov':   sentRenderConfigCoverage(body,p.color);break;
     default:        body.innerHTML='<p style="color:var(--t3);padding:20px">Unknown persona.</p>';
   }
+}
+
+/* ── CONFIG COVERAGE SENTINEL ───────────────────────────────────────────────
+   Honors "Config is the source of truth": every LIVE object scoped in Config
+   (Pillar 4) is live-probed here with access status + record count, derived
+   from CFG_TAXONOMY so it stays in sync automatically. */
+function sentRenderConfigCoverage(body,color){
+  if(!ST.conn||!ST.url){body.innerHTML=sentNoConn();return;}
+  var base=ST.url.replace(/\/$/,'');
+  var hdrs={'Authorization':'Basic '+btoa(ST.user+':'+ST.pass),'Accept':'application/json'};
+  var items=[];
+  if(typeof CFG_TAXONOMY!=='undefined'){
+    Object.keys(CFG_TAXONOMY).forEach(function(mk){
+      var tax=CFG_TAXONOMY[mk]; if(!tax) return;
+      (tax.sections||[]).forEach(function(sec){
+        (sec.items||[]).forEach(function(it){
+          if(it.type===CFG_LIVE&&it.ep) items.push({mod:tax.label||mk,label:it.label,ep:it.ep});
+        });
+      });
+    });
+  }
+  var total=items.length;
+  function shortEp(e){return e.replace('/fscmRestApi/resources/latest/','…/').replace('/crmRestApi/resources/latest/','…/').replace('/hcmRestApi/resources/latest/','…/');}
+  body.innerHTML=
+    '<div style="flex:1;overflow:auto;min-height:0;padding:16px">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'
+    +'<span style="font-size:15px;font-weight:800;color:var(--t1)">⚙ Config Coverage</span>'
+    +'<span id="cfgcov-sum" style="font-size:10px;color:var(--t3)">Probing '+total+' Config-scoped objects for '+(ST.user||'this login')+'…</span>'
+    +'</div>'
+    +'<div style="font-size:10px;color:var(--t3);margin-bottom:12px;line-height:1.6">Every object scoped in <strong>Config</strong> (Pillar 4), live-probed for this login. <span style="color:#51cf66">✅ accessible</span> · <span style="color:#fcc419">🔒 restricted (401/403)</span> · <span style="color:#ff8c42">🔍 not found / no data access (404)</span>.</div>'
+    +'<table class="ds-stat-tbl" style="width:100%;table-layout:fixed"><thead><tr>'
+    +'<th style="width:15%">Module</th><th style="width:25%">Object</th><th style="width:32%">Endpoint</th><th style="width:14%;text-align:center">Status</th><th style="width:14%;text-align:right">Records</th>'
+    +'</tr></thead><tbody>'
+    +items.map(function(it,i){
+      return'<tr><td style="color:var(--t2)">'+it.mod+'</td>'
+        +'<td style="font-weight:700;color:var(--t1)">'+it.label+'</td>'
+        +'<td style="font-family:var(--mono);font-size:9px;color:var(--t3)">'+shortEp(it.ep)+'</td>'
+        +'<td id="cfgcov-st-'+i+'" style="text-align:center"><span class="ds-spin" style="width:11px;height:11px;border-width:1.5px;display:inline-block"></span></td>'
+        +'<td id="cfgcov-ct-'+i+'" style="text-align:right;color:var(--t3)">—</td></tr>';
+    }).join('')
+    +'</tbody></table></div>';
+  if(!total){var s0=document.getElementById('cfgcov-sum');if(s0)s0.textContent='No Config-scoped objects found.';return;}
+  var done=0, okc=0;
+  function fin(){var s=document.getElementById('cfgcov-sum');if(s)s.innerHTML='<span style="color:#51cf66;font-weight:700">'+okc+'</span> / '+total+' accessible for '+(ST.user||'this login');}
+  items.forEach(function(it,i){
+    fetch(base+it.ep+'?limit=1&totalResults=true',{headers:hdrs,signal:AbortSignal.timeout(9000)})
+      .then(function(r){ if(r.ok) return r.json().then(function(d){return{ok:true,c:(d.totalResults!=null?d.totalResults:(d.count!=null?d.count:(d.items?d.items.length:0)))};}); return {ok:false,s:r.status}; })
+      .catch(function(){return{ok:false,s:0};})
+      .then(function(res){
+        var st=document.getElementById('cfgcov-st-'+i), ct=document.getElementById('cfgcov-ct-'+i);
+        if(res.ok){ okc++;
+          if(st)st.innerHTML='<span style="color:#51cf66;font-weight:700">✅</span>';
+          if(ct)ct.innerHTML='<span style="color:var(--t1)">'+(res.c!=null?Number(res.c).toLocaleString():'—')+'</span>';
+        } else {
+          var sc=res.s, ico=(sc===401||sc===403)?'🔒':(sc===404?'🔍':'⚠'), clr=(sc===401||sc===403)?'#fcc419':'#ff8c42';
+          if(st)st.innerHTML='<span style="color:'+clr+';font-weight:700" title="HTTP '+sc+'">'+ico+' '+(sc||'')+'</span>';
+        }
+        done++; if(done===total) fin();
+      });
+  });
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -5134,6 +5202,26 @@ var CFG_TAXONOMY = {
            desc:'Accounting boundaries (Standard, Average, Actual Costing) and cost segments: Material, Labor, Overhead, Outside Processing.',
            guide:'Cost Management → Manage Cost Books → Define Cost Elements and Valuation Units'},
         ]
+      },
+      {
+        id:'scm_crm', label:'Phase 2F — Channel Revenue Management',
+        desc:'Trade programs, customer rebates & accruals, and the claims-to-settlement cycle.',
+        items:[
+          {id:'scm_crmtype',   type:CFG_LIVE, label:'Channel Program Types',  icon:'🏷', ep:'/fscmRestApi/resources/latest/channelProgramTypes',    params:'limit=100',
+           desc:'Program-type templates and their qualifiers — the blueprint every rebate/accrual program is built from'},
+          {id:'scm_crmprog',   type:CFG_LIVE, label:'Channel Programs',        icon:'📑', ep:'/fscmRestApi/resources/latest/channelPrograms',        params:'limit=200',
+           desc:'Trade/marketing programs defining accrual rules, eligibility, budgets, and dates'},
+          {id:'scm_crmcust',   type:CFG_LIVE, label:'Customer Programs (Rebates/Accruals)', icon:'💵', ep:'/fscmRestApi/resources/latest/channelCustomerPrograms', params:'limit=200',
+           desc:'Customer-facing rebate and accrual programs with eligible-customer rules'},
+          {id:'scm_crmclaim',  type:CFG_LIVE, label:'Channel Claims',          icon:'📨', ep:'/fscmRestApi/resources/latest/channelClaims',          params:'limit=200',
+           desc:'Claims raised against programs — amount, status, and settlement progress'},
+          {id:'scm_crmcclaim', type:CFG_LIVE, label:'Customer Claims',         icon:'🧾', ep:'/fscmRestApi/resources/latest/channelCustomerClaims',  params:'limit=200',
+           desc:'Customer deductions/claims with their settlement methods and documents'},
+          {id:'scm_crmreason', type:CFG_LIVE, label:'Claim Reasons',           icon:'🔖', ep:'/fscmRestApi/resources/latest/channelClaimReasons',    params:'limit=100',
+           desc:'Reason codes classifying why a claim was raised'},
+          {id:'scm_crmsource', type:CFG_LIVE, label:'Claim Sources',           icon:'🗂', ep:'/fscmRestApi/resources/latest/channelClaimSources',    params:'limit=100',
+           desc:'Origin channels/sources from which claims are created'},
+        ]
       }
     ]
   },
@@ -5461,6 +5549,45 @@ Object.keys(CFG_TAXONOMY).forEach(function(modKey){
   });
   CFG_MODS[modKey].items=liveItems;
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CONFIG-AS-SOURCE-OF-TRUTH BRIDGE
+   Everything scoped in Config (LIVE taxonomy items) is auto-published to the
+   other pillars so a single Config addition (e.g. Channel Revenue Management)
+   appears everywhere with no duplicate hand-coding:
+     • DIY SQL  → a REST_MAP table (queryable: SELECT * FROM <OBJECT>)
+     • Built-in SQL → a ready "All Records" card under the Config category
+   Data Sentinels is a bespoke persona dashboard and is wired separately.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function bridgeConfigToPillars(){
+  if(typeof CFG_TAXONOMY==='undefined') return;
+  function tableFromEp(ep){
+    var seg=(ep||'').split('?')[0].replace(/\/$/,'').split('/').pop()||'';
+    return seg.replace(/([a-z0-9])([A-Z])/g,'$1_$2').replace(/[^A-Za-z0-9]+/g,'_').toUpperCase();
+  }
+  Object.keys(CFG_TAXONOMY).forEach(function(modKey){
+    var tax=CFG_TAXONOMY[modKey]; if(!tax) return;
+    var modLabel=tax.label||modKey;
+    (tax.sections||[]).forEach(function(sec){
+      (sec.items||[]).forEach(function(item){
+        if(item.type!==CFG_LIVE||!item.ep) return;
+        var tbl=tableFromEp(item.ep); if(!tbl) return;
+        /* 1) DIY SQL — make it runnable */
+        if(typeof REST_MAP!=='undefined' && !REST_MAP[tbl]) REST_MAP[tbl]=item.ep;
+        if(typeof SCH!=='undefined' && !SCH[tbl]) SCH[tbl]={desc:(item.desc||item.label)+' · Config-scoped (live REST)',pk:'',cols:[],_derived:true};
+        /* 2) Built-in SQL — publish a ready query card (deduped by title) */
+        if(typeof LIB!=='undefined'){
+          var title=item.label+' — '+modLabel;
+          if(!LIB.some(function(q){return q.t===title;})){
+            LIB.push({mod:'Config',tag:'cfg',t:title,
+              d:(item.desc||item.label)+' · auto-published from Config scope (live REST → '+tbl+')',
+              sql:'SELECT *\nFROM '+tbl+'\nFETCH FIRST 200 ROWS ONLY',_derived:true});
+          }
+        }
+      });
+    });
+  });
+})();
 
 /* Change default module to OM */
 cfgMod='om';
