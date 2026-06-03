@@ -79,6 +79,20 @@ ipcMain.handle('save-file', async (event, { filename, data, type }) => {
   return { success: false };
 });
 
+/* ── Durable connection-profile store ──────────────────────────────────────
+   localStorage is unreliable for file:// origins in Electron (wiped on relaunch),
+   so profiles are persisted to a JSON file in the app's userData folder.
+   sendSync keeps the renderer's existing synchronous load/save API intact. */
+const PROFILES_FILE = path.join(app.getPath('userData'), 'talk2sql-profiles.json');
+ipcMain.on('profiles-load', (event) => {
+  try { event.returnValue = fs.existsSync(PROFILES_FILE) ? fs.readFileSync(PROFILES_FILE, 'utf8') : ''; }
+  catch (e) { event.returnValue = ''; }
+});
+ipcMain.on('profiles-save', (event, json) => {
+  try { fs.writeFileSync(PROFILES_FILE, json || '[]'); event.returnValue = true; }
+  catch (e) { event.returnValue = false; }
+});
+
 ipcMain.handle('toggle-maximize', () => {
   if (!win) return;
   if (win.isMaximized()) {

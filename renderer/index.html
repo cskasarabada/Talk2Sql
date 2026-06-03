@@ -454,7 +454,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div id="top">
-  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v2.0.0</span></div>
+  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v2.0.7</span></div>
   <div class="sep"></div>
   <div class="conn-pill" id="connPill"><div class="dot" id="dot"></div><span id="connLbl">Click to connect</span></div>
   <button class="btn b-ghost" id="btnDisconn" style="font-size:10px;padding:3px 8px;display:none">✕</button>
@@ -628,6 +628,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     <div style="display:flex;gap:5px;padding:0 10px;align-items:center">
       <button class="btn b-ghost"  id="btnProbeEps"   onclick="cfgProbeEndpoints()"  style="font-size:10px">🛰 Probe URLs</button>
       <button class="btn b-ghost"  id="btnProbeAccess" onclick="cfgProbeAccess()"   style="font-size:10px">🔑 Probe Access</button>
+      <button class="btn b-ghost"  id="btnUserRoles"  onclick="cfgUserRoles()"   style="font-size:10px">👤 My Roles</button>
       <button class="btn b-blue"  id="btnCfgAudit"   onclick="cfgRunAudit()"    style="font-size:10px">🔍 Audit Module</button>
       <button class="btn b-blue"  id="btnCfgExtract" onclick="cfgExtract()"     style="font-size:10px">⚡ Extract</button>
       <button class="btn b-out"   id="btnCfgXls"     onclick="cfgExportXls()"   style="font-size:10px" disabled>↓ Excel</button>
@@ -720,7 +721,11 @@ const MODS = {
 ═══════════════════════════════════════ */
 const ICM_EP = {
   /* ICM — all fscmRestApi, confirmed in ICM-Optimizer E2E (MicroPlan AI) flow */
-  compPlans:       "/fscmRestApi/resources/latest/incentiveCompensationPlans",
+  /* Plan-build lifecycle objects — flat top-level resources used by the E2E deployer (orchestrate_optimizer.py steps 1-6) */
+  rateDimensions:  "/fscmRestApi/resources/latest/rateDimensions",
+  rateTables:      "/fscmRestApi/resources/latest/rateTables",
+  planComponents:  "/fscmRestApi/resources/latest/planComponents",
+  compPlans:       "/fscmRestApi/resources/latest/compensationPlans",
   participants:    "/fscmRestApi/resources/latest/incentiveCompensationParticipants",
   roles:           "/fscmRestApi/resources/latest/incentiveCompensationRoles",
   earnings:        "/fscmRestApi/resources/latest/incentiveCompensationEarnings",
@@ -731,7 +736,7 @@ const ICM_EP = {
   icmTransactions: "/fscmRestApi/resources/latest/incentiveCompensationTransactions",
   workers:         "/hcmRestApi/resources/latest/workers",
   invoices:        "/fscmRestApi/resources/latest/invoices",
-  buQuery:         "/fscmRestApi/resources/latest/businessUnitsLOV",  /* ❌ 404 on demo pods — kept for reference */
+  buQuery:         "/fscmRestApi/resources/latest/finBusinessUnitsLOV",  /* businessUnitsLOV 404s on demo pods; finBusinessUnitsLOV is the accessible variant */
 };
 
 /* ═══════════════════════════════════════
@@ -946,8 +951,14 @@ function clearEd(){document.getElementById("sqled").value="";updateLines();}
 /* ═══════════════════════════════════════
    AI / NLP
 ═══════════════════════════════════════ */
+/* True only when a real Anthropic key is present — rejects empty, the seed placeholder, and obvious non-keys */
+function aiKeyOK(){
+  var k=(ST.apiKey||'').trim();
+  return !!k && k.indexOf('YOUR_')!==0 && k!=='YOUR_ANTHROPIC_API_KEY' && /^sk-ant-/.test(k);
+}
 async function callAI(prompt,maxT,sys){
   return new Promise((resolve,reject)=>{
+    if(!aiKeyOK()){reject(new Error("No valid Anthropic API key. Add your sk-ant-… key in Connection settings — the demo profiles ship without one."));return;}
     var xhr=new XMLHttpRequest();
     xhr.open("POST","https://api.anthropic.com/v1/messages",true);
     xhr.setRequestHeader("Content-Type","application/json");
@@ -973,7 +984,7 @@ async function callAI(prompt,maxT,sys){
 async function genSQL(){
   var prompt=document.getElementById("nlpInp").value.trim();
   if(!prompt){toast("Type a description first","wa");return;}
-  if(!ST.apiKey){toast("Add Anthropic API key in Connection settings","er");openModal("connModal");return;}
+  if(!aiKeyOK()){toast("Add a valid Anthropic API key (sk-ant-…) in Connection settings","er");openModal("connModal");return;}
   var sp=document.getElementById("nlpSpin");sp.classList.add("go");
   var mod=MODS[ST.mod];
   var ctx=mod.tables.map(tn=>{var t=SCH[tn];return tn+"("+(t?t.cols.slice(0,6).map(c=>c.n).join(","):"")+")";}).join("\n");
@@ -1011,6 +1022,7 @@ async function doConnect(){
       ST.apiKey=(document.getElementById("fApiKey")||{value:""}).value.trim();
       Object.assign(ST,{conn:true,url,user,pass});
       localStorage.setItem("fxconn",JSON.stringify({url,user,pass,apiKey:ST.apiKey}));
+      if(window._persistApiKey)window._persistApiKey(ST.apiKey);  /* durable across restarts */
       document.getElementById("dot").className="dot on";
       document.getElementById("connLbl").textContent=url.replace("https://","").split("/")[0].slice(0,38);
       document.getElementById("btnDisconn").style.display="inline-flex";
@@ -1030,9 +1042,9 @@ const REST_MAP={
   PO_HEADERS_ALL:"/fscmRestApi/resources/latest/purchaseOrders",
   PER_ALL_PEOPLE_F:"/hcmRestApi/resources/latest/workers",
   // ICM tables → mapped to their Oracle REST equivalents
-  CN_COMP_PLANS_ALL_VL:"/fscmRestApi/resources/latest/incentiveCompensationPlans",
-  CN_COMP_PLANS_ALL_B:"/fscmRestApi/resources/latest/incentiveCompensationPlans",
-  CN_SRP_COMP_PLANS_ALL:"/fscmRestApi/resources/latest/incentiveCompensationPlans",
+  CN_COMP_PLANS_ALL_VL:"/fscmRestApi/resources/latest/compensationPlans",
+  CN_COMP_PLANS_ALL_B:"/fscmRestApi/resources/latest/compensationPlans",
+  CN_SRP_COMP_PLANS_ALL:"/fscmRestApi/resources/latest/compensationPlans",
   CN_SRP_PARTICIPANTS_ALL:"/fscmRestApi/resources/latest/incentiveCompensationParticipants",
   CN_SRP_PARTICIPANT_HDR_RO_V:"/fscmRestApi/resources/latest/incentiveCompensationParticipants",
   CN_SRP_PARTICIPANT_DETAILS_ALL:"/fscmRestApi/resources/latest/incentiveCompensationParticipants",
@@ -2334,7 +2346,7 @@ document.addEventListener("DOMContentLoaded",function(){
   <!-- ADVANCED -->
   <div class="cfg-sec" id="sec-advanced">
     <h3>App Info</h3>
-    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v2.0.0</span></div>
+    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v2.0.7</span></div>
     <div class="cfg-row"><span class="cfg-lbl">Repo</span><a href="#" id="cfg-repo-link" style="font-size:11px;color:var(--a1);font-family:var(--mono)">cskasarabada/Talk2Sql</a></div>
     <div class="cfg-row"><span class="cfg-lbl">Electron mode</span><span id="cfg-electron-mode" style="font-size:11px;font-family:var(--mono);color:var(--t3)">Detecting...</span></div>
 
@@ -2502,7 +2514,7 @@ document.addEventListener("DOMContentLoaded",function(){
     var ms = document.getElementById('cfg-maxsaved'); if(ms) cfg.maxSaved = parseInt(ms.value)||50;
     cfg.nlpAutoRun = getTog('tog-nlpauto');
     var nm = document.getElementById('cfg-nlpmodel'); if(nm) cfg.nlpModel = nm.value;
-    var ak = document.getElementById('cfg-apikey'); if(ak && ak.value) cfg.apiKey = ak.value;
+    var ak = document.getElementById('cfg-apikey'); if(ak && ak.value){ cfg.apiKey = ak.value; if(window._persistApiKey)window._persistApiKey(ak.value); }
     var mt = document.getElementById('cfg-maxtok'); if(mt) cfg.maxTokens = parseInt(mt.value)||1000;
     var nt = document.getElementById('cfg-nlptimeout'); if(nt) cfg.nlpTimeout = parseInt(nt.value)||30;
     var rt = document.getElementById('cfg-resttimeout'); if(rt) cfg.restTimeout = parseInt(rt.value)||15;
@@ -2585,7 +2597,7 @@ document.addEventListener("DOMContentLoaded",function(){
     var p = profiles[i]; if(!p) return;
     if(typeof ST === 'undefined') return;
     ST.url = p.url; ST.user = p.user; ST.pass = p.pass; ST.conn = true;
-    if(p.apiKey) ST.apiKey = p.apiKey;
+    if(p.apiKey && p.apiKey.indexOf('YOUR_')!==0) ST.apiKey = p.apiKey;
     localStorage.setItem('fxconn', JSON.stringify({url:p.url, user:p.user, pass:p.pass}));
     var dot = document.getElementById('dot');
     if(dot){ dot.className = 'dot on'; }
@@ -3823,7 +3835,7 @@ function sentRenderOverview(body,color){
      compute:function(d){return{val:dsNum(d.length),sub:'workforce',status:'ok',count:d.length};}},
     {kid:'ov_icp',name:'ICM Participants',ep:'/fscmRestApi/resources/latest/incentiveCompensationParticipants',params:'limit=100',
      compute:function(d){var a=d.filter(function(i){return(i.ParticipantStatus||i.Status||'').toLowerCase()==='active';}).length;return{val:dsNum(a),sub:a+' active / '+d.length+' total',status:a>0?'ok':'warn',count:d.length};}},
-    {kid:'ov_pln',name:'Comp Plans',ep:'/fscmRestApi/resources/latest/incentiveCompensationPlans',params:'limit=100',
+    {kid:'ov_pln',name:'Comp Plans',ep:'/fscmRestApi/resources/latest/compensationPlans',params:'limit=100',
      compute:function(d){var a=d.filter(function(i){return(i.PlanStatus||i.Status||'').toLowerCase()==='active';}).length;return{val:dsNum(a),sub:'active plans',status:a>0?'ok':'warn',count:a};}}
   ];
 
@@ -4255,7 +4267,7 @@ function cfgExtract(){
       if(body)body.innerHTML='<div class="cfg-empty">'
         +'<div style="font-size:30px">⚠️</div>'
         +'<div style="color:#ff6b6b;font-weight:700;margin:8px 0">'+item.label+' — Extract Failed</div>'
-        +'<div style="font-size:10px;color:var(--t3);max-width:280px">'+(err==='__restricted__'?'Access denied — John.Dunbar needs additional Oracle role for this endpoint.':err||'Check connection and permissions.')+'</div>'
+        +'<div style="font-size:10px;color:var(--t3);max-width:300px;line-height:1.6">'+(err==='__restricted__'?'Access denied (401/403) for <strong>'+((typeof ST!=='undefined'&&ST.user)?ST.user:'this login')+'</strong>. Either the credentials are wrong / user not recognized, or this login lacks the Oracle role + data access for this endpoint. Run 🔑 Probe Access to see what it can reach.':err==='__not_found__'?'Not found (404). Two possible causes: (1) the REST resource name is wrong, or (2) your login has the role but is missing the Data Security Policy for this object — Oracle returns 404 when data access is absent. Run 🔑 Probe Access to tell which.':err||'Check connection and permissions.')+'</div>'
         +'</div>';
       return;
     }
@@ -4299,6 +4311,8 @@ function cfgShowGrid(data,item,ms){
 
   // Config health score
   var health=cfgHealthScore(data,item);
+  // Compensation Plans support drill-down into their child components
+  var drillable=!!(item&&item.ep&&item.ep.indexOf('/compensationPlans')>=0);
   body.innerHTML=
     '<div style="flex-shrink:0;display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--b1);background:var(--bg2)">'
     +'<div style="display:flex;align-items:center;gap:6px">'
@@ -4306,13 +4320,14 @@ function cfgShowGrid(data,item,ms){
     +'<span style="font-size:10px;font-weight:700;color:'+health.color+'">'+health.label+'</span>'
     +'<span style="font-size:10px;color:var(--t3)">'+health.detail+'</span>'
     +'</div>'
+    +(drillable?'<span style="font-size:9px;color:var(--a1);font-weight:700">▸ Click any plan to view its components</span>':'')
     +'<div id="cfg-ai-insight" style="flex:1;font-size:10px;color:var(--t3);font-style:italic"></div>'
     +'</div>'
     +'<div style="flex:1;overflow:auto;min-height:0"><table class="ds-stat-tbl" style="width:100%;table-layout:fixed"><thead><tr>'
     +cols.map(function(c){return'<th>'+c+'</th>';}).join('')
     +'</tr></thead><tbody>'
-    +data.slice(0,300).map(function(row){
-      return'<tr>'+cols.map(function(c){
+    +data.slice(0,300).map(function(row,ri){
+      return'<tr'+(drillable?' style="cursor:pointer" title="Click to view this plan&#39;s components" onclick="cfgPlanDetail('+ri+')"':'')+'>'+cols.map(function(c){
         var v=row[c];var s=String(v!=null?v:'');
         var cls='';
         if(s.toLowerCase()==='active')cls=' class="ok"';
@@ -4320,6 +4335,138 @@ function cfgShowGrid(data,item,ms){
         return'<td'+cls+'>'+s.substring(0,80)+'</td>';
       }).join('')+'</tr>';
     }).join('')+'</tbody></table></div>';
+}
+
+/* ── PLAN DRILL-DOWN — three levels, all derived from the E2E deployer linkage ──
+   L0 grid: Compensation Plans  →  L1: CompensationPlanComponents (child of a plan)
+   →  L2: a Plan Component's master fields + its planComponentIncentiveFormulas
+          (the rate-table / expression that drives the calculation). */
+var cfgLastPlan=null;  /* {id,name,comps} cached so we can navigate back without re-fetching */
+
+function cfgBackToGrid(){
+  var mod=CFG_MODS[cfgMod];
+  var item=mod?mod.items.find(function(i){return i.id===cfgItemId;}):null;
+  if(item&&cfgData)cfgShowGrid(cfgData,item,0);
+}
+function cfgSpin(msg){
+  return '<div class="cfg-empty"><span class="ds-spin" style="width:20px;height:20px;border-width:2.5px;margin-bottom:12px"></span>'
+    +'<div style="font-size:12px;color:var(--t3)">'+msg+'</div></div>';
+}
+function cfgDrillErr(backLabel,backFn,title,err){
+  return '<div class="cfg-empty">'
+    +'<button class="btn b-ghost" onclick="'+backFn+'" style="font-size:10px;align-self:flex-start;margin-bottom:12px">← '+backLabel+'</button>'
+    +'<div style="font-size:28px">⚠️</div>'
+    +'<div style="color:#ff6b6b;font-weight:700;margin:8px 0">'+title+'</div>'
+    +'<div style="font-size:10px;color:var(--t3);max-width:300px;line-height:1.6">'+(err==='__not_found__'?'Nothing found, or your login lacks data access for this child resource.':err==='__restricted__'?'Access denied for this resource.':err)+'</div></div>';
+}
+
+/* L1 — plan → components */
+function cfgPlanDetail(idx){
+  var row=cfgData&&cfgData[idx];
+  if(!row){toast('Plan row not found','wa');return;}
+  var planId=row.CompensationPlanId||row.compensationPlanId||row.PlanId;
+  var planName=row.Name||row.PlanName||row.DisplayName||('Plan '+planId);
+  if(!planId){toast('No CompensationPlanId on this row — cannot drill in','wa');return;}
+  var hd=document.getElementById('cfg-result-hd');
+  var body=document.getElementById('cfg-result-body');
+  if(hd)hd.style.display='none';
+  if(body)body.innerHTML=cfgSpin('Loading components for <strong>'+planName+'</strong>…');
+  sentFetch(ICM_EP.compPlans+'/'+planId+'/child/CompensationPlanComponents','limit=200',function(items,err){
+    if(err){ if(body)body.innerHTML=cfgDrillErr('Back to plans','cfgBackToGrid()','Couldn\'t load components for '+planName,err); return; }
+    cfgLastPlan={id:planId,name:planName,comps:items||[]};
+    cfgRenderPlanComps();
+  });
+}
+
+/* render the cached plan-components table (rows drill to L2) */
+function cfgRenderPlanComps(){
+  if(!cfgLastPlan)return;
+  var planId=cfgLastPlan.id, planName=cfgLastPlan.name, comps=cfgLastPlan.comps;
+  var hd=document.getElementById('cfg-result-hd');
+  var body=document.getElementById('cfg-result-body');
+  if(hd){
+    hd.style.display='flex';
+    hd.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:14px">📋</span>'
+      +'<span style="font-size:12px;font-weight:800;color:var(--t1)">'+planName+'</span>'
+      +'<span style="font-size:9px;background:var(--b1);padding:2px 8px;border-radius:8px;color:var(--t3)">'+comps.length+' component'+(comps.length===1?'':'s')+'</span>'
+      +'</div>'
+      +'<button class="btn b-ghost" onclick="cfgBackToGrid()" style="font-size:10px">← Back to plans</button>';
+  }
+  if(!comps.length){
+    if(body)body.innerHTML='<div class="cfg-empty">'
+      +'<div style="font-size:28px">🧩</div>'
+      +'<div style="font-size:12px;color:var(--t2);font-weight:700;margin:8px 0">No plan components assigned</div>'
+      +'<div style="font-size:10px;color:var(--t3);max-width:300px">'+planName+' has no CompensationPlanComponents — it may be a draft or header-only plan.</div></div>';
+    return;
+  }
+  var cols=Object.keys(comps[0]).filter(function(k){return k!=='links';}).slice(0,12);
+  if(body)body.innerHTML=
+    '<div style="flex-shrink:0;padding:10px 14px;border-bottom:1px solid var(--b1);background:var(--bg2);display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:10px;font-weight:700;color:var(--t1)">🧩 Plan Components</span>'
+    +'<span style="font-size:9px;color:var(--t3)">'+planName+' · CompensationPlanId '+planId+'</span>'
+    +'<span style="font-size:9px;color:var(--a1);font-weight:700;margin-left:auto">▸ Click a component for its rate table &amp; formula</span>'
+    +'</div>'
+    +'<div style="flex:1;overflow:auto;min-height:0"><table class="ds-stat-tbl" style="width:100%;table-layout:fixed"><thead><tr>'
+    +cols.map(function(c){return'<th>'+c+'</th>';}).join('')
+    +'</tr></thead><tbody>'
+    +comps.map(function(r,ri){
+      var pcid=r.PlanComponentId||r.planComponentId;
+      return'<tr'+(pcid?' style="cursor:pointer" title="Click to view this component\'s rate table &amp; formula" onclick="cfgComponentDetail('+ri+')"':'')+'>'
+        +cols.map(function(c){var s=String(r[c]!=null?r[c]:'');return'<td>'+s.substring(0,80)+'</td>';}).join('')+'</tr>';
+    }).join('')+'</tbody></table></div>';
+}
+
+/* L2 — component → master fields + incentive formulas (rate table / expression) */
+function cfgComponentDetail(ci){
+  var comp=cfgLastPlan&&cfgLastPlan.comps[ci];
+  if(!comp){toast('Component not found','wa');return;}
+  var compId=comp.PlanComponentId||comp.planComponentId;
+  var compName=comp.PlanComponentName||comp.Name||comp.name||('Component '+compId);
+  if(!compId){toast('No PlanComponentId on this row — cannot drill in','wa');return;}
+  var hd=document.getElementById('cfg-result-hd');
+  var body=document.getElementById('cfg-result-body');
+  if(hd)hd.style.display='none';
+  if(body)body.innerHTML=cfgSpin('Loading detail for <strong>'+compName+'</strong>…');
+
+  /* 1) component master (Name, PerformanceMeasure, OrgId, …) — single-resource GET, read from meta */
+  sentFetch(ICM_EP.planComponents+'/'+compId,'',function(_i,merr,master){
+    var m=(merr||!master)?comp:master;  /* fall back to the row we already have */
+    /* 2) the component's incentive formulas — the rate table / expression linkage */
+    sentFetch(ICM_EP.planComponents+'/'+compId+'/child/planComponentIncentiveFormulas','limit=200',function(formulas,ferr){
+      if(hd){
+        hd.style.display='flex';
+        hd.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+          +'<span style="font-size:14px">🧩</span>'
+          +'<span style="font-size:12px;font-weight:800;color:var(--t1)">'+compName+'</span>'
+          +'<span style="font-size:9px;background:var(--b1);padding:2px 8px;border-radius:8px;color:var(--t3)">in '+(cfgLastPlan?cfgLastPlan.name:'plan')+'</span>'
+          +'</div>'
+          +'<button class="btn b-ghost" onclick="cfgRenderPlanComps()" style="font-size:10px">← Back to components</button>';
+      }
+      /* master key/value card */
+      var kv=Object.keys(m).filter(function(k){return k!=='links'&&typeof m[k]!=='object';}).slice(0,16)
+        .map(function(k){return'<div style="display:flex;gap:8px;font-size:10px;padding:3px 0;border-bottom:1px solid var(--b1)22">'
+          +'<span style="color:var(--t3);min-width:180px;flex-shrink:0">'+k+'</span>'
+          +'<span style="color:var(--t1)">'+String(m[k]).substring(0,90)+'</span></div>';}).join('');
+      var frows=formulas||[];
+      var fcols=frows.length?Object.keys(frows[0]).filter(function(k){return k!=='links';}).slice(0,12):[];
+      var formulaHtml = ferr
+        ? '<div style="font-size:10px;color:var(--t3);padding:8px 0">'+(ferr==='__not_found__'?'No incentive formulas exposed for this component, or no data access.':ferr)+'</div>'
+        : (!frows.length
+            ? '<div style="font-size:10px;color:var(--t3);padding:8px 0">No incentive formulas / rate tables attached to this component.</div>'
+            : '<table class="ds-stat-tbl" style="width:100%;table-layout:fixed"><thead><tr>'
+              +fcols.map(function(c){return'<th>'+c+'</th>';}).join('')+'</tr></thead><tbody>'
+              +frows.map(function(r){return'<tr>'+fcols.map(function(c){var s=String(r[c]!=null?r[c]:'');return'<td>'+s.substring(0,80)+'</td>';}).join('')+'</tr>';}).join('')
+              +'</tbody></table>');
+      if(body)body.innerHTML=
+        '<div style="flex:1;overflow:auto;min-height:0;padding:14px">'
+        +'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Component Detail</div>'
+        +'<div style="background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:12px 14px;margin-bottom:16px">'+(kv||'<span style="font-size:10px;color:var(--t3)">No scalar fields returned.</span>')+'</div>'
+        +'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:8px">🧮 Incentive Formula / Rate Table</div>'
+        +formulaHtml
+        +'</div>';
+    });
+  });
 }
 
 /* ── Config Health Score ── */
@@ -4356,7 +4503,7 @@ function cfgHealthScore(data,item){
 /* ── AI Insight ── */
 async function cfgAIInsight(){
   if(!cfgData||!cfgData.length){toast('Extract data first','wa');return;}
-  if(!ST.apiKey){toast('Add Anthropic API key in ⚙ Config → AI/API','wa');return;}
+  if(!aiKeyOK()){toast('Add a valid Anthropic API key (sk-ant-…) in ⚙ Config → AI/API','wa');return;}
   var el=document.getElementById('cfg-ai-insight');
   if(el)el.innerHTML='<span class="ds-spin" style="width:10px;height:10px;border-width:1.5px;display:inline-block;margin-right:6px"></span>AI analyzing…';
 
@@ -4433,7 +4580,7 @@ async function cfgBR100(){
 
   // Get AI narrative if API key available
   var aiNarrative='';
-  if(ST.apiKey){
+  if(aiKeyOK()){
     try{
       var sample=cfgData.slice(0,8).map(function(r){return cols.slice(0,5).map(function(c){return c+'='+r[c];}).join(', ');}).join(' | ');
       var resp=await fetch('https://api.anthropic.com/v1/messages',{
@@ -5221,9 +5368,9 @@ var CFG_TAXONOMY = {
           {id:'cx_cat',  type:CFG_GUIDE, label:'Product Catalogs & Attribute Rules', icon:'📦',
            desc:'Customizable configurations for complex products using constraint-based validation rules.',
            guide:'CPQ → Manage Product Catalog → Define Configuration and Constraint Rules'},
-          {id:'cx_pl',   type:CFG_LIVE,  label:'Price Lists',           icon:'🏷', ep:ORACLE_EP.priceLists, params:'limit=200',
+          {id:'cx_pl',   type:CFG_LIVE,  label:'Price Lists',           icon:'🏷', ep:'/fscmRestApi/resources/latest/priceLists', params:'limit=200',
            desc:'Base item prices, charges, currencies, and effective dates feeding quote pricing'},
-          {id:'cx_ps',   type:CFG_LIVE,  label:'Pricing & Discount Strategies', icon:'📊', ep:ORACLE_EP.pricingStrategies, params:'limit=100',
+          {id:'cx_ps',   type:CFG_LIVE,  label:'Pricing & Discount Strategies', icon:'📊', ep:'/fscmRestApi/resources/latest/pricingStrategies', params:'limit=100',
            desc:'Discount matrices, contract tiers, multi-currency structures, and approval routing'},
           {id:'cx_prop', type:CFG_GUIDE, label:'Proposal Templates',    icon:'📄',
            desc:'Branding layouts of generated PDF quote documents delivered to clients.',
@@ -5263,28 +5410,32 @@ var CFG_TAXONOMY = {
     label:'ICM Deep-Dive', color:'#ff6b6b', icon:'🎯',
     sections:[
       {
-        id:'icm_s1', label:'1. Business Unit & Plan Setup',
+        id:'icm_setup', label:'0. Foundation Setup',
         items:[
-          {id:'icm_bu',    type:CFG_LIVE, label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,      params:'limit=100', desc:'ICM-enabled Business Units'},
-          {id:'icm_plans', type:CFG_LIVE, label:'Compensation Plans',     icon:'📋', ep:ICM_EP.compPlans,    params:'limit=100', desc:'Active and draft plans — name, status, dates, currency'},
+          {id:'icm_bu',    type:CFG_LIVE, label:'Business Units',         icon:'🏢', ep:ICM_EP.buQuery,      params:'limit=100', desc:'ICM-enabled Business Units — the operating-unit scope for every plan object below'},
           {id:'icm_roles', type:CFG_LIVE, label:'Compensation Roles',     icon:'🎭', ep:ICM_EP.roles,        params:'limit=100', desc:'Role definitions linked to plans and job grades'},
         ]
       },
       {
-        id:'icm_s2', label:'2. Participants & Enrollment',
+        /* Derived from the E2E AI ICM Deployer (orchestrate_optimizer.py) — the exact build order:
+           1 Rate Dimensions → 2 Rate Tables → 3 Expressions → 4 Performance Measures → 5 Plan Components → 6 Compensation Plans.
+           Each object depends on the one before it, which is why the deployer creates them in this sequence. */
+        id:'icm_lifecycle', label:'Plan Build Lifecycle (E2E Deployer order)',
         items:[
-          {id:'icm_parts', type:CFG_LIVE, label:'Participants',           icon:'👤', ep:ICM_EP.participants, params:'limit=300', desc:'Enrolled participants with plan, status, and quota'},
-          {id:'icm_earn',  type:CFG_LIVE, label:'Earnings Records',       icon:'💰', ep:ICM_EP.earnings,     params:'limit=200', desc:'Commission earnings by participant and plan element'},
+          {id:'icm_ratedim', type:CFG_LIVE, label:'1. Rate Dimensions',      icon:'📐', ep:ICM_EP.rateDimensions, params:'limit=200', desc:'Tier boundaries / banding (e.g. attainment 0–80%, 81–100%) that rate tables are built on. Step 1 of the deployer.'},
+          {id:'icm_rate',    type:CFG_LIVE, label:'2. Rate Tables',          icon:'🧮', ep:ICM_EP.rateTables,     params:'limit=200', desc:'Step-rate or tiered matrices mapping each dimension tier to a payout rate (0–80% = X%, 81–100% = Y%). Step 2.'},
+          {id:'icm_expr',    type:CFG_LIVE, label:'3. Expressions',          icon:'🔣', ep:ICM_EP.expressions,    params:'limit=200', desc:'Reusable calculation formulas referenced by performance measures. Step 3.'},
+          {id:'icm_perf',    type:CFG_LIVE, label:'4. Performance Measures', icon:'📊', ep:ICM_EP.perfMeasures,   params:'limit=200', desc:'How transactions map to credit categories and metrics; consume expressions and rate tables. Step 4.'},
+          {id:'icm_comp',    type:CFG_LIVE, label:'5. Plan Components',      icon:'🧩', ep:ICM_EP.planComponents, params:'limit=200', desc:'Building blocks that combine a performance measure with a rate table into an earnings calculation. Step 5.'},
+          {id:'icm_plans',   type:CFG_LIVE, label:'6. Compensation Plans',   icon:'📋', ep:ICM_EP.compPlans,      params:'limit=200', desc:'Final assembly — one or more plan components bundled into a plan assigned to participants. Step 6.'},
         ]
       },
       {
-        id:'icm_s3', label:'3. Rate Tables & Calculation',
+        id:'icm_runtime', label:'Runtime — Participants & Earnings',
         items:[
-          {id:'icm_perf',  type:CFG_GUIDE, label:'Performance Measures', icon:'📊', desc:'How transactions map to credit categories and metrics.',
-           guide:'ICM → Plan Administration → Manage Performance Measures'},
-          {id:'icm_rate',  type:CFG_GUIDE, label:'Rate Tables & Components', icon:'🧮', desc:'Step-rate or tiered matrices (0–80% = X%, 81–100% = Y%). Combined into Compensation Plans.',
-           guide:'ICM → Plan Administration → Manage Plan Components → Rate Schedules'},
-          {id:'icm_quota', type:CFG_GUIDE, label:'Quota Distribution',   icon:'🎯', desc:'Corporate goals, top-down/bottom-up quota distribution, seasonal allocation.',
+          {id:'icm_parts', type:CFG_LIVE, label:'Participants',           icon:'👤', ep:ICM_EP.participants, params:'limit=300', desc:'Enrolled participants with plan, status, and quota'},
+          {id:'icm_earn',  type:CFG_LIVE, label:'Earnings Records',       icon:'💰', ep:ICM_EP.earnings,     params:'limit=200', desc:'Commission earnings by participant and plan element'},
+          {id:'icm_quota', type:CFG_GUIDE, label:'Quota Distribution',    icon:'🎯', desc:'Corporate goals, top-down/bottom-up quota distribution, seasonal allocation.',
            guide:'ICM → Quota Administration → Manage Quota Plans → Set Distribution'},
         ]
       }
@@ -5558,10 +5709,10 @@ async function cfgProbeAccess(){
   /* ── Step 3: SCIM user lookup ── */
   render('<div style="color:var(--t3);font-size:10px">Step 3/5 — checking SCIM identity…</div>');
   var scimUser=null, scimGroups=[];
-  var scimRes=await apiFetch(base+'/hcmRestApi/resources/latest/scim/v2/Users?filter=userName+eq+"'+username+'"');
+  var scimRes=await apiFetch(base+'/hcmRestApi/scim/Users?filter='+encodeURIComponent('userName eq "'+username+'"'));
   if(!scimRes._status&&!scimRes._error&&scimRes.Resources&&scimRes.Resources.length){
     scimUser=scimRes.Resources[0];
-    scimGroups=(scimUser.groups||[]);
+    scimGroups=(scimUser.roles||scimUser.groups||[]);
   }
 
   /* ── Step 4: quick endpoint access check (10 key endpoints) ── */
@@ -5569,7 +5720,7 @@ async function cfgProbeAccess(){
   var KEY_EPS=[
     {key:'businessUnits',  ep:'/fscmRestApi/resources/latest/businessUnits',  label:'Business Units',   role:'Financial Application Administrator'},
     {key:'legalEntities',  ep:'/fscmRestApi/resources/latest/legalEntities',   label:'Legal Entities',   role:'Application Implementation Consultant'},
-    {key:'compPlans',      ep:'/fscmRestApi/resources/latest/incentiveCompensationPlans', label:'ICM Comp Plans', role:'Incentive Compensation Analyst'},
+    {key:'compPlans',      ep:'/fscmRestApi/resources/latest/compensationPlans', label:'ICM Comp Plans', role:'Incentive Compensation Analyst'},
     {key:'ledgers',        ep:'/fscmRestApi/resources/latest/ledgers',          label:'GL Ledgers',       role:'General Accountant Manager'},
     {key:'inventoryOrgs',  ep:'/fscmRestApi/resources/latest/inventoryOrganizations', label:'Inventory Orgs', role:'Inventory Manager'},
     {key:'workers',        ep:'/hcmRestApi/resources/latest/workers',           label:'Workers',          role:'Human Resources Specialist'},
@@ -5688,7 +5839,7 @@ async function cfgProbeAccess(){
   } else {
     html+='<div style="background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:12px 14px;font-size:10px">'
       +'<div style="font-weight:700;color:var(--t2);margin-bottom:4px">ℹ Role list API not available for this user</div>'
-      +'<div style="color:var(--t3);line-height:1.7">Reading assigned roles via <code style="font-size:9px;background:var(--b1);padding:1px 4px;border-radius:3px">userAccounts</code> API requires <strong>IT Security Manager</strong> or <strong>HCM Application Administrator</strong> role — John.Dunbar doesn\'t have those.<br>'
+      +'<div style="color:var(--t3);line-height:1.7">Reading assigned roles via <code style="font-size:9px;background:var(--b1);padding:1px 4px;border-radius:3px">userAccounts</code> API requires <strong>IT Security Manager</strong> or <strong>HCM Application Administrator</strong> role — '+((typeof ST!=="undefined"&&ST.user)?ST.user:"this login")+' doesn\'t have those.<br>'
       +'This is normal and does not affect the endpoint probes below.</div>'
       +'</div>';
   }
@@ -5724,7 +5875,7 @@ async function cfgProbeAccess(){
     '/fscmRestApi/resources/latest/legalEntities':  {obj:'XLE_ENTITY_PROFILES',     action:'Select Legal Entities'},
     '/fscmRestApi/resources/latest/ledgers':        {obj:'GL_LEDGERS',              action:'Select Ledgers'},
     '/fscmRestApi/resources/latest/currencies':     {obj:'FND_CURRENCIES',          action:'Select Currencies'},
-    '/fscmRestApi/resources/latest/incentiveCompensationPlans': {obj:'CN_COMP_PLANS', action:'View Compensation Plans'},
+    '/fscmRestApi/resources/latest/compensationPlans': {obj:'CN_COMP_PLANS', action:'View Compensation Plans'},
   };
 
   /* Roles to request */
@@ -5781,7 +5932,7 @@ async function cfgProbeAccess(){
           /* Fix path */
           +'<div style="font-size:9px;color:var(--t2);margin-bottom:4px">📍 <strong>Fix path:</strong> '+kb.fixPath+'</div>'
           /* Note */
-          +'<div style="font-size:9px;color:var(--t3);background:var(--bg2);border-radius:4px;padding:6px 8px;line-height:1.6">'+kb.note+'</div>'
+          +'<div style="font-size:9px;color:var(--t3);background:var(--bg2);border-radius:4px;padding:6px 8px;line-height:1.6">'+kb.note.replace(/JOHN\.DUNBAR/gi,(username||'YOUR_USER').toUpperCase())+'</div>'
           +'</div>';
       }).filter(Boolean).join('')
       +'</div>'
@@ -5798,6 +5949,221 @@ async function cfgProbeAccess(){
       +(hasRoles?'<span style="font-size:9px;background:#51cf6622;color:#51cf66;padding:2px 8px;border-radius:8px">'+accountRoles.length+' roles found</span>'
         :'<span style="font-size:9px;background:#fcc41922;color:#fcc419;padding:2px 8px;border-radius:8px">Role API restricted</span>')
       +'<span style="font-size:9px;background:var(--b1);padding:2px 8px;border-radius:8px;color:var(--t3)">'+accessible+'/10 endpoints accessible</span>'
+      +'</div>'
+      +'<button class="btn b-ghost" onclick="cfgSetMod(cfgMod)" style="font-size:10px">← Back</button>';
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MY ROLES — lists the roles & responsibilities Oracle actually has
+   on the connected login, then reconciles each role against the live
+   endpoint probes. Resolves the "I assigned the role but it still 404s"
+   confusion by separating Layer 1 (job role) from Layer 2 (data security).
+   ══════════════════════════════════════════════════════════════ */
+async function cfgUserRoles(){
+  if(!ST.conn||!ST.url){openModal('connModal');return;}
+  var hd=document.getElementById('cfg-result-hd');
+  var body=document.getElementById('cfg-result-body');
+  var base=ST.url.replace(/\/$/,'');
+  var creds=btoa(ST.user+':'+ST.pass);
+  var hdrs={'Authorization':'Basic '+creds,'Accept':'application/json'};
+  var username=ST.user;
+
+  if(hd){
+    hd.style.display='flex';
+    hd.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+      +'<span class="ds-spin" style="width:12px;height:12px;border-width:2px"></span>'
+      +'<span style="font-size:12px;font-weight:800;color:var(--t1)">👤 Reading roles for <span style="color:var(--a1)">'+username+'</span>…</span>'
+      +'</div>';
+  }
+  if(body) body.innerHTML='<div style="flex:1;overflow:auto;min-height:0;padding:16px"><div id="user-roles-content"></div></div>';
+  var out=document.getElementById('user-roles-content');
+  function render(html){ if(out) out.innerHTML=html; }
+
+  async function apiFetch(url){
+    try{
+      var r=await fetch(url,{headers:hdrs,signal:AbortSignal.timeout(8000)});
+      if(!r.ok) return {_status:r.status};
+      return await r.json();
+    }catch(e){ return {_error:e.message}; }
+  }
+  /* normalize a role name/code for fuzzy matching */
+  function norm(s){return (s||'').toString().toUpperCase().replace(/^ORA_/,'').replace(/_JOB$/,'').replace(/_/g,' ').replace(/\s+/g,' ').trim();}
+  /* is this string a raw Oracle role code (ALL_CAPS_WITH_UNDERSCORES) rather than a display name? */
+  function isCode(s){ return !!s && /^[A-Z0-9][A-Z0-9_]+$/.test(s) && s.indexOf('_')>=0; }
+  /* derive a readable role name from a code, e.g. ORA_FUN_FINANCIAL_APPLICATION_ADMINISTRATOR_JOB → "Financial Application Administrator" */
+  function prettyRole(code){
+    if(!code) return '';
+    var s=code.toString().trim()
+      .replace(/^ORA_/i,'')
+      .replace(/_(JOB|DUTY|ABSTRACT|ABSTRACT_ROLE|DATA_ROLE|ROLE)$/i,'')
+      .replace(/^[A-Z]{2,4}_/,'');           /* strip leading module token (FUN_, GL_, CN_, XLE_…) */
+    return s.replace(/_/g,' ').toLowerCase().replace(/\b\w/g,function(c){return c.toUpperCase();}).trim();
+  }
+
+  /* ── Step 1: worker identity (display name) ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 1/4 — fetching identity…</div>');
+  var displayName=username, personId=null;
+  var wRes=await apiFetch(base+'/hcmRestApi/resources/latest/workers?q=PersonNumber='+encodeURIComponent(username)+'&fields=PersonId,PersonNumber,DisplayName&limit=1');
+  if(!wRes._status&&!wRes._error&&wRes.items&&wRes.items.length){displayName=wRes.items[0].DisplayName||username;personId=wRes.items[0].PersonId;}
+  if(personId===null && username.indexOf('.')>0){
+    var p=username.split('.');
+    var w2=await apiFetch(base+'/hcmRestApi/resources/latest/workers?q=FirstName='+p[0]+';LastName='+p[1]+'&fields=PersonId,DisplayName&limit=1');
+    if(!w2._status&&!w2._error&&w2.items&&w2.items.length){displayName=w2.items[0].DisplayName||username;personId=w2.items[0].PersonId;}
+  }
+
+  /* ── Step 2: roles via userAccounts → userAccountRoles ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 2/4 — reading user account roles…</div>');
+  var roles=[];           /* {name, code, category, source} */
+  var roleSources={ua:false, scim:false};
+  var seen={};
+  function addRole(name,code,category,source){
+    name=(name||'').trim(); code=(code||'').trim();
+    /* if the only "name" we got is actually a code, treat it as the code */
+    if(!code && isCode(name)){ code=name; name=''; }
+    if(isCode(name)){ if(!code) code=name; name=''; }
+    /* lead with a real display name; derive a readable one from the code when needed */
+    var display = name || prettyRole(code) || code;
+    var key=norm(display)||norm(code); if(!key||seen[key])return; seen[key]=1;
+    roles.push({name:display, code:code, category:category||'', source:source, job:/_JOB$/i.test(code)});
+  }
+  var uaRes=await apiFetch(base+'/hcmRestApi/resources/latest/userAccounts?q=Username='+encodeURIComponent(username)+'&fields=GUID,Username,PersonId&limit=1');
+  if(!uaRes._status&&!uaRes._error&&uaRes.items&&uaRes.items.length){
+    var guid=uaRes.items[0].GUID||uaRes.items[0].guid;
+    if(guid){
+      var rr=await apiFetch(base+'/hcmRestApi/resources/latest/userAccounts/'+guid+'/userAccountRoles?limit=200');
+      if(!rr._status&&!rr._error&&rr.items){
+        roleSources.ua=true;
+        rr.items.forEach(function(r){
+          /* RoleName is the friendly display name; RoleCommonName/RoleCode is the ORA_..._JOB code */
+          addRole(r.RoleName||r.roleName||r.DisplayName||r.displayName||'',
+                  r.RoleCommonName||r.roleCommonName||r.RoleCode||r.roleCode||'',
+                  r.RoleCategory||r.roleCategory||'', 'userAccounts');
+        });
+      }
+    }
+  }
+
+  /* ── Step 3: roles via SCIM (correct path) ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 3/4 — checking SCIM identity store…</div>');
+  var scimRes=await apiFetch(base+'/hcmRestApi/scim/Users?filter='+encodeURIComponent('userName eq "'+username+'"'));
+  if(!scimRes._status&&!scimRes._error&&scimRes.Resources&&scimRes.Resources.length){
+    var su=scimRes.Resources[0];
+    var scimRoles=su.roles||su.groups||[];
+    if(scimRoles.length){roleSources.scim=true;}
+    scimRoles.forEach(function(g){ addRole(g.display||g.value,g.value||'','','SCIM'); });
+  }
+
+  /* ── Step 4: probe the key endpoints to reconcile ── */
+  render('<div style="color:var(--t3);font-size:10px">Step 4/4 — reconciling roles against endpoint access…</div>');
+  var KEY_EPS=[
+    {ep:'/fscmRestApi/resources/latest/businessUnits',  label:'Business Units',   role:'Financial Application Administrator', obj:'FUN_BUSINESS_UNITS_V', ctx:'Business unit'},
+    {ep:'/fscmRestApi/resources/latest/legalEntities',  label:'Legal Entities',   role:'Application Implementation Consultant', obj:'XLE_ENTITY_PROFILES', ctx:'Legal entity'},
+    {ep:'/fscmRestApi/resources/latest/compensationPlans', label:'ICM Comp Plans', role:'Incentive Compensation Analyst', obj:'CN_COMP_PLANS', ctx:'Business unit'},
+    {ep:'/fscmRestApi/resources/latest/ledgers',        label:'GL Ledgers',       role:'General Accountant Manager', obj:'GL_LEDGERS', ctx:'Ledger'},
+    {ep:'/fscmRestApi/resources/latest/inventoryOrganizations', label:'Inventory Orgs', role:'Inventory Manager', obj:'', ctx:''},
+    {ep:'/hcmRestApi/resources/latest/workers',         label:'Workers',          role:'Human Resources Specialist', obj:'', ctx:''},
+    {ep:'/fscmRestApi/resources/latest/suppliers',      label:'Suppliers',        role:'Procurement Manager', obj:'', ctx:''},
+    {ep:'/fscmRestApi/resources/latest/priceLists',     label:'Price Lists',      role:'Pricing Manager', obj:'', ctx:''},
+    {ep:'/crmRestApi/resources/latest/accounts',        label:'CRM Accounts',     role:'Sales Administrator', obj:'', ctx:''},
+    {ep:'/fscmRestApi/resources/latest/incentiveCompensationRoles', label:'ICM Roles', role:'Incentive Compensation Administrator', obj:'', ctx:''}
+  ];
+  var epResults=await Promise.all(KEY_EPS.map(async function(e){
+    try{ var r=await fetch(base+e.ep+'?limit=1',{headers:hdrs,signal:AbortSignal.timeout(6000)}); return Object.assign({},e,{ok:r.ok,status:r.status}); }
+    catch(ex){ return Object.assign({},e,{ok:false,status:0}); }
+  }));
+
+  /* match: does the user hold the role this endpoint needs? */
+  var normAssigned=roles.map(function(r){return norm(r.name);}).concat(roles.map(function(r){return norm(r.code);})).filter(Boolean);
+  function holdsRole(roleName){
+    var n=norm(roleName);
+    return normAssigned.some(function(a){return a===n||a.indexOf(n)>=0||n.indexOf(a)>=0;});
+  }
+  var roleApiWorked=roleSources.ua||roleSources.scim;
+
+  /* ── render ── */
+  var html='';
+
+  /* identity card */
+  html+='<div style="background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:16px;margin-bottom:16px;display:flex;gap:16px;align-items:center">'
+    +'<div style="font-size:36px">👤</div><div>'
+    +'<div style="font-size:15px;font-weight:800;color:var(--t1)">'+displayName+'</div>'
+    +'<div style="font-size:11px;color:var(--t3);font-family:var(--mono);margin-top:2px">'+username+'</div>'
+    +'<div style="font-size:9px;color:var(--t3);margin-top:4px">'+roles.length+' role'+(roles.length===1?'':'s')+' found'
+      +(roleSources.ua?' · userAccounts':'')+(roleSources.scim?' · SCIM':'')+'</div>'
+    +'</div></div>';
+
+  /* roles list — job roles first (these are what you assign), then duty/other roles, each A→Z by name */
+  var jobCount=roles.filter(function(r){return r.job;}).length;
+  var sortedRoles=roles.slice().sort(function(a,b){
+    if(a.job!==b.job) return a.job?-1:1;
+    return (a.name||'').localeCompare(b.name||'');
+  });
+  html+='<div style="margin-bottom:16px"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--b1)">Roles &amp; Responsibilities'
+    +(jobCount?'<span style="float:right;text-transform:none;letter-spacing:0;font-weight:600;color:var(--t3)">'+jobCount+' job role'+(jobCount===1?'':'s')+' · '+roles.length+' total (incl. inherited duties)</span>':'')
+    +'</div>';
+  if(roles.length){
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px">'
+      +sortedRoles.map(function(r){
+        return'<div style="background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:8px 12px">'
+          +'<div style="font-size:10px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px">'+r.name
+          +(r.job?'<span style="font-size:7px;font-weight:700;background:#51cf6622;color:#51cf66;padding:1px 5px;border-radius:6px">JOB</span>':'')
+          +'</div>'
+          +(r.code&&norm(r.code)!==norm(r.name)?'<div style="font-size:8px;color:var(--t3);font-family:var(--mono)">'+r.code+'</div>':'')
+          +(r.category?'<div style="font-size:8px;color:var(--t3)">'+r.category+'</div>':'')
+          +'<div style="font-size:7px;color:var(--t3);margin-top:2px;opacity:.7">via '+r.source+'</div>'
+          +'</div>';
+      }).join('')+'</div>';
+  } else {
+    html+='<div style="background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:12px 14px;font-size:10px">'
+      +'<div style="font-weight:700;color:var(--t2);margin-bottom:4px">ℹ Could not read assigned roles for this login</div>'
+      +'<div style="color:var(--t3);line-height:1.7">Both <code style="font-size:9px;background:var(--b1);padding:1px 4px;border-radius:3px">userAccounts</code> and <code style="font-size:9px;background:var(--b1);padding:1px 4px;border-radius:3px">/hcmRestApi/scim/Users</code> require an <strong>IT Security Manager</strong> (or HCM admin) privilege to read another user\'s roles. The connected login likely lacks it.<br>The reconciliation below still works — it infers role presence from live endpoint access.</div></div>';
+  }
+  html+='</div>';
+
+  /* reconciliation table */
+  html+='<div style="margin-bottom:14px"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--b1)">Role → Access Reconciliation</div>';
+  html+='<div style="background:#fcc41911;border:1px solid #fcc41933;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:10px">'
+    +'<div style="font-weight:700;color:#fcc419;margin-bottom:4px">Why a role you assigned can still show 404</div>'
+    +'<div style="color:var(--t2);line-height:1.7"><strong>Layer 1 — Job Role</strong> (Security Console) grants the function. <strong>Layer 2 — Data Security Policy</strong> (Manage Data Access for Users) grants the rows. A REST 404 with the role present = Layer 2 missing, <em>not</em> a role problem.</div></div>';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr>'
+    +'<th style="text-align:left;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">OBJECT</th>'
+    +'<th style="text-align:left;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">REQUIRED ROLE</th>'
+    +'<th style="text-align:center;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">ROLE HELD</th>'
+    +'<th style="text-align:center;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">ACCESS</th>'
+    +'<th style="text-align:left;padding:4px 8px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--t3);border-bottom:1px solid var(--b1)">DIAGNOSIS</th>'
+    +'</tr></thead><tbody>'
+    +epResults.map(function(e){
+      var ok=e.ok, sc=e.status;
+      var held=roleApiWorked?holdsRole(e.role):null; /* null = unknown (API blocked) */
+      var accStr=ok?'✅':sc===401||sc===403?'🔒 '+sc:'🔍 '+sc;
+      var accCl=ok?'#51cf66':sc===401||sc===403?'#fcc419':'#ff8c42';
+      var heldStr=held===null?'<span style="color:var(--t3)">?</span>':held?'<span style="color:#51cf66">✓</span>':'<span style="color:#ff6b6b">✗</span>';
+      var diag, dcl='var(--t3)';
+      if(ok){diag='Working — role + data access both in place.';dcl='#51cf66';}
+      else if(held===true){diag='Role assigned ✓ — missing Data Security Policy ('+(e.obj||'object')+'). Add a Manage Data Access for Users row'+(e.ctx?' · context: '+e.ctx:'')+'.';dcl='#fcc419';}
+      else if(held===false){diag='Job role "'+e.role+'" not assigned to this login — assign it in Security Console.';dcl='#ff6b6b';}
+      else {diag=(sc===401||sc===403)?'Restricted — login lacks the role/privilege.':'404 — either job role not assigned OR Data Security Policy missing'+(e.obj?' ('+e.obj+')':'')+'.';}
+      return'<tr style="border-bottom:1px solid var(--b1)22">'
+        +'<td style="padding:5px 8px;font-weight:700;color:var(--t1)">'+e.label+'</td>'
+        +'<td style="padding:5px 8px;color:var(--t3)">'+e.role+'</td>'
+        +'<td style="padding:5px 8px;text-align:center;font-weight:700">'+heldStr+'</td>'
+        +'<td style="padding:5px 8px;text-align:center;font-weight:700;color:'+accCl+'">'+accStr+'</td>'
+        +'<td style="padding:5px 8px;font-size:9px;color:'+dcl+';line-height:1.5">'+diag+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table></div>';
+
+  render(html);
+
+  if(hd){
+    var accessible=epResults.filter(function(e){return e.ok;}).length;
+    var roleOkData404=epResults.filter(function(e){return !e.ok&&roleApiWorked&&holdsRole(e.role);}).length;
+    hd.innerHTML='<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:12px;font-weight:800;color:var(--t1)">👤 Roles &amp; Access — '+displayName+'</span>'
+      +'<span style="font-size:9px;background:'+(roles.length?'#51cf6622;color:#51cf66':'#fcc41922;color:#fcc419')+';padding:2px 8px;border-radius:8px">'+(roles.length?roles.length+' roles':'role API blocked')+'</span>'
+      +(roleOkData404?'<span style="font-size:9px;background:#fcc41922;color:#fcc419;padding:2px 8px;border-radius:8px">'+roleOkData404+' role-OK / data-404</span>':'')
+      +'<span style="font-size:9px;background:var(--b1);padding:2px 8px;border-radius:8px;color:var(--t3)">'+accessible+'/'+KEY_EPS.length+' accessible</span>'
       +'</div>'
       +'<button class="btn b-ghost" onclick="cfgSetMod(cfgMod)" style="font-size:10px">← Back</button>';
   }
@@ -5935,7 +6301,7 @@ var ORACLE_EP = {
   /* CRM */
   accounts:            '/crmRestApi/resources/latest/accounts',                            /* ✅ */
   /* ICM — all fscmRestApi, confirmed via ICM-Optimizer E2E (MicroPlan AI) */
-  compPlans:           '/fscmRestApi/resources/latest/incentiveCompensationPlans',          /* ✅ fscmRestApi */
+  compPlans:           '/fscmRestApi/resources/latest/compensationPlans',          /* ✅ fscmRestApi */
   participants:        '/fscmRestApi/resources/latest/incentiveCompensationParticipants',   /* ✅ fscmRestApi */
   earnings:            '/fscmRestApi/resources/latest/incentiveCompensationEarnings',       /* ✅ fscmRestApi */
   icmRoles:            '/fscmRestApi/resources/latest/incentiveCompensationRoles',          /* ✅ */
@@ -6273,7 +6639,7 @@ async function cfgSnapBR100(){
 
   // AI narrative for the full snapshot
   var aiText='';
-  if(ST.apiKey){
+  if(aiKeyOK()){
     try{
       var summary=keys.map(function(k){var r=cfgSnapResults[k];return r.label+': '+r.count+' records';}).join(', ');
       var resp=await fetch('https://api.anthropic.com/v1/messages',{
@@ -6378,7 +6744,7 @@ var BRIEF_PERSONAS = [
     kpis:[
       {label:'Active Participants', ep:'/fscmRestApi/resources/latest/incentiveCompensationParticipants', params:'limit=100',
        extract:function(d){var a=d.filter(function(i){return(i.ParticipantStatus||i.Status||'').toLowerCase()==='active';}).length;return{val:a,sub:'of '+d.length+' enrolled',status:a>0?'ok':'warn'};}},
-      {label:'Active Comp Plans',   ep:'/fscmRestApi/resources/latest/incentiveCompensationPlans', params:'limit=100',
+      {label:'Active Comp Plans',   ep:'/fscmRestApi/resources/latest/compensationPlans', params:'limit=100',
        extract:function(d){var a=d.filter(function(i){return(i.PlanStatus||i.Status||'').toLowerCase()==='active';});return{val:a.length,sub:a.slice(0,2).map(function(p){return p.PlanName||p.planName||'';}).join(', ').substring(0,40),status:a.length>0?'ok':'warn'};}},
       {label:'Earnings Records',    ep:'/fscmRestApi/resources/latest/incentiveCompensationEarnings', params:'limit=100',
        extract:function(d){var t=d.reduce(function(s,i){return s+(parseFloat(i.EarnedIncentive||i.earnedIncentive||0));},0);return{val:d.length,sub:'$'+(t/1e6).toFixed(2)+'M total earned',status:d.length>0?'ok':''};}},
@@ -6619,8 +6985,8 @@ async function runBrief(){
 
   /* Step 4: Stream Claude response */
   var aiOut=document.getElementById('brief-ai-output')||document.getElementById('brief-inline-ai');
-  if(!ST.apiKey){
-    if(aiOut)aiOut.innerHTML='<span style="color:#fcc419">⚠ Add your Anthropic API key in ⚙ Config → AI / API to enable AI briefings.</span>';
+  if(!aiKeyOK()){
+    if(aiOut)aiOut.innerHTML='<span style="color:#fcc419">⚠ Add a valid Anthropic API key (sk-ant-…) in ⚙ Config → AI / API to enable AI briefings.</span>';
     return;
   }
 
@@ -6914,7 +7280,7 @@ var ENDPOINT_ROLES = {
   '/crmRestApi/resources/latest/accounts':                        {role:'Sales Administrator', module:'CX Sales'},
   /* ICM */
   /* ICM — fscmRestApi paths (confirmed working via ICM-Optimizer E2E) */
-  '/fscmRestApi/resources/latest/incentiveCompensationPlans':              {role:'Incentive Compensation Analyst', module:'ICM'},
+  '/fscmRestApi/resources/latest/compensationPlans':              {role:'Incentive Compensation Analyst', module:'ICM'},
   '/fscmRestApi/resources/latest/incentiveCompensationParticipants':       {role:'Incentive Compensation Analyst', module:'ICM'},
   '/fscmRestApi/resources/latest/incentiveCompensationEarnings':           {role:'Incentive Compensation Analyst', module:'ICM'},
   '/fscmRestApi/resources/latest/incentiveCompensationRoles':              {role:'Incentive Compensation Administrator', module:'ICM'},
@@ -7085,12 +7451,27 @@ function cfgPrintRolesReport(){
   var KEYS = ['fusion_conn_profiles_v1','fxconn_profiles','talk2sql_profiles'];
 
   function loadP(){
+    /* Prefer the durable file store (survives file:// localStorage wipes on relaunch) */
+    try{
+      if(window.electronAPI && electronAPI.loadProfiles){
+        var raw=electronAPI.loadProfiles();
+        if(raw){
+          var v=JSON.parse(raw);
+          if(v&&v.length){ KEYS.forEach(function(k){try{localStorage.setItem(k,raw);}catch(e){}}); return v; }
+        }
+      }
+    }catch(e){}
+    /* Fallback: localStorage (dev mode in a browser, or pre-migration data) */
     for(var i=0;i<KEYS.length;i++){
-      try{ var v=JSON.parse(localStorage.getItem(KEYS[i])); if(v&&v.length) return v; }catch(e){}
+      try{ var lv=JSON.parse(localStorage.getItem(KEYS[i])); if(lv&&lv.length) return lv; }catch(e){}
     }
     return [];
   }
-  function saveP(a){ var s=JSON.stringify(a); KEYS.forEach(function(k){ try{localStorage.setItem(k,s);}catch(e){} }); }
+  function saveP(a){
+    var s=JSON.stringify(a);
+    KEYS.forEach(function(k){ try{localStorage.setItem(k,s);}catch(e){} });
+    try{ if(window.electronAPI && electronAPI.saveProfiles) electronAPI.saveProfiles(s); }catch(e){}
+  }
 
   /* Role → visible Config Extract module tabs */
   var ROLE_MODULES = {
@@ -7170,14 +7551,16 @@ function cfgPrintRolesReport(){
     var effectivePass = p.pass || (sameInstance && ST.pass ? ST.pass : '');
     /* Always fill modal fields */
     function sv(id,v){var e=document.getElementById(id);if(e)e.value=v||'';}
+    /* Never let a demo profile's placeholder key clobber a real one already in memory */
+    var realPK=(p.apiKey && p.apiKey.indexOf('YOUR_')!==0) ? p.apiKey : ((typeof ST!=='undefined'&&ST.apiKey)||'');
     sv('fUrl',p.url); sv('fUser',p.user); sv('fPass',effectivePass);
-    sv('fApiKey',p.apiKey||''); sv('fProfName',p.name);
+    sv('fApiKey',realPK); sv('fProfName',p.name);
     var roleEl=document.getElementById('fRole');
     if(roleEl) roleEl.value = p.role||'';
     /* Activate immediately */
     if(typeof ST!=='undefined'){
       Object.assign(ST,{conn:true, url:p.url, user:p.user, pass:effectivePass,
-        apiKey:p.apiKey||ST.apiKey||'', orgId:p.orgId||''});
+        apiKey:realPK, orgId:p.orgId||''});
     }
     updateConnUI(p.url, p.user, p.role||'');
     cfgFilterModsByRole(p.role||'');
@@ -7207,6 +7590,22 @@ function cfgPrintRolesReport(){
     if(typeof toast==='function')toast('Profile "'+name+'" saved','ok');else alert('Saved!');
   };
 
+  /* Persist a real Anthropic key into the durable file store (shared across this workstation's
+     profiles) so it survives app restarts — localStorage on file:// does not. */
+  window._persistApiKey=function(k){
+    if(!k || k.indexOf('YOUR_')===0) return;
+    var a=loadP(); if(!a.length) return;
+    a.forEach(function(p){ p.apiKey=k; });
+    saveP(a);
+  };
+  /* On load, if no real key is in memory, hydrate it from the durable store */
+  window._hydrateApiKey=function(){
+    if(typeof ST==='undefined') return;
+    if(ST.apiKey && ST.apiKey.indexOf('YOUR_')!==0) return;
+    var pk=loadP().filter(function(p){return p.apiKey && p.apiKey.indexOf('YOUR_')!==0;})[0];
+    if(pk) ST.apiKey=pk.apiKey;
+  };
+
   function wireAndRender(){
     render();
     var btn=document.getElementById('fSaveProf');
@@ -7220,6 +7619,7 @@ function cfgPrintRolesReport(){
   };
 
   document.addEventListener('DOMContentLoaded',function(){
+    window._hydrateApiKey();   /* restore a real saved key before anything calls the AI */
     wireAndRender();
     renderTopbarSwitcher();
     var pill=document.getElementById('connPill');
@@ -7230,17 +7630,13 @@ function cfgPrintRolesReport(){
   /* Demo pod profiles — all users share the same instance password.
      Store password on first profile; subsequent profiles on the same URL inherit it automatically. */
   var SEED=[
-    {"name":"John Dunbar Demo",  "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"John.Dunbar",   "pass":"","apiKey":"YOUR_ANTHROPIC_API_KEY","role":""},
-    {"name":"Amy Compadmin ICM", "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"Amy.Compadmin","pass":"","apiKey":"YOUR_ANTHROPIC_API_KEY","role":"icm","orgId":"300000046987012"},
-    {"name":"SCM_IMPL Demo",     "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"SCM_IMPL",     "pass":"","apiKey":"YOUR_ANTHROPIC_API_KEY","role":"scm"}
+    {"name":"John Dunbar Demo",  "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"John.Dunbar",   "pass":"","apiKey":"","role":""},
+    {"name":"Amy Compadmin ICM", "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"Amy.Compadmin","pass":"","apiKey":"","role":"icm","orgId":"300000046987012"},
+    {"name":"SCM_IMPL Demo",     "url":"https://fa-esll-dev41-saasfademo1.ds-fa.oraclepdemos.com","user":"SCM_IMPL",     "pass":"","apiKey":"","role":"scm"}
   ];
-  var hasSeed=false;
-  for(var ki=0;ki<KEYS.length;ki++){
-    try{var rv=localStorage.getItem(KEYS[ki]);if(rv&&JSON.parse(rv).length>0){hasSeed=true;break;}}catch(e){}
-  }
-  if(!hasSeed){
-    var ss=JSON.stringify(SEED);
-    for(var si=0;si<KEYS.length;si++){try{localStorage.setItem(KEYS[si],ss);}catch(e){}}
+  /* Seed only if neither the durable file store nor localStorage already has profiles */
+  if(!loadP().length){
+    saveP(SEED);
     console.log('[Talk2Sql] Profile seed restored');
   }
 
