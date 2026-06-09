@@ -397,14 +397,22 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:1px;margin-bottom:6px">SAVED PROFILES</div>
     <div id="connProfileList" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px"><span style="font-size:10px;color:var(--t3)">Loading...</span></div>
   </div>
+  <div class="field" id="authModeRow" style="margin-bottom:8px;display:none">
+    <label>Authentication</label>
+    <div style="display:flex;gap:6px">
+      <button type="button" id="authBasicBtn" class="btn b-blue" style="flex:1;font-size:11px" onclick="setAuthMode('basic')">🔑 Username / Password</button>
+      <button type="button" id="authSsoBtn" class="btn b-out" style="flex:1;font-size:11px" onclick="setAuthMode('sso')">🪪 SSO (Federated)</button>
+    </div>
+    <div id="ssoHint" style="display:none;font-size:9px;color:var(--t3);margin-top:5px;line-height:1.5">Use this for instances behind your org SSO. Enter the Oracle URL, click <b>Sign in with SSO</b>, complete login, then close the login window.</div>
+  </div>
   <div class="field"><label>Instance URL</label><input id="fUrl" type="text" placeholder="https://your-instance.fa.us2.oraclecloud.com"/></div>
-  <div class="grid2m">
+  <div id="basicFields"><div class="grid2m">
     <div class="field" style="margin:0"><label>Username</label><input id="fUser" type="text" placeholder="user@company.com"/></div>
     <div class="field" style="margin:0">
       <label>Password <span style="font-size:9px;color:var(--t3);font-weight:400">(shared across demo pod users)</span></label>
       <input id="fPass" type="password" placeholder="Enter once — reused for all profiles on this URL"/>
     </div>
-  </div>
+  </div></div>
   <div class="field" style="margin-top:10px">
     <label>Anthropic API Key (NLP → SQL)</label>
     <input id="fApiKey" type="password" placeholder="YOUR_ANTHROPIC_API_KEY..."/>
@@ -454,7 +462,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div id="top">
-  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v2.0.7</span></div>
+  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v3.0.1</span></div>
   <div class="sep"></div>
   <div class="conn-pill" id="connPill"><div class="dot" id="dot"></div><span id="connLbl">Click to connect</span></div>
   <button class="btn b-ghost" id="btnDisconn" style="font-size:10px;padding:3px 8px;display:none">✕</button>
@@ -744,6 +752,8 @@ const ICM_EP = {
 ═══════════════════════════════════════ */
 const ST = {
   conn:false,url:"",user:"",pass:"",apiKey:"",
+  authMode:"basic",   // "basic" (default, username/password) | "sso" (federated session)
+  note:"",prov:null,
   mod:"CX Sales",
   cols:[],allRows:[],filtRows:[],
   sortCol:-1,sortDir:1,
@@ -996,7 +1006,12 @@ async function genSQL(){
   var ctx=mod.tables.map(tn=>{var t=SCH[tn];return tn+"("+(t?t.cols.slice(0,6).map(c=>c.n).join(","):"")+")";}).join("\n");
   try{
     var sql=await callAI('Convert to Oracle Fusion SQL for module "'+ST.mod+'":\n"'+prompt+'"\n\nKey tables:\n'+ctx+'\n\nReturn ONLY clean SQL, no explanation, no backticks.',700,'Oracle Fusion SQL expert. Return ONLY the SQL query. Use FETCH FIRST N ROWS ONLY.');
-    if(sql){document.getElementById("sqled").value=sql;updateLines();toast("SQL generated — press Run","ok");}
+    sql=String(sql||"").replace(/```sql|```/g,"").trim();
+    // Guardrail #1: the model may ONLY emit a read-only SQL statement. If it returns
+    // explanation or result-shaped content, reject it — never place it where it could run/render.
+    var chk=t2sReadOnlySQL(sql);
+    if(!chk.ok){toast("Generation rejected: "+chk.reason,"er");document.getElementById("nlpInp").value=prompt;}
+    else{document.getElementById("sqled").value=sql;updateLines();toast("SQL generated — press Run","ok");}
   }catch(e){toast("AI error: "+e.message,"er");}
   sp.classList.remove("go");
 }
@@ -1013,7 +1028,52 @@ async function explainSQL(){
 /* ═══════════════════════════════════════
    CONNECTION
 ═══════════════════════════════════════ */
+/* SSO is built and working, but hidden by default so it can't be clicked by accident
+   during assessments. Set SSO_ENABLED=true to expose the Basic/SSO toggle again. */
+var SSO_ENABLED=false;
+(function(){try{var r=document.getElementById("authModeRow");if(r)r.style.display=SSO_ENABLED?"":"none";}catch(e){}})();
+
+function setAuthMode(mode){
+  if(mode==="sso"&&!SSO_ENABLED){ST.authMode="basic";return;} // gated off — never switch to SSO while disabled
+  ST.authMode=(mode==="sso")?"sso":"basic";
+  var basicBtn=document.getElementById("authBasicBtn"),ssoBtn=document.getElementById("authSsoBtn");
+  var basicFields=document.getElementById("basicFields"),hint=document.getElementById("ssoHint"),connOk=document.getElementById("connOk");
+  var sso=ST.authMode==="sso";
+  if(basicBtn)basicBtn.className="btn "+(sso?"b-out":"b-blue");
+  if(ssoBtn)ssoBtn.className="btn "+(sso?"b-blue":"b-out");
+  if(basicFields)basicFields.style.display=sso?"none":"";
+  if(hint)hint.style.display=sso?"":"none";
+  if(connOk)connOk.innerHTML='<span class="spin" id="connSpin"></span>'+(sso?"Sign in with SSO":"Connect");
+}
+
+/* SSO (federated) connect — opens the Oracle URL for interactive login, then
+   verifies the session can actually fetch. No credentials stored; no fabrication. */
+async function doConnectSSO(){
+  var url=document.getElementById("fUrl").value.trim().replace(/\/$/,"");
+  if(!url){toast("Enter the Oracle instance URL","er");return;}
+  if(!(window.electronAPI&&window.electronAPI.ssoLogin)){toast("SSO is only available in the desktop app","er");return;}
+  var sp=document.getElementById("connSpin");if(sp)sp.classList.add("go");
+  try{
+    var res=await window.electronAPI.ssoLogin(url);
+    if(!res||!res.ok){toast("SSO login cancelled or failed","er");if(sp)sp.classList.remove("go");return;}
+    // Real read-only probe through the session — confirms cookies actually authorize REST.
+    var probe=await window.electronAPI.ssoFetch(url+"/fscmRestApi/resources/latest/?limit=1&onlyData=true");
+    if(probe&&(probe.networkError||(probe.status&&probe.status>=400))){
+      toast("Signed in, but the session can't reach REST"+(probe.status?" (HTTP "+probe.status+")":"")+" — this pod may require OAuth or a local account","wa");
+    }
+    ST.apiKey=(document.getElementById("fApiKey")||{value:""}).value.trim();
+    Object.assign(ST,{conn:true,url:url,user:"",pass:"",authMode:"sso"});
+    if(window._persistApiKey)window._persistApiKey(ST.apiKey);
+    document.getElementById("dot").className="dot on";
+    document.getElementById("connLbl").textContent=(url.replace("https://","").split("/")[0].slice(0,30))+" · SSO";
+    document.getElementById("btnDisconn").style.display="inline-flex";
+    closeModal("connModal");toast("Connected via SSO ✓","ok");
+  }catch(e){toast("SSO error: "+e.message,"er");}
+  if(sp)sp.classList.remove("go");
+}
+
 async function doConnect(){
+  if(ST.authMode==="sso")return doConnectSSO();
   var url=document.getElementById("fUrl").value.trim(),user=document.getElementById("fUser").value.trim(),pass=document.getElementById("fPass").value.trim();
   if(!url||!user||!pass){toast("Fill all fields","er");return;}
   var sp=document.getElementById("connSpin");sp.classList.add("go");
@@ -1044,6 +1104,22 @@ async function doConnect(){
 const REST_MAP={
   HZ_PARTIES:"/crmRestApi/resources/latest/accounts",
   HZ_CUST_ACCOUNTS:"/crmRestApi/resources/latest/accounts",
+  // CX Sales — opportunities (raw tables/views are not REST-queryable; map to the business resource)
+  MKL_OPPORTUNITIES_ALL_VL:"/crmRestApi/resources/latest/opportunities",
+  MKL_OPPORTUNITIES_ALL_B:"/crmRestApi/resources/latest/opportunities",
+  MOO_OPPORTUNITIES:"/crmRestApi/resources/latest/opportunities",
+  MOO_OPTY_ALL:"/crmRestApi/resources/latest/opportunities",
+  // SCM — Channel Revenue Management programs → channelPrograms business resource
+  CJM_PROGRAMS_ALL_B:"/fscmRestApi/resources/latest/channelPrograms",
+  CJM_PROGRAMS_ALL_TL:"/fscmRestApi/resources/latest/channelPrograms",
+  CJM_PROGRAMS_VL:"/fscmRestApi/resources/latest/channelPrograms",
+  // SCM — Inventory on-hand balances
+  INV_ONHAND_QUANTITIES_VAL:"/fscmRestApi/resources/latest/inventoryOnhandBalances",
+  INV_ONHAND_QUANTITIES_DETAIL:"/fscmRestApi/resources/latest/inventoryOnhandBalances",
+  ONHAND_QUANTITY_DETAILS:"/fscmRestApi/resources/latest/onhandQuantityDetails",
+  // SCM/PIM — items
+  EGP_SYSTEM_ITEMS_B:"/fscmRestApi/resources/latest/itemsV2",
+  EGP_SYSTEM_ITEMS_VL:"/fscmRestApi/resources/latest/itemsV2",
   AP_INVOICES_ALL:"/fscmRestApi/resources/latest/invoices",
   PO_HEADERS_ALL:"/fscmRestApi/resources/latest/purchaseOrders",
   PER_ALL_PEOPLE_F:"/hcmRestApi/resources/latest/workers",
@@ -1105,77 +1181,438 @@ const REST_MAP={
   AR_RECEIPT_CLASSES:"/fscmRestApi/resources/latest/receivablesCreditMemos",
 };
 
+/* Guardrail #5: wipe the grid + all result state. Called before every run and on every failure,
+   so the grid can never retain a prior query's rows and present them as the current result. */
+function t2sWipeGrid(){
+  ST.cols=[];ST.allRows=[];ST.filtRows=[];ST.note="";ST.prov=null;
+  var tbl=document.getElementById("resTbl"); if(tbl){tbl.innerHTML="";tbl.style.display="none";}
+  ["btnXls","btnCsv","btnJson"].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
+}
+/* Guardrail #3/#7: error states render as errors — never rows. Oracle/Fusion error surfaced verbatim. */
+function t2sRenderError(msg){
+  t2sWipeGrid();
+  var es=document.getElementById("emptyState");
+  if(es){es.style.display="";es.innerHTML='<div class="empty-ico" style="color:var(--err)">✕</div><div style="color:var(--err);font-size:12px;font-weight:600;max-width:640px">Query failed — no rows</div><div style="color:var(--t2);font-size:11px;max-width:640px;margin-top:6px;white-space:pre-wrap">'+String(msg).replace(/</g,"&lt;")+'</div>';}
+  document.getElementById("resSt").innerHTML='<span style="color:var(--err)">✕ Error</span>';
+  document.getElementById("resCnt").textContent="0 rows";
+  document.getElementById("resTm").textContent="";
+  toast("Error: "+msg,"er");
+}
+/* Guardrail #4/#6: zero rows is a first-class, explicit state with verification context. No fake row. */
+function t2sRenderEmpty(payload,elapsed){
+  t2sWipeGrid();
+  var inst=(payload.prov&&payload.prov.instance)||"instance";
+  var es=document.getElementById("emptyState");
+  if(es){es.style.display="";es.innerHTML='<div class="empty-ico">0</div><div style="font-size:13px;font-weight:600;color:var(--t1)">0 rows returned</div><div style="color:var(--t3);font-size:11px;margin-top:6px">Queried '+inst+' · '+(payload.prov&&payload.prov.endpoint||'')+'</div>';}
+  document.getElementById("resSt").innerHTML='<span style="color:var(--ok)">✓ Queried '+inst+' — 0 rows returned</span>';
+  document.getElementById("resCnt").innerHTML='<span class="res-cnt">0</span> rows returned';
+  document.getElementById("resTm").textContent=elapsed?elapsed+"s":"";
+}
+
 async function runQuery(){
   var sql=document.getElementById("sqled").value.trim();
   if(!sql){toast("Write a query first","er");return;}
+  // Guardrail #5: clear the grid before anything else.
+  t2sWipeGrid();
   document.getElementById("prog").className="prog run";
-  document.getElementById("emptyState").style.display="none";document.getElementById("resTbl").style.display="none";
   document.getElementById("resCnt").textContent="Running...";
   ["resTm","resSt","resEp"].forEach(id=>document.getElementById(id).textContent="");
   document.getElementById("filtInp").value="";
-  ["btnXls","btnCsv","btnJson"].forEach(id=>document.getElementById(id).disabled=true);
+  // Guardrail #1: read-only SQL only — reject DML/DDL/PL-SQL, multi-statements, and non-query content.
+  var chk=t2sReadOnlySQL(sql);
+  if(!chk.ok){t2sRenderError(chk.reason);document.getElementById("prog").className="prog";return;}
+  if(!(ST.conn&&ST.url)){t2sRenderError("Not connected. Connect to an Oracle Fusion instance (⌘⇧C) to run live data.");document.getElementById("prog").className="prog";return;}
   var t0=Date.now();
   try{
-    var cols,rows,ep="demo";
-    if(ST.conn&&ST.url){
-      try{var res=await queryREST(sql);cols=res.cols;rows=res.rows;ep=res.ep;}
-      catch(e){var res2=await aiData(sql);cols=res2.cols;rows=res2.rows;}
-    }else{var res3=await aiData(sql);cols=res3.cols;rows=res3.rows;}
-    ST.cols=cols;ST.allRows=rows;ST.filtRows=rows;
-    renderResults(cols,rows,((Date.now()-t0)/1000).toFixed(2),ep);
+    var payload=await queryREST(sql);
+    var kind=t2sAssertRenderable(payload); // throws unless rows carry live provenance
+    var elapsed=((Date.now()-t0)/1000).toFixed(2);
+    if(kind==="error"){t2sRenderError(payload.message);}
+    else if(kind==="empty"){t2sRenderEmpty(payload,elapsed);}
+    else{
+      ST.note=payload.note||"";ST.prov=payload.prov;
+      ST.cols=payload.cols;ST.allRows=payload.rows;ST.filtRows=payload.rows;
+      renderResults(payload.cols,payload.rows,elapsed,payload.prov.endpoint);
+    }
   }catch(e){
-    document.getElementById("resSt").innerHTML='<span style="color:var(--err)">Error: '+e.message+'</span>';
-    document.getElementById("resCnt").textContent="0 rows";
-    toast("Error: "+e.message,"er");
+    t2sRenderError(e.message); // includes the invariant breach if rows ever arrived untagged
   }
   document.getElementById("prog").className="prog";
 }
 
-async function queryREST(sql){
-  var base=ST.url.replace(/\/$/,""),creds=btoa(ST.user+":"+ST.pass);
-  var m=sql.match(/FROM\s+(\w+)/i),tn=m?m[1].toUpperCase():"";
-  var ep=REST_MAP[tn]||"/fscmRestApi/resources/latest/";
-  var lim=document.getElementById("rowLim").value;
-  document.getElementById("resEp").textContent="→ "+ep;
-  // Use XHR instead of fetch — works from file:// without CORS preflight issues
-  return new Promise((resolve,reject)=>{
+function t2sInstanceName(url){
+  try{return (url||"").replace(/^https?:\/\//,"").replace(/\/.*$/,"")||"instance";}catch(e){return "instance";}
+}
+
+/* Transport layer. Returns a raw {status,responseText} | {networkError} | {timeout}
+   — never a parsed result. Basic mode = XHR with Basic auth (unchanged behavior).
+   SSO mode = main-process fetch carrying the federated session cookies. Both feed
+   the SAME t2sProcessResponse guard, so neither can fabricate rows. */
+function t2sAuthGet(url){
+  if(ST.authMode==="sso"){
+    if(!(window.electronAPI&&window.electronAPI.ssoFetch))return Promise.resolve({networkError:true});
+    return window.electronAPI.ssoFetch(url).then(function(r){
+      if(!r||r.networkError)return {networkError:true};
+      return {status:r.status,responseText:r.responseText};
+    }).catch(function(){return {networkError:true};});
+  }
+  // Basic auth — identical transport to the original queryREST.
+  return new Promise(function(resolve){
     var xhr=new XMLHttpRequest();
-    xhr.open("GET",base+ep+"?limit="+lim+"&onlyData=true",true);
-    xhr.setRequestHeader("Authorization","Basic "+creds);
+    xhr.open("GET",url,true);
+    xhr.setRequestHeader("Authorization","Basic "+btoa(ST.user+":"+ST.pass));
     xhr.setRequestHeader("Accept","application/json");
     xhr.timeout=15000;
-    xhr.onload=function(){
-      if(xhr.status===0||xhr.status>=400){reject(new Error("HTTP "+xhr.status+" — check URL/credentials"));return;}
-      try{
-        var data=JSON.parse(xhr.responseText),items=data.items||data.value||[];
-        if(!items.length){resolve({cols:["Result"],rows:[["No data — endpoint returned empty"]],ep});return;}
-        var cols=Object.keys(items[0]);
-        resolve({cols,rows:items.map(i=>cols.map(c=>i[c]!=null?i[c]:null)),ep});
-      }catch(e){reject(new Error("JSON parse error: "+e.message));}
-    };
-    xhr.onerror=function(){reject(new Error("Network error — CORS or connectivity issue. Try running from a web server or Electron."));};
-    xhr.ontimeout=function(){reject(new Error("Timeout after 15s"));};
+    xhr.onload=function(){resolve({status:xhr.status,responseText:xhr.responseText});};
+    xhr.onerror=function(){resolve({networkError:true});};
+    xhr.ontimeout=function(){resolve({timeout:true});};
     xhr.send();
   });
 }
 
-async function aiData(sql){
-  var m=sql.match(/FROM\s+(\w+)/i),tn=m?m[1].toUpperCase():"HZ_PARTIES";
-  var tbl=SCH[tn];
-  var colHint=tbl?"Use columns: "+tbl.cols.slice(0,10).map(c=>c.n).join(", "):"";
-  var txt=await callAI("Simulate Oracle Fusion data for:\n"+sql+"\n"+colHint+"\nReturn ONLY JSON (no markdown): {\"columns\":[...],\"rows\":[[...],...]}\nGenerate 10-14 realistic rows.",1200,"Oracle Fusion data simulator. Return ONLY valid JSON.");
-  var parsed=JSON.parse(txt.replace(/```json|```/g,"").trim());
-  return{cols:parsed.columns,rows:parsed.rows};
+/* queryREST resolves EXACTLY ONE of t2sProcessResponse's outcomes: error | empty | rows.
+   It never rejects with row-shaped data and never fabricates an empty/placeholder row. */
+async function queryREST(sql){
+  var base=ST.url.replace(/\/$/,"");
+  var instance=t2sInstanceName(ST.url);
+  var m=sql.match(/FROM\s+(\w+)/i),tn=m?m[1].toUpperCase():"";
+  var ep=REST_MAP[tn];
+  if(!ep){
+    document.getElementById("resEp").textContent="→ (no REST resource)";
+    return {kind:"error",message:(tn||"This table")+" has no Oracle Fusion REST resource mapped. Fusion REST exposes business resources (e.g. opportunities, accounts, invoices), not raw tables or _VL views. Map it, or add a REST_MAP entry for "+(tn||"it")+"."};
+  }
+  var fetchLim=500;
+  var ctx={instance:instance,endpoint:ep,sql:sql,connectionId:instance,fetchLim:fetchLim};
+  document.getElementById("resEp").textContent="→ "+ep+(ST.authMode==="sso"?" (SSO)":"");
+  var http=await t2sAuthGet(base+ep+"?limit="+fetchLim+"&onlyData=true");
+  return t2sProcessResponse(http,ctx); // single choke point — error | empty | rows only
 }
+
+/* aiData() removed — Talk2Sql never simulates or fabricates data. All results are live from Oracle Fusion. */
+
+/* ===== SQL→REST client-side executor + anti-fabrication guard (see queryREST/runQuery) ===== */
+/* ──────────────────────────────────────────────────────────────────────────
+   Talk2Sql — client-side SQL executor over a live Fusion REST resource.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function t2sNorm(name){
+  return String(name).split(".").pop().toLowerCase().replace(/[^a-z0-9]/g,"");
+}
+
+function t2sSplitTop(s){
+  var out=[],depth=0,cur="";
+  for(var i=0;i<s.length;i++){
+    var c=s[i];
+    if(c==="(")depth++;
+    else if(c===")")depth--;
+    if(c===","&&depth===0){out.push(cur);cur="";}
+    else cur+=c;
+  }
+  if(cur.trim())out.push(cur);
+  return out.map(function(x){return x.trim();});
+}
+
+function t2sParseSelectItem(item){
+  var alias=null, expr=item;
+  var mAs=item.match(/^(.*?)\s+as\s+("?[\w ]+"?|\w+)\s*$/i);
+  if(mAs){expr=mAs[1].trim();alias=mAs[2].replace(/"/g,"").trim();}
+  else{
+    var mTrail=expr.match(/^(.+\))\s+("?[\w ]+"?|\w+)$/);
+    if(mTrail){expr=mTrail[1].trim();alias=mTrail[2].replace(/"/g,"").trim();}
+  }
+  var agg=null;
+  var mAgg=expr.match(/^(sum|count|avg|min|max)\s*\(\s*(distinct\s+)?(.+?)\s*\)$/i);
+  if(mAgg)agg={fn:mAgg[1].toLowerCase(),arg:mAgg[3].trim()};
+  if(!alias)alias=expr;
+  return {raw:item,expr:expr,alias:alias,agg:agg};
+}
+
+function t2sParse(sql){
+  var s=" "+sql.replace(/;\s*$/,"").replace(/\s+/g," ").trim()+" ";
+  function between(startRe,endRes){
+    var m=s.match(startRe); if(!m)return null;
+    var start=m.index+m[0].length, end=s.length;
+    endRes.forEach(function(re){var mm=s.slice(start).match(re); if(mm)end=Math.min(end,start+mm.index);});
+    return s.slice(start,end).trim();
+  }
+  var selPart =between(/\bselect\b/i,[/\bfrom\b/i]);
+  var fromPart=between(/\bfrom\b/i,[/\bwhere\b/i,/\bgroup\s+by\b/i,/\bhaving\b/i,/\border\s+by\b/i,/\bfetch\s+first\b/i,/\blimit\b/i]);
+  var wherePart=between(/\bwhere\b/i,[/\bgroup\s+by\b/i,/\bhaving\b/i,/\border\s+by\b/i,/\bfetch\s+first\b/i,/\blimit\b/i]);
+  var groupPart=between(/\bgroup\s+by\b/i,[/\bhaving\b/i,/\border\s+by\b/i,/\bfetch\s+first\b/i,/\blimit\b/i]);
+  var havingPart=between(/\bhaving\b/i,[/\border\s+by\b/i,/\bfetch\s+first\b/i,/\blimit\b/i]);
+  var orderPart=between(/\border\s+by\b/i,[/\bfetch\s+first\b/i,/\blimit\b/i]);
+  var limit=null;
+  var mF=s.match(/\bfetch\s+first\s+(\d+)\s+rows?/i); if(mF)limit=parseInt(mF[1]);
+  var mL=s.match(/\blimit\s+(\d+)/i); if(mL)limit=parseInt(mL[1]);
+
+  var joins=fromPart?(fromPart.match(/\bjoin\b/gi)||[]).length:0;
+  var baseTable=null;
+  if(fromPart){
+    var bt=fromPart.split(/\bjoin\b/i)[0].trim().split(/\s+/);
+    baseTable=bt[0];
+  }
+  var select=(selPart?t2sSplitTop(selPart):[]).map(t2sParseSelectItem);
+  var groupBy=groupPart?t2sSplitTop(groupPart):[];
+  var orderBy=orderPart?t2sSplitTop(orderPart).map(function(o){
+    var d=/\bdesc\b/i.test(o)?-1:1; var col=o.replace(/\b(asc|desc)\b/ig,"").trim();
+    return {col:col,dir:d};
+  }):[];
+  return {select:select,baseTable:baseTable,joins:joins,where:wherePart,groupBy:groupBy,having:havingPart,orderBy:orderBy,limit:limit};
+}
+
+function t2sResolver(sampleRow){
+  var keys=Object.keys(sampleRow||{});
+  var idx={}; keys.forEach(function(k){idx[t2sNorm(k)]=k;});
+  return function(col){ return idx[t2sNorm(col)]; };
+}
+
+function t2sCoerce(v){
+  if(v===null||v===undefined)return v;
+  if(typeof v==="number")return v;
+  var s=String(v).trim();
+  if(/^-?\d+(\.\d+)?$/.test(s))return parseFloat(s);
+  return v;
+}
+
+function t2sLike(val,pat){
+  if(val===null||val===undefined)return false;
+  var re=new RegExp("^"+String(pat).replace(/[.+^${}()|[\]\\]/g,"\\$&").replace(/%/g,".*").replace(/_/g,".")+"$","i");
+  return re.test(String(val));
+}
+
+function t2sEvalCond(cond,row,resolve){
+  cond=cond.trim();
+  if(/sysdate|userenv|trunc\s*\(|nvl\s*\(/i.test(cond))return null;
+  var m;
+  if(m=cond.match(/^(.+?)\s+is\s+not\s+null$/i)){var k=resolve(m[1]);return k?row[k]!==null&&row[k]!==undefined&&row[k]!=="":null;}
+  if(m=cond.match(/^(.+?)\s+is\s+null$/i)){var k2=resolve(m[1]);return k2?(row[k2]===null||row[k2]===undefined||row[k2]===""):null;}
+  if(m=cond.match(/^(.+?)\s+not\s+in\s*\((.+)\)$/i)){var kn=resolve(m[1]); if(!kn)return null; var listN=t2sSplitTop(m[2]).map(function(x){return t2sCoerce(x.replace(/^'|'$/g,""));}); return listN.indexOf(t2sCoerce(row[kn]))===-1;}
+  if(m=cond.match(/^(.+?)\s+in\s*\((.+)\)$/i)){var ki=resolve(m[1]); if(!ki)return null; var listI=t2sSplitTop(m[2]).map(function(x){return t2sCoerce(x.replace(/^'|'$/g,""));}); return listI.indexOf(t2sCoerce(row[ki]))!==-1;}
+  if(m=cond.match(/^(.+?)\s+not\s+like\s+'(.+)'$/i)){var kl=resolve(m[1]); if(!kl)return null; return !t2sLike(row[kl],m[2]);}
+  if(m=cond.match(/^(.+?)\s+like\s+'(.+)'$/i)){var kl2=resolve(m[1]); if(!kl2)return null; return t2sLike(row[kl2],m[2]);}
+  if(m=cond.match(/^(.+?)\s*(<=|>=|<>|!=|=|<|>)\s*(.+)$/)){
+    var k3=resolve(m[1]); if(!k3)return null;
+    var op=m[2], rhsRaw=m[3].trim().replace(/^'|'$/g,"");
+    var lhs=t2sCoerce(row[k3]), rhs=t2sCoerce(rhsRaw);
+    switch(op){case"=":return lhs==rhs;case"<>":case"!=":return lhs!=rhs;
+      case"<":return lhs<rhs;case">":return lhs>rhs;case"<=":return lhs<=rhs;case">=":return lhs>=rhs;}
+  }
+  return null;
+}
+
+function t2sEvalWhere(where,row,resolve,skipped){
+  if(!where)return true;
+  var parts=where.split(/\band\b/i);
+  for(var i=0;i<parts.length;i++){
+    var r=t2sEvalCond(parts[i],row,resolve);
+    if(r===null){ if(skipped&&skipped.indexOf(parts[i].trim())===-1)skipped.push(parts[i].trim()); continue; }
+    if(r===false)return false;
+  }
+  return true;
+}
+
+function t2sAgg(fn,vals){
+  var nums=vals.map(t2sCoerce).filter(function(v){return typeof v==="number"&&!isNaN(v);});
+  switch(fn){
+    case"count":return vals.filter(function(v){return v!==null&&v!==undefined&&v!=="";}).length;
+    case"sum":return nums.reduce(function(a,b){return a+b;},0);
+    case"avg":return nums.length?nums.reduce(function(a,b){return a+b;},0)/nums.length:null;
+    case"min":return nums.length?Math.min.apply(null,nums):null;
+    case"max":return nums.length?Math.max.apply(null,nums):null;
+  }
+}
+
+function t2sRun(items,sql){
+  var notes=[];
+  if(!items||!items.length)return {cols:["Result"],rows:[["No data — endpoint returned empty"]],note:""};
+  var p=t2sParse(sql);
+  var resolve=t2sResolver(items[0]);
+  var skipped=[];
+  var filtered=items.filter(function(r){return t2sEvalWhere(p.where,r,resolve,skipped);});
+  var hasAgg=p.select.some(function(s){return s.agg;});
+  var star=!p.select.length||(p.select.length===1&&p.select[0].expr==="*");
+  // clean header: strip table-alias prefix for implicit aliases, keep explicit AS aliases
+  var outCols=star?Object.keys(items[0]):p.select.map(function(s){return s.expr===s.alias?s.alias.split(".").pop():s.alias;});
+  var unresolved=[];
+
+  function projectScalar(row){
+    return p.select.map(function(s){
+      if(s.agg)return null;
+      var k=resolve(s.expr);
+      if(!k){ if(unresolved.indexOf(s.expr)===-1)unresolved.push(s.expr); return null; }
+      return row[k];
+    });
+  }
+
+  var outRows;
+  if(star&&!hasAgg&&!p.groupBy.length){
+    outRows=filtered.map(function(r){return outCols.map(function(c){return r[c];});});
+  }else if(p.groupBy.length||hasAgg){
+    var groups={};
+    var gkeys=p.groupBy.map(function(g){return resolve(g);});
+    filtered.forEach(function(row){
+      var gv=gkeys.map(function(k){return k?row[k]:""; });
+      var gid=JSON.stringify(gv);
+      (groups[gid]=groups[gid]||[]).push(row);
+    });
+    var gids=Object.keys(groups);
+    if(!p.groupBy.length){gids=["__all__"];groups["__all__"]=filtered;}
+    outRows=gids.map(function(gid){
+      var grp=groups[gid]||[];
+      return p.select.map(function(s){
+        if(s.agg){
+          var ak=resolve(s.agg.arg);
+          var vals=s.agg.fn==="count"&&(s.agg.arg==="*"||!ak)?grp.map(function(){return 1;}):grp.map(function(r){return ak?r[ak]:null;});
+          if(s.agg.fn!=="count"&&!ak&&s.agg.arg!=="*"&&unresolved.indexOf(s.agg.arg)===-1)unresolved.push(s.agg.arg);
+          return t2sAgg(s.agg.fn,vals);
+        }
+        var k=resolve(s.expr); if(!k){if(unresolved.indexOf(s.expr)===-1)unresolved.push(s.expr);return null;}
+        return grp.length?grp[0][k]:null;
+      });
+    });
+    if(p.having){
+      var hm=p.having.match(/^\s*(sum|count|avg|min|max)\s*\(\s*(.+?)\s*\)\s*(<=|>=|<>|!=|=|<|>)\s*(.+?)\s*$/i);
+      if(hm){
+        var hAliasIdx=p.select.findIndex(function(s){return s.agg&&s.agg.fn===hm[1].toLowerCase()&&t2sNorm(s.agg.arg)===t2sNorm(hm[2]);});
+        if(hAliasIdx!==-1){
+          var hop=hm[3], hrhs=t2sCoerce(hm[4].replace(/^'|'$/g,""));
+          outRows=outRows.filter(function(r){
+            var lv=t2sCoerce(r[hAliasIdx]);
+            switch(hop){case"=":return lv==hrhs;case"<>":case"!=":return lv!=hrhs;case"<":return lv<hrhs;case">":return lv>hrhs;case"<=":return lv<=hrhs;case">=":return lv>=hrhs;}
+            return true;
+          });
+        } else notes.push("HAVING skipped (aggregate not in SELECT)");
+      } else notes.push("HAVING not applied (unsupported expression)");
+    }
+  } else {
+    outRows=filtered.map(projectScalar);
+  }
+
+  if(p.orderBy.length){
+    var orderIdx=p.orderBy.map(function(o){
+      var ai=outCols.findIndex(function(c){return t2sNorm(c)===t2sNorm(o.col);});
+      return {idx:ai,dir:o.dir};
+    });
+    outRows.sort(function(a,b){
+      for(var i=0;i<orderIdx.length;i++){
+        var oi=orderIdx[i]; if(oi.idx===-1)continue;
+        var av=t2sCoerce(a[oi.idx]),bv=t2sCoerce(b[oi.idx]);
+        if(av<bv)return -1*oi.dir; if(av>bv)return 1*oi.dir;
+      }
+      return 0;
+    });
+  }
+
+  if(p.limit)outRows=outRows.slice(0,p.limit);
+
+  if(p.joins)notes.unshift(p.joins+" JOIN"+(p.joins>1?"s":"")+" can't run over a single REST resource — joined columns are blank. Use BI Publisher for cross-table joins.");
+  if(unresolved.length)notes.push("Columns not on this resource (blank): "+unresolved.join(", "));
+  if(skipped.length)notes.push("WHERE conditions skipped (SYSDATE/NVL/TRUNC not supported client-side): "+skipped.join(" AND "));
+
+  return {cols:outCols,rows:outRows,note:notes.join(" · ")};
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Anti-fabrication guard layer.
+
+   THE INVARIANT: result rows have exactly one origin — a live REST fetch in THIS
+   request. Every other path may produce only an error state or an explicit empty
+   state. These pure functions are the single choke point the app routes through,
+   so fabrication is structurally impossible (and unit-testable without a DOM).
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Provenance stamp proving a result set came from a live execution in this request. */
+function t2sProvenance(ctx,rowCount){
+  return {
+    live:true,
+    instance:(ctx&&ctx.instance)||null,
+    endpoint:(ctx&&ctx.endpoint)||null,
+    sql:(ctx&&ctx.sql)||null,
+    connection_id:(ctx&&ctx.connectionId)||null,
+    executed_at:new Date().toISOString(),
+    row_count:rowCount
+  };
+}
+
+/* Pull the verbatim Oracle/Fusion error out of a REST error body — never invent one. */
+function t2sExtractError(txt){
+  if(!txt)return "";
+  try{var d=JSON.parse(txt);
+    var detail=d.detail||d.message||d.title||(d["o:errorDetails"]&&d["o:errorDetails"][0]&&d["o:errorDetails"][0].detail);
+    if(detail)return String(detail);
+  }catch(e){}
+  var m=String(txt).match(/ORA-\d{5}:[^\n"]*/);
+  if(m)return m[0];
+  return String(txt).slice(0,200);
+}
+
+/* Read-only SQL gate. The LLM may only emit a single SELECT/WITH; anything else
+   (DML, DDL, PL/SQL, multiple statements, or result-shaped junk) is rejected. */
+function t2sReadOnlySQL(sql){
+  if(!sql||!String(sql).trim())return {ok:false,reason:"Empty query"};
+  var s=String(sql).trim().replace(/;+\s*$/,"");
+  if(/;/.test(s))return {ok:false,reason:"Multiple statements are not allowed — single read-only query only"};
+  if(!/^\s*(select|with)\b/i.test(s))return {ok:false,reason:"Only read-only SELECT / WITH queries are allowed (got non-query content)"};
+  if(/\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|exec|execute|call|begin|declare)\b/i.test(s))
+    return {ok:false,reason:"Write/DDL/PL-SQL keywords are not permitted in this read-only tool"};
+  return {ok:true};
+}
+
+/* The choke point. Turns a raw HTTP outcome into exactly one of: error | empty | rows.
+   http = {status, responseText, networkError, timeout}
+   ctx  = {instance, endpoint, sql, connectionId, fetchLim}
+   Rows are ONLY ever produced from a live 2xx body with items, and always carry provenance. */
+function t2sProcessResponse(http,ctx){
+  ctx=ctx||{};
+  if(http.networkError)return {kind:"error",message:"Network error — could not reach "+(ctx.instance||"the instance")+" (connection refused, offline, or CORS)."};
+  if(http.timeout)return {kind:"error",message:"Timeout contacting "+(ctx.instance||"the instance")+"."};
+  if(http.status===0||http.status>=400){
+    var detail=t2sExtractError(http.responseText);
+    return {kind:"error",message:"HTTP "+http.status+(detail?" — "+detail:" — request rejected by Fusion"),raw:http.responseText||""};
+  }
+  var data;
+  try{data=JSON.parse(http.responseText);}
+  catch(e){return {kind:"error",message:"Malformed response (not JSON) from "+(ctx.instance||"the instance")+"."};}
+  var items=data.items||data.value||[];
+  if(!items.length)return {kind:"empty",rowCount:0,prov:t2sProvenance(ctx,0)};
+  var r=t2sRun(items,ctx.sql);
+  if(!r.rows.length)return {kind:"empty",rowCount:0,prov:t2sProvenance(ctx,0),note:r.note};
+  var note=r.note;
+  if(ctx.fetchLim&&items.length>=ctx.fetchLim){
+    var cap="REST returned the max "+ctx.fetchLim+"-row page — filters/aggregates reflect those rows only (use BI Publisher for full-table accuracy).";
+    note=note?cap+" · "+note:cap;
+  }
+  return {kind:"rows",cols:r.cols,rows:r.rows,note:note,prov:t2sProvenance(ctx,r.rows.length)};
+}
+
+/* Invariant enforcement at the render boundary. Rows may render ONLY if they carry
+   live-execution provenance. Throws otherwise — a fabricated/untagged set cannot pass. */
+function t2sAssertRenderable(payload){
+  if(!payload||!payload.kind)throw new Error("Result payload missing kind — refusing to render");
+  if(payload.kind==="rows"){
+    if(!payload.prov||payload.prov.live!==true)throw new Error("Refusing to render rows without live-execution provenance");
+    if(!Array.isArray(payload.rows))throw new Error("Refusing to render non-array row data");
+  }
+  return payload.kind; // 'rows' | 'empty' | 'error'
+}
+
+/* ===== end executor ===== */
+
 
 /* ═══════════════════════════════════════
    RENDER RESULTS
 ═══════════════════════════════════════ */
 function renderResults(cols,rows,elapsed,ep){
+  // Invariant: only provenance-tagged, live-execution rows may render here.
+  if(!ST.prov||ST.prov.live!==true){t2sRenderError("Refused to render: result set is missing live-execution provenance.");return;}
   var lim=parseInt(document.getElementById("rowLim").value),display=rows.slice(0,lim);
   document.getElementById("resCnt").innerHTML='<span class="res-cnt">'+display.length+'</span> rows';
   document.getElementById("resTm").textContent=elapsed?elapsed+"s":"";
-  document.getElementById("resSt").innerHTML=(ep&&ep.indexOf("demo")===-1)?'<span style="color:var(--ok)">✓ Live</span>':'<span style="color:var(--a4)">◉ Demo</span>';
+  // Guardrail #8: provenance stamp — instance, timestamp, driver-reported row count.
+  var stampTime=new Date(ST.prov.executed_at).toLocaleString();
+  var stamp='<span style="color:var(--ok)" title="'+ST.prov.endpoint+'">✓ Verified against '+ST.prov.instance+' at '+stampTime+' — '+ST.prov.row_count+' rows</span>';
+  document.getElementById("resSt").innerHTML=stamp+
+    (ST.note?' <span title="'+String(ST.note).replace(/"/g,"&quot;")+'" style="color:var(--a4);font-size:10px">⚠ '+String(ST.note).replace(/</g,"&lt;")+'</span>':'');
   document.getElementById("filtCnt").textContent=display.length+" of "+rows.length;
   var tbl=document.getElementById("resTbl");
   var ths=cols.map((c,i)=>"<th id='th_"+i+"'>"+c+"</th>").join("");
@@ -1279,8 +1716,9 @@ function icmPage(page){
 }
 
 /* ── Shared: fetch from Oracle REST or simulate with AI ── */
-async function icmFetch(ep,params,simulate){
-  if(!ST.conn||!ST.url){return simulate();}
+async function icmFetch(ep,params){
+  // Live only — never fabricate. Returns empty items when not connected or on error.
+  if(!ST.conn||!ST.url){return {live:false,items:[],error:"not_connected"};}
   var base=ST.url.replace(/\/$/,""),creds=btoa(ST.user+":"+ST.pass);
   return new Promise((resolve)=>{
     var xhr=new XMLHttpRequest();
@@ -1290,12 +1728,12 @@ async function icmFetch(ep,params,simulate){
     xhr.setRequestHeader("Accept","application/json");
     xhr.timeout=12000;
     xhr.onload=function(){
-      if(xhr.status===0||xhr.status>=400){console.warn("ICM REST HTTP "+xhr.status);resolve(simulate());return;}
+      if(xhr.status===0||xhr.status>=400){console.warn("ICM REST HTTP "+xhr.status);resolve({live:false,items:[],error:"http_"+xhr.status});return;}
       try{var d=JSON.parse(xhr.responseText);resolve({live:true,items:d.items||d.value||[],raw:d});}
-      catch(e){resolve(simulate());}
+      catch(e){resolve({live:false,items:[],error:"parse_error"});}
     };
-    xhr.onerror=function(){console.warn("ICM REST network error");resolve(simulate());};
-    xhr.ontimeout=function(){resolve(simulate());};
+    xhr.onerror=function(){console.warn("ICM REST network error");resolve({live:false,items:[],error:"network"});};
+    xhr.ontimeout=function(){resolve({live:false,items:[],error:"timeout"});};
     xhr.send();
   });
 }
@@ -1352,44 +1790,43 @@ function qBlock(title,sqlHtml,badge){
 async function loadQPanel(btn){
   var card=btn.closest(".qpanel"),sqlEl=card.querySelector(".qpanel-sql"),resultEl=card.querySelector(".qpanel-result"),statusEl=card.querySelector(".qpanel-status");
   var sql=sqlEl.innerText.trim();
+  // Guardrail #5: clear this card's result before running.
   resultEl.innerHTML='<div class="loading-row"><span class="kpi-spin"></span> Fetching from Oracle Fusion…</div>';
   statusEl.innerHTML='<span class="kpi-spin"></span> Running…';
+  function fail(msg){
+    resultEl.innerHTML=`<div style="padding:16px;background:var(--err)11;border:1px solid var(--err)33;border-radius:8px;margin:10px">
+      <div style="color:var(--err);font-weight:700;margin-bottom:8px;font-size:12px">✕ Query failed — no rows</div>
+      <div style="color:var(--t2);font-size:11px;white-space:pre-wrap">${String(msg).replace(/</g,"&lt;")}</div></div>`;
+    statusEl.innerHTML=`<span style="color:var(--err)">✕ Error</span>`;
+    toast("Error: "+msg,"er");
+  }
+  // Guardrail #1: read-only SQL only.
+  var chk=t2sReadOnlySQL(sql);
+  if(!chk.ok){fail(chk.reason);return;}
+  if(!(ST.conn&&ST.url)){fail("Not connected. Connect to Oracle Fusion to run live data.");return;}
   var t0=Date.now();
   try{
-    var res;
-    // In ICM dashboard: ICM SQL uses DB tables not directly REST-queryable
-    // Use REST for known REST-mapped tables, AI demo for ICM-specific tables
-    var icmTables=/CN_|FND_BPM/i;
-    var sqlTable=(sql.match(/FROM\s+(\w+)/i)||[])[1]||"";
-    if(ST.conn&&ST.url&&!icmTables.test(sqlTable)){
-      res=await queryREST(sql);
-    } else if(ST.conn&&ST.url&&REST_MAP[sqlTable.toUpperCase()]){
-      res=await queryREST(sql); // will use mapped ICM REST endpoint
-    } else {
-      res=await aiData(sql); // demo mode for pure DB tables
+    var payload=await queryREST(sql);
+    var kind=t2sAssertRenderable(payload); // throws unless rows carry live provenance
+    var elapsed=((Date.now()-t0)/1000).toFixed(2);
+    if(kind==="error"){fail(payload.message);return;}
+    if(kind==="empty"){
+      var inst0=(payload.prov&&payload.prov.instance)||"instance";
+      resultEl.innerHTML=`<div style="padding:18px;color:var(--t2);font-size:12px"><b style="color:var(--t1)">0 rows returned</b><div style="color:var(--t3);font-size:11px;margin-top:4px">Queried ${inst0} · ${(payload.prov&&payload.prov.endpoint)||''}</div></div>`;
+      statusEl.innerHTML=`<span style="color:var(--ok)">✓ Queried ${inst0} — 0 rows returned</span>`;
+      return;
     }
-    var {cols,rows}=res,elapsed=((Date.now()-t0)/1000).toFixed(2);
+    var cols=payload.cols,rows=payload.rows,prov=payload.prov;
     var ths=cols.map((c,i)=>`<th>${c}</th>`).join("");
-    var trs=rows.slice(0,100).map((row,ri)=>`<tr><td class="rn">${ri+1}</td>${row.map(c=>`<td>${c??'—'}</td>`).join("")}</tr>`).join("");
+    var trs=rows.slice(0,100).map((row,ri)=>`<tr><td class="rn">${ri+1}</td>${row.map(c=>`<td>${c==null?'—':String(c).replace(/</g,'&lt;')}</td>`).join("")}</tr>`).join("");
     resultEl.innerHTML=`<table class="icm-tbl" style="width:100%;min-width:max-content"><thead><tr><th class="rn">#</th>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
-    statusEl.innerHTML=`<span style="color:var(--ok)">✓ ${rows.length} rows</span> <span style="color:var(--t3)">· ${elapsed}s</span> ${ST.conn?"· <span style='color:var(--ok)'>Live</span>":"· <span style='color:var(--warn)'>Demo mode</span>"}`;
-    // also push to main grid
-    ST.cols=cols;ST.allRows=rows;ST.filtRows=rows;
+    // Guardrail #8: provenance stamp.
+    statusEl.innerHTML=`<span style="color:var(--ok)" title="${prov.endpoint}">✓ Verified against ${prov.instance} at ${new Date(prov.executed_at).toLocaleString()} — ${prov.row_count} rows · ${elapsed}s</span>`;
+    // push to main grid WITH provenance, so it can never be rendered as untagged
+    ST.cols=cols;ST.allRows=rows;ST.filtRows=rows;ST.prov=prov;ST.note=payload.note||"";
     toast(rows.length+" rows loaded","ok");
   }catch(e){
-    resultEl.innerHTML=`<div style="padding:16px;background:var(--err)11;border:1px solid var(--err)33;border-radius:8px;margin:10px">
-      <div style="color:var(--err);font-weight:700;margin-bottom:8px;font-size:12px">⚠ Query Error</div>
-      <div style="color:var(--t2);font-size:11px;margin-bottom:10px">${e.message}</div>
-      <div style="color:var(--t3);font-size:10px;line-height:1.8">
-        <b>Common fixes:</b><br>
-        • <b>file:// CORS:</b> Open Chrome with <code>--disable-web-security</code> flag, or use Electron app<br>
-        • <b>Not connected:</b> Click the connection pill and enter Oracle Fusion URL + credentials<br>
-        • <b>Wrong endpoint:</b> This ICM REST endpoint may not exist on your instance — check the URL<br>
-        • <b>No API key:</b> For demo data, add your Anthropic API key in Connection settings
-      </div>
-    </div>`;
-    statusEl.innerHTML=`<span style="color:var(--err)">Failed</span>`;
-    toast("Error: "+e.message,"er");
+    fail(e.message);
   }
 }
 
@@ -1438,15 +1875,15 @@ async function renderOverview(){
     <div class="icm-card">
       <div class="icm-card-hd"><div class="icm-card-title">🌐 Business Units</div><button class="btn b-run b-xs" onclick="loadBU()">▶ Load Live</button></div>
       <div class="icm-card-body" id="buTable">
-        ${mkTable(["BU_ID","BU_NAME","Status"],[["300000001870282","McAfee Enterprise LE BU",pill("Active","green")],["300000002594180","McAfee BU",pill("Active","green")],["300000002781680","McAfee Corp BU",pill("Review","warn")]],["num","",""])}
+        <div style="padding:14px;color:var(--t3);font-size:11px">Click <strong>▶ Load Live</strong> to pull Business Units from Oracle Fusion.</div>
       </div>
     </div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
     <div class="icm-card">
-      <div class="icm-card-hd"><div class="icm-card-title">📊 Comp Plans by Participant Count</div></div>
+      <div class="icm-card-hd"><div class="icm-card-title">📊 Comp Plans by Participant Count</div><button class="btn b-run b-xs" onclick="loadPlanBars()">▶ Load Live</button></div>
       <div class="icm-card-body pad" id="planBars">
-        ${mkBars([{lbl:"IC Simple Per Event 2017",val:842,color:"var(--icm1)"},{lbl:"McAfee EMEA Accelerator",val:634,color:"var(--icm2)"},{lbl:"McAfee APJ Standard",val:521,color:"var(--icm3)"},{lbl:"McAfee Americas Q4",val:398,color:"var(--icm4)"},{lbl:"McAfee Channel Partner",val:283,color:"var(--icm5)"},{lbl:"McAfee TBD Pool",val:169,color:"var(--t3)"}],842)}
+        <div style="padding:14px;color:var(--t3);font-size:11px">Click <strong>▶ Load Live</strong> to pull comp plans from Oracle Fusion.</div>
       </div>
     </div>
     <div class="icm-card">
@@ -1468,28 +1905,57 @@ async function renderOverview(){
 
 async function loadOverviewKPIs(){
   var live=ST.conn&&ST.url;
-  var data={participants:2847,otv:48.3,earned:12.7,pending:183};
+  // Live only — no hardcoded demo numbers, no fabricated deltas.
+  var data={participants:null,otv:null,earned:null,pending:null};
   if(live){
     try{
       var base=ST.url.replace(/\/$/,""),creds=btoa(ST.user+":"+ST.pass),hdrs={"Authorization":"Basic "+creds,"Accept":"application/json"};
-      var r=await fetch(base+ICM_EP.participants+"?limit=1&onlyData=true",{headers:hdrs,signal:AbortSignal.timeout(8000)});
-      if(r.ok){var d=await r.json();if(d.totalResults)data.participants=d.totalResults;}
+      var r=await fetch(base+ICM_EP.participants+"?limit=1&onlyData=true&totalResults=true",{headers:hdrs,signal:AbortSignal.timeout(8000)});
+      if(r.ok){var d=await r.json();if(d.totalResults!=null)data.participants=d.totalResults;}
     }catch(e){}
   }
+  var show=v=>v==null?"—":(typeof v==="number"?v.toLocaleString():v);
+  var subC=live?"":"Connect for live data";
   document.getElementById("icmKpis").innerHTML=
-    kpiCard("Active Participants",data.participants.toLocaleString(),"Across all comp plans","↑ +142 vs last period","var(--icm1)",true)+
-    kpiCard("Total OTV","$"+data.otv+"M","On-Target Variable","↑ +6.2% YoY","var(--icm2)",true)+
-    kpiCard("Commission Earned","$"+data.earned+"M","Calculated · Pending payout","↓ -2.1% vs target","var(--icm3)",false)+
-    kpiCard("Pending Approvals",data.pending,"Comp letters awaiting sign-off","↓ -34 from last week","var(--icm4)",true);
-  toast(live?"Live KPIs loaded":"Demo KPIs shown",live?"ok":"wa");
+    kpiCard("Active Participants",show(data.participants),live?"Across all comp plans":subC,"","var(--icm1)")+
+    kpiCard("Total OTV",data.otv==null?"—":"$"+data.otv+"M",live?"On-Target Variable":subC,"","var(--icm2)")+
+    kpiCard("Commission Earned",data.earned==null?"—":"$"+data.earned+"M",live?"Calculated · Pending payout":subC,"","var(--icm3)")+
+    kpiCard("Pending Approvals",show(data.pending),live?"Comp letters awaiting sign-off":subC,"","var(--icm4)");
+  toast(live?(data.participants!=null?"Live KPIs loaded":"Connected — live KPIs unavailable"):"Not connected — connect for live KPIs",live?(data.participants!=null?"ok":"wa"):"wa");
 }
 
 async function loadBU(){
-  var res=await icmFetch(ICM_EP.buQuery,"",()=>({live:false,items:[{bu_id:"300000001870282",bu_name:"McAfee Enterprise LE BU"},{bu_id:"300000002594180",bu_name:"McAfee BU"}]}));
+  var res=await icmFetch(ICM_EP.buQuery,"");
+  var el=document.getElementById("buTable");
   if(res.items&&res.items.length){
     var rows=res.items.map(i=>[i.bu_id||i.BU_ID||"—",i.bu_name||i.BU_NAME||"—",pill("Active","green")]);
-    document.getElementById("buTable").innerHTML=mkTable(["BU_ID","BU_NAME","Status"],rows,["num","",""]);
+    el.innerHTML=mkTable(["BU_ID","BU_NAME","Status"],rows,["num","",""]);
     toast("Business Units loaded","ok");
+  }else if(el){
+    el.innerHTML='<div style="padding:14px;color:var(--t3);font-size:11px">'+(res.error==="not_connected"?"⚠ Not connected — connect to Oracle Fusion to load Business Units.":"No Business Units returned from the live endpoint.")+'</div>';
+  }
+}
+
+async function loadPlanBars(){
+  var el=document.getElementById("planBars");
+  if(el)el.innerHTML='<div style="padding:14px;color:var(--t3);font-size:11px"><span class="kpi-spin"></span> Loading…</div>';
+  var res=await icmFetch(ICM_EP.compPlans,"");
+  if(!el)return;
+  if(res.items&&res.items.length){
+    var colors=["var(--icm1)","var(--icm2)","var(--icm3)","var(--icm4)","var(--icm5)","var(--t3)"];
+    var items=res.items.slice(0,8).map(function(p,i){
+      var nm=p.Name||p.CompensationPlanName||p.PlanName||p.name||("Plan "+(i+1));
+      var v=p.ParticipantCount!=null?p.ParticipantCount:(p.participantCount!=null?p.participantCount:null);
+      return {lbl:nm,val:v,color:colors[i%colors.length]};
+    });
+    if(items.every(function(x){return x.val!=null;})){
+      el.innerHTML=mkBars(items,Math.max.apply(null,items.map(function(x){return x.val;})));
+    }else{
+      el.innerHTML='<div style="padding:10px;color:var(--t3);font-size:11px">Loaded '+res.items.length+' live comp plans (per-plan participant counts aren\'t exposed by this REST resource): '+items.map(function(x){return x.lbl;}).join(", ")+'</div>';
+    }
+    toast(res.items.length+" comp plans loaded","ok");
+  }else{
+    el.innerHTML='<div style="padding:14px;color:var(--t3);font-size:11px">'+(res.error==="not_connected"?"⚠ Not connected — connect to Oracle Fusion to load comp plans.":"No comp plans returned from the live endpoint.")+'</div>';
   }
 }
 
@@ -2182,7 +2648,7 @@ document.addEventListener("DOMContentLoaded",function(){
 
 #pws{height:calc(100vh - 82px);position:relative;overflow:hidden}
 </style>
-<div id="offline-note"><span>&#10003; Talk2Sql v3.0.0</span>&nbsp;&middot;&nbsp;<a href="https://github.com/cskasarabada/Talk2Sql" target="_blank" style="color:#4dabf7">github.com/cskasarabada/Talk2Sql</a></div>
+<div id="offline-note"><span>&#10003; Talk2Sql v3.0.1</span>&nbsp;&middot;&nbsp;<a href="https://github.com/cskasarabada/Talk2Sql" target="_blank" style="color:#4dabf7">github.com/cskasarabada/Talk2Sql</a></div>
 
 
 <!-- ══════════════ APP CONFIGURATIONS DRAWER v2.0.0 ══════════════ -->
@@ -2352,7 +2818,7 @@ document.addEventListener("DOMContentLoaded",function(){
   <!-- ADVANCED -->
   <div class="cfg-sec" id="sec-advanced">
     <h3>App Info</h3>
-    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v2.0.7</span></div>
+    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v3.0.1</span></div>
     <div class="cfg-row"><span class="cfg-lbl">Repo</span><a href="#" id="cfg-repo-link" style="font-size:11px;color:var(--a1);font-family:var(--mono)">cskasarabada/Talk2Sql</a></div>
     <div class="cfg-row"><span class="cfg-lbl">Electron mode</span><span id="cfg-electron-mode" style="font-size:11px;font-family:var(--mono);color:var(--t3)">Detecting...</span></div>
 
@@ -7684,17 +8150,20 @@ function cfgPrintRolesReport(){
     sv('fApiKey',realPK); sv('fProfName',p.name);
     var roleEl=document.getElementById('fRole');
     if(roleEl) roleEl.value = p.role||'';
+    var pmode=(p.authMode==='sso')?'sso':'basic';
+    if(typeof setAuthMode==='function') setAuthMode(pmode); // restore the profile's auth mode in the modal
     /* Activate immediately */
     if(typeof ST!=='undefined'){
       Object.assign(ST,{conn:true, url:p.url, user:p.user, pass:effectivePass,
-        apiKey:realPK, orgId:p.orgId||''});
+        apiKey:realPK, orgId:p.orgId||'', authMode:pmode});
     }
     updateConnUI(p.url, p.user, p.role||'');
     cfgFilterModsByRole(p.role||'');
     render();
     if(instant){ closeModal('connModal'); }
     var msg=(instant?'Switched to: ':'Loaded: ')+p.name+(p.role?' ['+p.role.toUpperCase()+']':'');
-    if(!effectivePass) msg+=' — enter password to connect';
+    if(pmode==='sso') msg+=' — SSO; click Sign in with SSO if queries fail';
+    else if(!effectivePass) msg+=' — enter password to connect';
     if(typeof toast==='function') toast(msg,'ok');
   };
 
@@ -7708,10 +8177,11 @@ function cfgPrintRolesReport(){
     var pass=(document.getElementById('fPass')||{}).value||'';
     var apiKey=gv('fApiKey');
     var role=gv('fRole');
-    if(!name||!url||!user){alert('Name, URL and username required');return;}
+    var mode=(typeof ST!=='undefined'&&ST.authMode==='sso')?'sso':'basic';
+    if(!name||!url||(mode!=='sso'&&!user)){alert('Name and URL required (username also required for Basic auth)');return;}
     var a=loadP();
     var idx=a.findIndex(function(p){return p.name===name;});
-    var prof={name:name,url:url.replace(/\/$/,''),user:user,pass:pass,apiKey:apiKey,role:role};
+    var prof={name:name,url:url.replace(/\/$/,''),user:user,pass:pass,apiKey:apiKey,role:role,authMode:mode};
     if(idx>=0)a[idx]=prof;else a.push(prof);
     saveP(a);render();
     if(typeof toast==='function')toast('Profile "'+name+'" saved','ok');else alert('Saved!');

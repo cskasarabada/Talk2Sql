@@ -1,8 +1,62 @@
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog, session, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 let win;
+
+/* ── SSO (federated) connection support ─────────────────────────────────────
+   Optional auth mode. The user completes their org SSO (e.g. Argano → customer
+   Oracle) in a real browser window backed by a persistent session partition;
+   the resulting session cookies are then reused for read-only REST GETs issued
+   from the main process. Basic-auth path is untouched and remains the default. */
+const SSO_PARTITION = 'persist:fusion-sso';
+
+// Open the Oracle base URL for interactive SSO. Resolves when the user closes the
+// window after signing in. Cookies persist in SSO_PARTITION for subsequent fetches.
+ipcMain.handle('sso-login', async (event, baseUrl) => {
+  return new Promise((resolve) => {
+    let loginWin;
+    try {
+      loginWin = new BrowserWindow({
+        width: 1100, height: 820, title: 'Sign in to Oracle (SSO)',
+        parent: win, modal: false, show: true,
+        webPreferences: { partition: SSO_PARTITION, nodeIntegration: false, contextIsolation: true }
+      });
+    } catch (e) { resolve({ ok: false, error: String(e) }); return; }
+    let settled = false;
+    const finish = (ok) => { if (settled) return; settled = true; resolve({ ok: ok, partition: SSO_PARTITION }); };
+    loginWin.on('closed', () => finish(true)); // user signs in, then closes the window
+    loginWin.loadURL(baseUrl).catch((e) => { finish(false); });
+  });
+});
+
+// Issue a read-only GET using the SSO session's cookies. Returns a plain
+// {status, responseText} or {networkError:true} — the renderer feeds this into
+// the SAME t2sProcessResponse guard, so SSO can never fabricate rows either.
+ipcMain.handle('sso-fetch', async (event, opts) => {
+  const url = (opts && opts.url) || '';
+  return new Promise((resolve) => {
+    let body = '';
+    let req;
+    try {
+      req = net.request({ method: 'GET', url: url, session: session.fromPartition(SSO_PARTITION), useSessionCookies: true });
+    } catch (e) { resolve({ networkError: true, message: String(e) }); return; }
+    req.setHeader('Accept', 'application/json');
+    req.on('response', (resp) => {
+      resp.on('data', (chunk) => { body += chunk.toString(); });
+      resp.on('end', () => resolve({ status: resp.statusCode, responseText: body }));
+      resp.on('error', () => resolve({ networkError: true }));
+    });
+    req.on('error', (err) => resolve({ networkError: true, message: String(err) }));
+    req.end();
+  });
+});
+
+// Clear the SSO session (sign out / switch customer).
+ipcMain.handle('sso-clear', async () => {
+  try { await session.fromPartition(SSO_PARTITION).clearStorageData(); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e) }; }
+});
 
 function createWindow() {
   win = new BrowserWindow({
