@@ -401,9 +401,11 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     <label>Authentication</label>
     <div style="display:flex;gap:6px">
       <button type="button" id="authBasicBtn" class="btn b-blue" style="flex:1;font-size:11px" onclick="setAuthMode('basic')">🔑 Username / Password</button>
+      <button type="button" id="authOauthBtn" class="btn b-out" style="flex:1;font-size:11px" onclick="setAuthMode('oauth')">🎫 OAuth (SSO Pods)</button>
       <button type="button" id="authSsoBtn" class="btn b-out" style="flex:1;font-size:11px" onclick="setAuthMode('sso')">🪪 SSO (Federated)</button>
     </div>
     <div id="ssoHint" style="display:none;font-size:9px;color:var(--t3);margin-top:5px;line-height:1.5">Use this for instances behind your org SSO. Enter the Oracle URL, click <b>Sign in with SSO</b>, complete login, then close the login window.</div>
+    <div id="oauthHint" style="display:none;font-size:9px;color:var(--t3);margin-top:5px;line-height:1.5">For SAML-federated pods (e.g. Entra SSO) where username/password is rejected for REST. Your Oracle admin registers a <b>client-credentials</b> app in the pod's IAM identity domain and provides the values below. The secret is stored in your OS keychain — never in profiles.</div>
   </div>
   <div class="field"><label>Instance URL</label><input id="fUrl" type="text" placeholder="https://your-instance.fa.us2.oraclecloud.com"/></div>
   <div id="basicFields"><div class="grid2m">
@@ -413,6 +415,17 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
       <input id="fPass" type="password" placeholder="Enter once — reused for all profiles on this URL"/>
     </div>
   </div></div>
+  <div id="oauthFields" style="display:none">
+    <div class="field"><label>IAM Token URL</label><input id="fOauthTokenUrl" type="text" placeholder="https://idcs-xxxx.identity.oraclecloud.com/oauth2/v1/token"/></div>
+    <div class="grid2m">
+      <div class="field" style="margin:0"><label>Client ID</label><input id="fOauthClientId" type="text" placeholder="from the IAM confidential app"/></div>
+      <div class="field" style="margin:0">
+        <label>Client Secret <span style="font-size:9px;color:var(--t3);font-weight:400">(OS keychain)</span></label>
+        <input id="fOauthSecret" type="password" placeholder="Enter once — blank to reuse stored"/>
+      </div>
+    </div>
+    <div class="field" style="margin-top:8px"><label>Scope</label><input id="fOauthScope" type="text" placeholder="urn:opc:resource:fusion:&lt;pod&gt;:erp/"/></div>
+  </div>
   <div class="field" style="margin-top:10px">
     <label>Anthropic API Key (NLP → SQL)</label>
     <input id="fApiKey" type="password" placeholder="YOUR_ANTHROPIC_API_KEY..."/>
@@ -752,7 +765,8 @@ const ICM_EP = {
 ═══════════════════════════════════════ */
 const ST = {
   conn:false,url:"",user:"",pass:"",apiKey:"",
-  authMode:"basic",   // "basic" (default, username/password) | "sso" (federated session)
+  authMode:"basic",   // "basic" (default, username/password) | "oauth" (client-credentials Bearer, federated pods) | "sso" (federated session)
+  oauth:null,         // {tokenUrl,clientId,scope} — never the secret or token (those live in main/keychain)
   note:"",prov:null,
   mod:"CX Sales",
   cols:[],allRows:[],filtRows:[],
@@ -1028,22 +1042,65 @@ async function explainSQL(){
 /* ═══════════════════════════════════════
    CONNECTION
 ═══════════════════════════════════════ */
-/* SSO is built and working, but hidden by default so it can't be clicked by accident
-   during assessments. Set SSO_ENABLED=true to expose the Basic/SSO toggle again. */
+/* SSO (session-cookie) is built but hidden by default — federated pods reject the
+   cookie route for REST. Set SSO_ENABLED=true to expose it again.
+   OAuth (client-credentials Bearer) is the supported path for SAML-federated pods
+   and is visible by default. */
 var SSO_ENABLED=false;
-(function(){try{var r=document.getElementById("authModeRow");if(r)r.style.display=SSO_ENABLED?"":"none";}catch(e){}})();
+var OAUTH_ENABLED=true;
+(function(){try{
+  var r=document.getElementById("authModeRow");if(r)r.style.display=(SSO_ENABLED||OAUTH_ENABLED)?"":"none";
+  var sb=document.getElementById("authSsoBtn");if(sb)sb.style.display=SSO_ENABLED?"":"none";
+  var ob=document.getElementById("authOauthBtn");if(ob)ob.style.display=OAUTH_ENABLED?"":"none";
+}catch(e){}})();
 
 function setAuthMode(mode){
-  if(mode==="sso"&&!SSO_ENABLED){ST.authMode="basic";return;} // gated off — never switch to SSO while disabled
-  ST.authMode=(mode==="sso")?"sso":"basic";
-  var basicBtn=document.getElementById("authBasicBtn"),ssoBtn=document.getElementById("authSsoBtn");
-  var basicFields=document.getElementById("basicFields"),hint=document.getElementById("ssoHint"),connOk=document.getElementById("connOk");
-  var sso=ST.authMode==="sso";
-  if(basicBtn)basicBtn.className="btn "+(sso?"b-out":"b-blue");
+  if(mode==="sso"&&!SSO_ENABLED)mode="basic";     // gated off — never switch to SSO while disabled
+  if(mode==="oauth"&&!OAUTH_ENABLED)mode="basic";
+  ST.authMode=(mode==="sso")?"sso":(mode==="oauth")?"oauth":"basic";
+  var basicBtn=document.getElementById("authBasicBtn"),ssoBtn=document.getElementById("authSsoBtn"),oauthBtn=document.getElementById("authOauthBtn");
+  var basicFields=document.getElementById("basicFields"),oauthFields=document.getElementById("oauthFields");
+  var hint=document.getElementById("ssoHint"),oHint=document.getElementById("oauthHint"),connOk=document.getElementById("connOk");
+  var sso=ST.authMode==="sso",oauth=ST.authMode==="oauth";
+  if(basicBtn)basicBtn.className="btn "+((sso||oauth)?"b-out":"b-blue");
   if(ssoBtn)ssoBtn.className="btn "+(sso?"b-blue":"b-out");
-  if(basicFields)basicFields.style.display=sso?"none":"";
+  if(oauthBtn)oauthBtn.className="btn "+(oauth?"b-blue":"b-out");
+  if(basicFields)basicFields.style.display=(sso||oauth)?"none":"";
+  if(oauthFields)oauthFields.style.display=oauth?"":"none";
   if(hint)hint.style.display=sso?"":"none";
+  if(oHint)oHint.style.display=oauth?"":"none";
   if(connOk)connOk.innerHTML='<span class="spin" id="connSpin"></span>'+(sso?"Sign in with SSO":"Connect");
+}
+
+/* OAuth (client-credentials) connect — the main process mints a Bearer token from
+   the customer's IAM identity domain. The secret field is write-only: it is sent
+   once over IPC into the OS keychain and immediately cleared from the DOM; the
+   renderer never holds the token. Failures are honest errors — no fabrication. */
+async function doConnectOAuth(){
+  function gv(id){var e=document.getElementById(id);return e?e.value.trim():"";}
+  var url=gv("fUrl").replace(/\/$/,""),tokenUrl=gv("fOauthTokenUrl"),clientId=gv("fOauthClientId"),scope=gv("fOauthScope");
+  var secretEl=document.getElementById("fOauthSecret"),secret=secretEl?secretEl.value.trim():"";
+  if(!url||!tokenUrl||!clientId||!scope){toast("Enter Instance URL, Token URL, Client ID and Scope","er");return;}
+  if(!(window.electronAPI&&window.electronAPI.oauthConnect)){toast("OAuth is only available in the desktop app","er");return;}
+  var sp=document.getElementById("connSpin");if(sp)sp.classList.add("go");
+  try{
+    var res=await window.electronAPI.oauthConnect({baseUrl:url,tokenUrl:tokenUrl,clientId:clientId,scope:scope,clientSecret:secret||undefined});
+    if(!res||!res.ok){toast("OAuth: "+((res&&res.error)||"token request failed"),"er");if(sp)sp.classList.remove("go");return;}
+    if(secretEl)secretEl.value="";  // write-only — never kept in the DOM after use
+    // Real read-only probe with the minted token — confirms scope/roles actually authorize REST.
+    var probe=await window.electronAPI.oauthFetch(url+"/fscmRestApi/resources/latest/?limit=1&onlyData=true");
+    if(probe&&(probe.networkError||(probe.status&&probe.status>=400))){
+      toast("Token minted, but the REST probe failed"+(probe.status?" (HTTP "+probe.status+")":"")+" — check the scope string and the client's data roles","wa");
+    }
+    ST.apiKey=(document.getElementById("fApiKey")||{value:""}).value.trim();
+    Object.assign(ST,{conn:true,url:url,user:"",pass:"",authMode:"oauth",oauth:{tokenUrl:tokenUrl,clientId:clientId,scope:scope}});
+    if(window._persistApiKey)window._persistApiKey(ST.apiKey);
+    document.getElementById("dot").className="dot on";
+    document.getElementById("connLbl").textContent=(url.replace("https://","").split("/")[0].slice(0,30))+" · OAuth";
+    document.getElementById("btnDisconn").style.display="inline-flex";
+    closeModal("connModal");toast("Connected via OAuth ✓","ok");
+  }catch(e){toast("OAuth error: "+e.message,"er");}
+  if(sp)sp.classList.remove("go");
 }
 
 /* SSO (federated) connect — opens the Oracle URL for interactive login, then
@@ -1074,6 +1131,7 @@ async function doConnectSSO(){
 
 async function doConnect(){
   if(ST.authMode==="sso")return doConnectSSO();
+  if(ST.authMode==="oauth")return doConnectOAuth();
   var url=document.getElementById("fUrl").value.trim(),user=document.getElementById("fUser").value.trim(),pass=document.getElementById("fPass").value.trim();
   if(!url||!user||!pass){toast("Fill all fields","er");return;}
   var sp=document.getElementById("connSpin");sp.classList.add("go");
@@ -1246,9 +1304,18 @@ function t2sInstanceName(url){
 
 /* Transport layer. Returns a raw {status,responseText} | {networkError} | {timeout}
    — never a parsed result. Basic mode = XHR with Basic auth (unchanged behavior).
-   SSO mode = main-process fetch carrying the federated session cookies. Both feed
-   the SAME t2sProcessResponse guard, so neither can fabricate rows. */
+   OAuth mode = main-process GET with a Bearer token minted from the customer's IAM
+   domain (token never enters this web context). SSO mode = main-process fetch
+   carrying the federated session cookies. ALL modes feed the SAME
+   t2sProcessResponse guard, so none of them can fabricate rows. */
 function t2sAuthGet(url){
+  if(ST.authMode==="oauth"){
+    if(!(window.electronAPI&&window.electronAPI.oauthFetch))return Promise.resolve({networkError:true});
+    return window.electronAPI.oauthFetch(url).then(function(r){
+      if(!r||r.networkError)return {networkError:true};
+      return {status:r.status,responseText:r.responseText};
+    }).catch(function(){return {networkError:true};});
+  }
   if(ST.authMode==="sso"){
     if(!(window.electronAPI&&window.electronAPI.ssoFetch))return Promise.resolve({networkError:true});
     return window.electronAPI.ssoFetch(url).then(function(r){
@@ -1283,7 +1350,7 @@ async function queryREST(sql){
   }
   var fetchLim=500;
   var ctx={instance:instance,endpoint:ep,sql:sql,connectionId:instance,fetchLim:fetchLim};
-  document.getElementById("resEp").textContent="→ "+ep+(ST.authMode==="sso"?" (SSO)":"");
+  document.getElementById("resEp").textContent="→ "+ep+(ST.authMode==="sso"?" (SSO)":ST.authMode==="oauth"?" (OAuth)":"");
   var http=await t2sAuthGet(base+ep+"?limit="+fetchLim+"&onlyData=true");
   return t2sProcessResponse(http,ctx); // single choke point — error | empty | rows only
 }
@@ -2294,7 +2361,8 @@ document.addEventListener("DOMContentLoaded",function(){
   document.getElementById("connCancel").addEventListener("click",()=>closeModal("connModal"));
   document.getElementById("fPass").addEventListener("keydown",e=>{if(e.key==="Enter")doConnect();});
   document.getElementById("btnDisconn").addEventListener("click",()=>{
-    localStorage.removeItem("fxconn");Object.assign(ST,{conn:false,url:"",user:"",pass:""});
+    if(ST.authMode==="oauth"&&window.electronAPI&&window.electronAPI.oauthClear)window.electronAPI.oauthClear(); // token clear on disconnect (secret stays in keychain)
+    localStorage.removeItem("fxconn");Object.assign(ST,{conn:false,url:"",user:"",pass:"",oauth:null});
     document.getElementById("dot").className="dot";document.getElementById("connLbl").textContent="Click to connect";
     document.getElementById("btnDisconn").style.display="none";toast("Disconnected","inf");
   });
@@ -8150,12 +8218,24 @@ function cfgPrintRolesReport(){
     sv('fApiKey',realPK); sv('fProfName',p.name);
     var roleEl=document.getElementById('fRole');
     if(roleEl) roleEl.value = p.role||'';
-    var pmode=(p.authMode==='sso')?'sso':'basic';
+    var pmode=(p.authMode==='sso')?'sso':(p.authMode==='oauth')?'oauth':'basic';
+    if(pmode==='oauth'&&p.oauth){
+      sv('fOauthTokenUrl',p.oauth.tokenUrl);sv('fOauthClientId',p.oauth.clientId);sv('fOauthScope',p.oauth.scope);
+      sv('fOauthSecret','');  // secret is keychain-only; never round-trips through profiles
+    }
     if(typeof setAuthMode==='function') setAuthMode(pmode); // restore the profile's auth mode in the modal
     /* Activate immediately */
     if(typeof ST!=='undefined'){
       Object.assign(ST,{conn:true, url:p.url, user:p.user, pass:effectivePass,
-        apiKey:realPK, orgId:p.orgId||'', authMode:pmode});
+        apiKey:realPK, orgId:p.orgId||'', authMode:pmode, oauth:(pmode==='oauth'?(p.oauth||null):null)});
+    }
+    /* OAuth profiles: re-arm the main-process Token Manager using the keychain-stored
+       secret. If the secret isn't on file, queries surface an honest error and the
+       user re-enters it once via Connect. */
+    if(pmode==='oauth'&&p.oauth&&window.electronAPI&&window.electronAPI.oauthConnect){
+      window.electronAPI.oauthConnect({baseUrl:p.url,tokenUrl:p.oauth.tokenUrl,clientId:p.oauth.clientId,scope:p.oauth.scope})
+        .then(function(r){if(typeof toast==='function')toast(r&&r.ok?'OAuth token ready ✓':('OAuth: '+((r&&r.error)||'open Connect to finish setup')),r&&r.ok?'ok':'wa');})
+        .catch(function(){});
     }
     updateConnUI(p.url, p.user, p.role||'');
     cfgFilterModsByRole(p.role||'');
@@ -8163,6 +8243,7 @@ function cfgPrintRolesReport(){
     if(instant){ closeModal('connModal'); }
     var msg=(instant?'Switched to: ':'Loaded: ')+p.name+(p.role?' ['+p.role.toUpperCase()+']':'');
     if(pmode==='sso') msg+=' — SSO; click Sign in with SSO if queries fail';
+    else if(pmode==='oauth') msg+=' — OAuth (Bearer)';
     else if(!effectivePass) msg+=' — enter password to connect';
     if(typeof toast==='function') toast(msg,'ok');
   };
@@ -8177,11 +8258,17 @@ function cfgPrintRolesReport(){
     var pass=(document.getElementById('fPass')||{}).value||'';
     var apiKey=gv('fApiKey');
     var role=gv('fRole');
-    var mode=(typeof ST!=='undefined'&&ST.authMode==='sso')?'sso':'basic';
-    if(!name||!url||(mode!=='sso'&&!user)){alert('Name and URL required (username also required for Basic auth)');return;}
+    var mode=(typeof ST!=='undefined'&&(ST.authMode==='sso'||ST.authMode==='oauth'))?ST.authMode:'basic';
+    if(!name||!url||(mode==='basic'&&!user)){alert('Name and URL required (username also required for Basic auth)');return;}
+    if(mode==='oauth'&&!(gv('fOauthTokenUrl')&&gv('fOauthClientId')&&gv('fOauthScope'))){alert('OAuth profiles need Token URL, Client ID and Scope');return;}
     var a=loadP();
     var idx=a.findIndex(function(p){return p.name===name;});
     var prof={name:name,url:url.replace(/\/$/,''),user:user,pass:pass,apiKey:apiKey,role:role,authMode:mode};
+    if(mode==='oauth'){
+      prof.user='';prof.pass='';
+      /* clientSecret is NEVER stored in a profile — it lives encrypted in the OS keychain (main process) */
+      prof.oauth={tokenUrl:gv('fOauthTokenUrl'),clientId:gv('fOauthClientId'),scope:gv('fOauthScope')};
+    }
     if(idx>=0)a[idx]=prof;else a.push(prof);
     saveP(a);render();
     if(typeof toast==='function')toast('Profile "'+name+'" saved','ok');else alert('Saved!');

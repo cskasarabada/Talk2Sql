@@ -1,6 +1,7 @@
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog, session, net } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog, session, net, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { createTokenManager } = require('./oauth-manager');
 
 let win;
 
@@ -56,6 +57,87 @@ ipcMain.handle('sso-fetch', async (event, opts) => {
 ipcMain.handle('sso-clear', async () => {
   try { await session.fromPartition(SSO_PARTITION).clearStorageData(); return { ok: true }; }
   catch (e) { return { ok: false, error: String(e) }; }
+});
+
+/* ── OAuth 2.0 Client Credentials (Bearer) — the supported path for SAML-federated pods ──
+   Token Manager lives in oauth-manager.js (injected transport, unit-tested for the
+   401-refresh-once path). The client secret is encrypted at rest via Electron
+   safeStorage (macOS Keychain / Windows DPAPI) keyed by tokenUrl|clientId; the
+   secret and the live token NEVER reach the renderer — it only ever gets raw
+   {status,responseText}|{networkError}, which feeds the same t2sProcessResponse
+   guard as Basic and SSO. No fabrication path. */
+
+function netRequest(method, url, headers, body) {
+  return new Promise((resolve) => {
+    let req;
+    try { req = net.request({ method: method, url: url }); }
+    catch (e) { resolve({ networkError: true, message: String(e) }); return; }
+    Object.keys(headers || {}).forEach((h) => { try { req.setHeader(h, headers[h]); } catch (e) {} });
+    let buf = '';
+    req.on('response', (resp) => {
+      resp.on('data', (c) => { buf += c.toString(); });
+      resp.on('end', () => resolve({ status: resp.statusCode, responseText: buf, body: buf }));
+      resp.on('error', () => resolve({ networkError: true }));
+    });
+    req.on('error', (err) => resolve({ networkError: true, message: String(err) }));
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+const OAUTH_SECRETS_FILE = path.join(app.getPath('userData'), 'talk2sql-oauth-secrets.json');
+let oauthCfgKey = null; // tokenUrl|clientId of the active config
+
+function oauthSecretsRead() { try { return JSON.parse(fs.readFileSync(OAUTH_SECRETS_FILE, 'utf8')); } catch (e) { return {}; } }
+function oauthSecretsWrite(o) { try { fs.writeFileSync(OAUTH_SECRETS_FILE, JSON.stringify(o)); return true; } catch (e) { return false; } }
+function oauthSecretSave(key, secret) {
+  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'OS keychain encryption is unavailable on this machine — cannot store the client secret safely' };
+  const all = oauthSecretsRead();
+  all[key] = safeStorage.encryptString(secret).toString('base64');
+  return oauthSecretsWrite(all) ? { ok: true } : { ok: false, error: 'Could not persist the encrypted secret' };
+}
+function oauthSecretLoad(key) {
+  try {
+    const b64 = oauthSecretsRead()[key];
+    if (!b64) return null;
+    return safeStorage.decryptString(Buffer.from(b64, 'base64'));
+  } catch (e) { return null; }
+}
+
+const oauthManager = createTokenManager({
+  httpPost: (url, headers, body) => netRequest('POST', url, headers, body),
+  httpGet:  (url, headers) => netRequest('GET', url, headers, null),
+  getSecret: async () => (oauthCfgKey ? oauthSecretLoad(oauthCfgKey) : null)
+});
+
+// Configure + eagerly mint a token (verifies IAM domain, client, scope, secret).
+// clientSecret is optional: omit it to reuse the keychain-stored secret.
+ipcMain.handle('oauth-connect', async (event, c) => {
+  c = c || {};
+  const cfgRes = oauthManager.configure(c);
+  if (!cfgRes.ok) return cfgRes;
+  oauthCfgKey = (c.tokenUrl || '') + '|' + (c.clientId || '');
+  if (c.clientSecret) {
+    const s = oauthSecretSave(oauthCfgKey, c.clientSecret);
+    if (!s.ok) { oauthManager.clear(); oauthCfgKey = null; return s; }
+  } else if (!oauthSecretLoad(oauthCfgKey)) {
+    oauthManager.clear(); oauthCfgKey = null;
+    return { ok: false, error: 'No client secret on file for this client — enter it once; it is stored encrypted in the OS keychain' };
+  }
+  return oauthManager.connect();
+});
+
+// Authorized read-only GET with Bearer; host-pinned; 401 → refresh once → retry once.
+ipcMain.handle('oauth-fetch', async (event, opts) => oauthManager.authedFetch((opts && opts.url) || ''));
+
+// Token clear on disconnect. {forget:true} also deletes the stored secret.
+ipcMain.handle('oauth-clear', async (event, opts) => {
+  oauthManager.clear();
+  if (opts && opts.forget && oauthCfgKey) {
+    const all = oauthSecretsRead(); delete all[oauthCfgKey]; oauthSecretsWrite(all);
+  }
+  oauthCfgKey = null;
+  return { ok: true };
 });
 
 function createWindow() {

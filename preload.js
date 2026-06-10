@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ssoLogin: (baseUrl) => ipcRenderer.invoke('sso-login', baseUrl),
   ssoFetch: (url) => ipcRenderer.invoke('sso-fetch', { url }),
   ssoClear: () => ipcRenderer.invoke('sso-clear'),
+  // OAuth client-credentials (Bearer) — for SAML-federated pods. The token and the
+  // keychain-stored secret live in the main process only; the renderer just asks
+  // for authorized GETs and receives raw {status,responseText}|{networkError}.
+  oauthConnect: (cfg) => ipcRenderer.invoke('oauth-connect', cfg),
+  oauthFetch: (url) => ipcRenderer.invoke('oauth-fetch', { url }),
+  oauthClear: (opts) => ipcRenderer.invoke('oauth-clear', opts || {}),
   onMenuEvent: (cb) => {
     ['menu-run','menu-save','menu-new-tab','menu-format','menu-explain',
      'menu-connect','menu-export-excel','menu-export-csv'].forEach(e => {
