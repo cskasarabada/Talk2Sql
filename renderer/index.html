@@ -401,11 +401,11 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     <label>Authentication</label>
     <div style="display:flex;gap:6px">
       <button type="button" id="authBasicBtn" class="btn b-blue" style="flex:1;font-size:11px" onclick="setAuthMode('basic')">🔑 Username / Password</button>
-      <button type="button" id="authOauthBtn" class="btn b-out" style="flex:1;font-size:11px" onclick="setAuthMode('oauth')">🎫 OAuth (SSO Pods)</button>
+      <button type="button" id="authOauthBtn" class="btn b-out" style="flex:1;font-size:11px" onclick="setAuthMode('oauth');maybeShowOauthChecklist()">🎫 OAuth (SSO Pods)</button>
       <button type="button" id="authSsoBtn" class="btn b-out" style="flex:1;font-size:11px" onclick="setAuthMode('sso')">🪪 SSO (Federated)</button>
     </div>
     <div id="ssoHint" style="display:none;font-size:9px;color:var(--t3);margin-top:5px;line-height:1.5">Use this for instances behind your org SSO. Enter the Oracle URL, click <b>Sign in with SSO</b>, complete login, then close the login window.</div>
-    <div id="oauthHint" style="display:none;font-size:9px;color:var(--t3);margin-top:5px;line-height:1.5">For SAML-federated pods (e.g. Entra SSO) where username/password is rejected for REST. Your Oracle admin registers a <b>client-credentials</b> app in the pod's IAM identity domain and provides the values below. The secret is stored in your OS keychain — never in profiles.</div>
+    <div id="oauthHint" style="display:none;font-size:9px;color:var(--t3);margin-top:5px;line-height:1.5">For SAML-federated pods (e.g. Entra SSO) where username/password is rejected for REST. Your Oracle admin registers a <b>client-credentials</b> app in the pod's IAM identity domain and provides the values below. The secret is stored in your OS keychain — never in profiles. <a href="#" onclick="openModal('oauthChecklistModal');return false" style="color:var(--ac);text-decoration:none">📋 View admin checklist</a></div>
   </div>
   <div class="field"><label>Instance URL</label><input id="fUrl" type="text" placeholder="https://your-instance.fa.us2.oraclecloud.com"/></div>
   <div id="basicFields"><div class="grid2m">
@@ -456,6 +456,37 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
   <div class="macts">
     <button class="btn b-ghost" id="connCancel">Cancel</button>
     <button class="btn b-blue" id="connOk"><span class="spin" id="connSpin"></span>Connect</button>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════ OAUTH PROVISIONING CHECKLIST (federated / SSO pods) ══════════════ -->
+<div class="overlay" id="oauthChecklistModal" style="z-index:1001">
+<div class="modal" style="width:560px;max-width:96vw;max-height:86vh;overflow-y:auto">
+  <h2>🎫 OAuth Setup — Customer Admin Checklist</h2>
+  <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-top:4px">SAML-federated pods (Entra/Okta SSO) reject username + password for REST. Oracle's supported path is an <b>OAuth client-credentials</b> app that Talk2Sql exchanges for a Bearer token. Send this checklist to the customer's Oracle / identity admin — it's a one-time setup.</p>
+  <div style="font-size:11px;color:var(--t1);line-height:1.7">
+    <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:1px;margin:10px 0 6px">WHAT THE CUSTOMER ADMIN DOES (ONCE)</div>
+    <ol style="margin:0;padding-left:20px">
+      <li>Identify the <b>IAM identity domain</b> associated with the Fusion pod and its token endpoint:<br/><code style="font-size:10px;color:var(--ac)">https://&lt;iam-domain&gt;/oauth2/v1/token</code></li>
+      <li>Register a <b>confidential application / OAuth client</b> in that domain; enable the <b>Client Credentials</b> grant.</li>
+      <li>Grant the client the <b>Fusion REST resource scope</b> — the exact audience string, e.g.<br/><code style="font-size:10px;color:var(--ac)">urn:opc:resource:fusion:&lt;POD&gt;:erp/</code> <span style="color:var(--t3)">(CX/HCM have their own segments)</span></li>
+      <li>Associate a <b>least-privilege service identity</b> with read-only data roles covering only the modules to be queried.</li>
+      <li>Confirm outbound network access from this workstation to both the <b>IAM domain</b> and the <b>Fusion host</b>.</li>
+    </ol>
+    <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:1px;margin:12px 0 6px">WHAT THEY HAND BACK (VIA A SECURE CHANNEL)</div>
+    <ul style="margin:0;padding-left:20px">
+      <li><b>Token URL</b> · <b>Client ID</b> · <b>Client Secret</b> · <b>Scope</b> · Fusion base URL</li>
+    </ul>
+    <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:1px;margin:12px 0 6px">THEN, IN TALK2SQL</div>
+    <ul style="margin:0;padding-left:20px">
+      <li>Enter the four values in the OAuth fields and click <b>Connect</b>. The secret is stored encrypted in your <b>OS keychain</b> — never in profiles — and is reused automatically next time (leave the field blank).</li>
+      <li>If the token mints but the probe fails (HTTP 403), the <b>scope string or data roles</b> need adjusting on the Oracle side.</li>
+    </ul>
+    <div style="margin-top:12px;padding:8px 10px;border:1px solid var(--b1);border-radius:6px;font-size:10px;color:var(--t3);line-height:1.6">⛔ <b>If OAuth can't be approved</b> — fallback: request a single <b>non-federated local Fusion service account</b> (username + password, read-only roles, Basic auth permitted for REST) and use the 🔑 Username / Password mode.</div>
+  </div>
+  <div class="macts">
+    <button class="btn b-blue" onclick="closeModal('oauthChecklistModal')">Got it</button>
   </div>
 </div>
 </div>
@@ -1070,6 +1101,16 @@ function setAuthMode(mode){
   if(hint)hint.style.display=sso?"":"none";
   if(oHint)oHint.style.display=oauth?"":"none";
   if(connOk)connOk.innerHTML='<span class="spin" id="connSpin"></span>'+(sso?"Sign in with SSO":"Connect");
+}
+
+/* Show the admin provisioning checklist when OAuth mode is picked but not yet
+   configured (fields empty). Once values are in (typed or loaded from a profile),
+   it stays out of the way — the 📋 link in the hint reopens it anytime. */
+function maybeShowOauthChecklist(){
+  try{
+    function v(id){var e=document.getElementById(id);return e?e.value.trim():"";}
+    if(!v("fOauthTokenUrl")&&!v("fOauthClientId")&&!v("fOauthScope"))openModal("oauthChecklistModal");
+  }catch(e){}
 }
 
 /* OAuth (client-credentials) connect — the main process mints a Bearer token from
