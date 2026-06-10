@@ -124,6 +124,32 @@ function makeMgr(behavior) {
     ok(m._calls.post === 1 && m._calls.get === 2, "1 mint serves 2 GETs");
   }
 
+  console.log("\n(9) METHOD RESTRICTION — POST only to the BIP service path");
+  {
+    const m = makeMgr({ onGet: () => ({ status: 200, responseText: LIVE_BODY }) });
+    m.configure(CFG);
+    const blocked = await m.authedFetch(CFG.baseUrl + "/fscmRestApi/resources/latest/invoices", { method: "POST", body: "x" });
+    ok(blocked.networkError === true && /only permitted/.test(blocked.message || ""), "POST to a REST resource is blocked");
+    const del = await m.authedFetch(CFG.baseUrl + "/xmlpserver/services/ExternalReportWSSService", { method: "DELETE" });
+    ok(del.networkError === true, "non-GET/POST methods are blocked everywhere");
+    // POST to the BIP SOAP path is allowed and flows through the same refresh logic
+    const m2 = makeMgr({ onGet: () => ({ status: 200, responseText: LIVE_BODY }) });
+    m2.configure(CFG);
+    // reuse httpPost: first call is the token mint, second is the SOAP POST
+    let soapPosts = 0;
+    const m3 = createTokenManager({
+      httpPost: async (url) => {
+        if (/oauth2\/v1\/token/.test(url)) return { status: 200, body: JSON.stringify({ access_token: "t", expires_in: 3600 }) };
+        soapPosts++; return { status: 200, responseText: "<soap/>", body: "<soap/>" };
+      },
+      httpGet: async () => ({ status: 200, responseText: LIVE_BODY }),
+      getSecret: async () => "s3cret", now: () => 1000000
+    });
+    m3.configure(CFG);
+    const r = await m3.authedFetch(CFG.baseUrl + "/xmlpserver/services/ExternalReportWSSService", { method: "POST", body: "<env/>" });
+    ok(r.status === 200 && soapPosts === 1, "POST to /xmlpserver/ is permitted with Bearer");
+  }
+
   console.log("\n" + (failures ? failures + " GUARD FAILURE(S)" : "ALL OAUTH GUARDS PASS"));
   process.exit(failures ? 1 : 0);
 })();

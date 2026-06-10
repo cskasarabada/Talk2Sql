@@ -127,8 +127,12 @@ ipcMain.handle('oauth-connect', async (event, c) => {
   return oauthManager.connect();
 });
 
-// Authorized read-only GET with Bearer; host-pinned; 401 → refresh once → retry once.
-ipcMain.handle('oauth-fetch', async (event, opts) => oauthManager.authedFetch((opts && opts.url) || ''));
+// Authorized read-only request with Bearer; host-pinned; 401 → refresh once → retry once.
+// GET by default; POST only to /xmlpserver/ (BIP runReport) — enforced in oauth-manager.
+ipcMain.handle('oauth-fetch', async (event, opts) => {
+  opts = opts || {};
+  return oauthManager.authedFetch(opts.url || '', { method: opts.method, body: opts.body, contentType: opts.contentType, accept: opts.accept });
+});
 
 // Token clear on disconnect. {forget:true} also deletes the stored secret.
 ipcMain.handle('oauth-clear', async (event, opts) => {

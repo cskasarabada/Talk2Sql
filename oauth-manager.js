@@ -65,25 +65,42 @@ function createTokenManager(opts) {
     /* Mint (or re-mint) eagerly — used by the connect flow to verify setup. */
     async connect() { return mint(); },
 
-    /* Authorized read-only GET. Host-pinned to the configured pod. On 401,
-       refreshes the token ONCE and retries ONCE; a second 401 is surfaced
-       verbatim. Never returns invented content. */
-    async authedFetch(url) {
+    /* Authorized read-only request. Host-pinned to the configured pod. GET by
+       default; POST is permitted ONLY to the BI Publisher SOAP service path
+       (/xmlpserver/...) so the BIP SQL engine can call runReport — every other
+       method/path is refused (the read-only posture is enforced by the SQL gate
+       upstream AND this transport restriction). On 401, refreshes the token ONCE
+       and retries ONCE; a second 401 is surfaced verbatim. Never returns
+       invented content. */
+    async authedFetch(url, opts) {
+      opts = opts || {};
+      const method = (opts.method || "GET").toUpperCase();
       if (!cfg) return { networkError: true, message: "OAuth not configured" };
       if (host(url) !== host(cfg.baseUrl))
         return { networkError: true, message: "Blocked: " + host(url) + " is not the configured Fusion host" };
+      let pathname; try { pathname = new URL(url).pathname; } catch (e) { pathname = ""; }
+      if (method !== "GET" && !(method === "POST" && pathname.indexOf("/xmlpserver/") === 0))
+        return { networkError: true, message: "Blocked: " + method + " is only permitted to the BI Publisher service path" };
       if (!token || now() >= expMs) {
         const m = await mint();
         if (!m.ok) return { networkError: true, message: "OAuth token: " + m.error };
       }
-      let r = await httpGet(url, { "Authorization": "Bearer " + token, "Accept": "application/json" });
+      const send = () => {
+        const hdrs = { "Authorization": "Bearer " + token, "Accept": opts.accept || "application/json" };
+        if (method === "POST") {
+          hdrs["Content-Type"] = opts.contentType || "application/soap+xml; charset=UTF-8";
+          return httpPost(url, hdrs, opts.body || "");
+        }
+        return httpGet(url, hdrs);
+      };
+      let r = await send();
       if (r && !r.networkError && r.status === 401) {
         const m = await mint();                          // 401 → refresh once
         if (!m.ok) return { status: 401, responseText: r.responseText || "" };
-        r = await httpGet(url, { "Authorization": "Bearer " + token, "Accept": "application/json" });
+        r = await send();
       }
       if (!r || r.networkError) return { networkError: true, message: (r && r.message) || "" };
-      return { status: r.status, responseText: r.responseText || "" };
+      return { status: r.status, responseText: r.responseText || r.body || "" };
     }
   };
 }

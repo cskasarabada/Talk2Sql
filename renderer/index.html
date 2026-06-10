@@ -491,6 +491,37 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 </div>
 </div>
 
+<!-- ══════════════ BIP SQL ENGINE SETUP ══════════════ -->
+<div class="overlay" id="bipModal" style="z-index:1001">
+<div class="modal" style="width:580px;max-width:96vw;max-height:86vh;overflow-y:auto">
+  <h2>📄 BIP SQL Engine — One-Time Setup</h2>
+  <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-top:4px">Runs your SQL <b>server-side</b> through a BI Publisher data model — real SQL with joins across any table, no REST mapping limits. Requires a one-time custom report on the pod (BI Author role needed once to create it; the connecting user only needs permission to run it).</p>
+  <div class="field" style="margin-top:10px">
+    <label>Report Catalog Path</label>
+    <input id="fBipPath" type="text" placeholder="/Custom/Talk2Sql/T2S_SQL.xdo"/>
+    <div style="font-size:9px;color:var(--t3);margin-top:3px">The .xdo path shown in the BIP catalog after step 4 below</div>
+  </div>
+  <div style="font-size:11px;color:var(--t1);line-height:1.7">
+    <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:1px;margin:10px 0 6px">CREATE THE DATA MODEL (ONCE, IN /xmlpserver)</div>
+    <ol style="margin:0;padding-left:20px">
+      <li>Open <b>BI Publisher</b> → New → <b>Data Model</b>.</li>
+      <li>Add a <b>Parameter</b>: name <code style="color:var(--ac)">p_sql</code>, type String, default value <code style="color:var(--ac)">SELECT 1 AS ONE FROM DUAL</code>.</li>
+      <li>Add a <b>SQL Query</b> dataset (name G_1, Standard SQL) with the query exactly:<br/><code style="font-size:10px;color:var(--ac)">&amp;p_sql</code><br/><span style="color:var(--t3)">(the lexical reference substitutes your whole query — same pattern the JDBC-over-BIP drivers use)</span></li>
+      <li>Save as <code style="color:var(--ac)">/Custom/Talk2Sql/T2S_SQL_DM</code>, then create a <b>Report</b> on it (any minimal layout), save as <code style="color:var(--ac)">/Custom/Talk2Sql/T2S_SQL</code> — the path above gets <code>.xdo</code>.</li>
+      <li>Grant the connecting user (or OAuth service identity) a role that can <b>run</b> the report (e.g. BI Consumer + catalog permission).</li>
+    </ol>
+    <div style="margin-top:12px;padding:8px 10px;border:1px solid var(--b1);border-radius:6px;font-size:10px;color:var(--t3);line-height:1.6">
+      🛡 The read-only gate still applies — only SELECT/WITH leaves the app. Auth: works over <b>Basic</b> and <b>OAuth</b> (not the SSO cookie mode). Results carry the same verification stamp; failures surface verbatim — never invented rows.<br/>
+      ⚠ Large results: BIP truncates very large outputs per call — add a WHERE/ROWNUM filter rather than SELECT * on huge tables.
+    </div>
+  </div>
+  <div class="macts">
+    <button class="btn b-ghost" onclick="closeModal('bipModal')">Cancel</button>
+    <button class="btn b-blue" onclick="window._saveBipCfg()">Save</button>
+  </div>
+</div>
+</div>
+
 <!-- ══════════════ SAVE MODAL ══════════════ -->
 <div class="overlay" id="saveModal">
 <div class="modal" style="width:380px">
@@ -589,6 +620,11 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
       <button class="btn b-ghost" id="btnExplain" style="font-size:10px">💡 Explain</button>
     </div>
     <div class="tbar-r">
+      <span style="font-size:10px;color:var(--t3)">Engine:</span>
+      <select class="lim-sel" id="engineSel" title="REST = mapped business resources, SQL applied client-side. BIP = real SQL executed server-side by BI Publisher (one-time data model setup).">
+        <option value="rest">REST</option><option value="bip">BIP SQL</option>
+      </select>
+      <button class="btn b-ghost" id="bipCfgBtn" style="font-size:10px;padding:2px 6px" title="BIP engine setup" onclick="window._openBipCfg()">⚙</button>
       <span style="font-size:10px;color:var(--t3)">Limit:</span>
       <select class="lim-sel" id="rowLim"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option></select>
       <span style="font-size:10px;color:var(--t3)" id="edStat"></span>
@@ -798,6 +834,8 @@ const ST = {
   conn:false,url:"",user:"",pass:"",apiKey:"",
   authMode:"basic",   // "basic" (default, username/password) | "oauth" (client-credentials Bearer, federated pods) | "sso" (federated session)
   oauth:null,         // {tokenUrl,clientId,scope} — never the secret or token (those live in main/keychain)
+  engine:"rest",      // "rest" (SQL→REST mapping, client-side executor) | "bip" (real SQL server-side via BI Publisher runReport)
+  bip:null,           // {reportPath} — catalog path of the one-time T2S data model report (…/T2S_SQL.xdo)
   note:"",prov:null,
   mod:"CX Sales",
   cols:[],allRows:[],filtRows:[],
@@ -1113,6 +1151,33 @@ function maybeShowOauthChecklist(){
   }catch(e){}
 }
 
+/* ── Execution engine selection (REST | BIP SQL) + BIP config ──────────────
+   Engine changes routing only: both engines resolve to the same
+   error|empty|rows contract and pass the same render-boundary assert. */
+window._openBipCfg=function(){
+  var f=document.getElementById("fBipPath");
+  if(f)f.value=(ST.bip&&ST.bip.reportPath)||"";
+  openModal("bipModal");
+};
+window._saveBipCfg=function(){
+  var p=(document.getElementById("fBipPath")||{value:""}).value.trim();
+  if(p&&!/^\/.+\.xdo$/i.test(p)){toast("Report path must start with / and end in .xdo","er");return;}
+  ST.bip=p?{reportPath:p}:null;
+  var es=document.getElementById("engineSel");
+  if(p){ST.engine="bip";if(es)es.value="bip";}
+  else if(ST.engine==="bip"){ST.engine="rest";if(es)es.value="rest";}
+  closeModal("bipModal");
+  toast(p?"BIP SQL engine configured ✓":"BIP path cleared — engine back to REST","ok");
+};
+(function(){
+  var es=document.getElementById("engineSel");
+  if(!es)return;
+  es.addEventListener("change",function(){
+    ST.engine=(es.value==="bip")?"bip":"rest";
+    if(ST.engine==="bip"&&!(ST.bip&&ST.bip.reportPath))window._openBipCfg(); // needs the one-time setup first
+  });
+})();
+
 /* OAuth (client-credentials) connect — the main process mints a Bearer token from
    the customer's IAM identity domain. The secret field is write-only: it is sent
    once over IPC into the OS keychain and immediately cleared from the DOM; the
@@ -1323,7 +1388,7 @@ async function runQuery(){
   if(!(ST.conn&&ST.url)){t2sRenderError("Not connected. Connect to an Oracle Fusion instance (⌘⇧C) to run live data.");document.getElementById("prog").className="prog";return;}
   var t0=Date.now();
   try{
-    var payload=await queryREST(sql);
+    var payload=await (ST.engine==="bip"?queryBIP(sql):queryREST(sql));
     var kind=t2sAssertRenderable(payload); // throws unless rows carry live provenance
     var elapsed=((Date.now()-t0)/1000).toFixed(2);
     if(kind==="error"){t2sRenderError(payload.message);}
@@ -1376,6 +1441,48 @@ function t2sAuthGet(url){
     xhr.ontimeout=function(){resolve({timeout:true});};
     xhr.send();
   });
+}
+
+/* POST transport for the BIP engine — same posture as t2sAuthGet: raw outcome only.
+   OAuth = main-process Bearer POST (pinned to /xmlpserver/). Basic = XHR with Basic
+   auth. SSO sessions can't call the SOAP service — honest error, no fallback. */
+function t2sAuthPost(url,body,contentType){
+  if(ST.authMode==="oauth"){
+    if(!(window.electronAPI&&window.electronAPI.oauthFetch))return Promise.resolve({networkError:true});
+    return window.electronAPI.oauthFetch(url,{method:"POST",body:body,contentType:contentType,accept:"application/soap+xml, text/xml, */*"}).then(function(r){
+      if(!r||r.networkError)return {networkError:true};
+      return {status:r.status,responseText:r.responseText};
+    }).catch(function(){return {networkError:true};});
+  }
+  if(ST.authMode==="sso")return Promise.resolve({networkError:true});
+  return new Promise(function(resolve){
+    var xhr=new XMLHttpRequest();
+    xhr.open("POST",url,true);
+    xhr.setRequestHeader("Authorization","Basic "+btoa(ST.user+":"+ST.pass));
+    xhr.setRequestHeader("Content-Type",contentType||"application/soap+xml; charset=UTF-8");
+    xhr.timeout=120000; // BIP executes the SQL server-side — allow long queries
+    xhr.onload=function(){resolve({status:xhr.status,responseText:xhr.responseText});};
+    xhr.onerror=function(){resolve({networkError:true});};
+    xhr.ontimeout=function(){resolve({timeout:true});};
+    xhr.send(body);
+  });
+}
+
+/* queryBIP — real SQL executed server-side by BI Publisher through the one-time
+   T2S data model (&p_sql lexical). Resolves EXACTLY ONE of error | empty | rows
+   via t2sProcessBipResponse; same guard, same provenance, no fabrication. */
+async function queryBIP(sql){
+  var base=ST.url.replace(/\/$/,"");
+  var instance=t2sInstanceName(ST.url);
+  var rp=(ST.bip&&ST.bip.reportPath)||"";
+  if(!rp)return {kind:"error",message:"BIP engine: no report path configured. Click the engine selector's ⚙ to set the catalog path of the Talk2Sql report (e.g. /Custom/Talk2Sql/T2S_SQL.xdo) — see the one-time setup checklist."};
+  if(ST.authMode==="sso")return {kind:"error",message:"BIP engine needs Basic or OAuth auth — the SSO session-cookie mode cannot call the SOAP service."};
+  var ctx={instance:instance,endpoint:"BIP "+rp,sql:sql,connectionId:instance};
+  document.getElementById("resEp").textContent="→ BIP runReport"+(ST.authMode==="oauth"?" (OAuth)":"");
+  var env=t2sBipEnvelope(sql,rp);
+  if(env.error)return {kind:"error",message:env.error};
+  var http=await t2sAuthPost(base+"/xmlpserver/services/ExternalReportWSSService",env.xml,"application/soap+xml; charset=UTF-8");
+  return t2sProcessBipResponse(http,ctx); // BIP choke point — error | empty | rows only
 }
 
 /* queryREST resolves EXACTLY ONE of t2sProcessResponse's outcomes: error | empty | rows.
@@ -1704,6 +1811,141 @@ function t2sAssertRenderable(payload){
   return payload.kind; // 'rows' | 'empty' | 'error'
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   BIP SQL ENGINE — real SQL via BI Publisher runReport (ExternalReportWSSService).
+   The SQL executes SERVER-SIDE in a one-time custom data model whose dataset is
+   the lexical parameter &p_sql (same pattern as the community JDBC-over-BIP
+   drivers). These functions are PURE (no DOM/transport) so the guard test runs
+   them: build envelope → parse SOAP → decode reportBytes → rows. The processor
+   produces the SAME error|empty|rows contract with t2sProvenance stamps and is
+   subject to the SAME t2sAssertRenderable boundary. No fabrication path:
+   every malformed/faulted/errored response is an explicit error state.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* XML-escape free text (error paths only — SQL travels inside CDATA). */
+function t2sBipXmlEsc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+/* Decode XML entities in element text. */
+function t2sBipXmlUnesc(s){
+  return String(s)
+    .replace(/&#x([0-9a-fA-F]+);/g,function(_,h){return String.fromCharCode(parseInt(h,16));})
+    .replace(/&#(\d+);/g,function(_,d){return String.fromCharCode(parseInt(d,10));})
+    .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,"&");
+}
+
+/* Pure-JS base64 → UTF-8 string (no Buffer/atob dependency so the vm-based
+   guard test exercises the exact shipped code). */
+function t2sBipB64Decode(b64){
+  var ABC="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var clean=String(b64).replace(/[^A-Za-z0-9+/=]/g,""),bytes=[],i=0;
+  while(i<clean.length){
+    var e1=ABC.indexOf(clean[i++]),e2=ABC.indexOf(clean[i++]),e3=ABC.indexOf(clean[i++]),e4=ABC.indexOf(clean[i++]);
+    var n=(e1<<18)|(e2<<12)|((e3&63)<<6)|(e4&63);
+    bytes.push((n>>16)&255);
+    if(e3>=0&&clean[i-2]!=="=")bytes.push((n>>8)&255);
+    if(e4>=0&&clean[i-1]!=="=")bytes.push(n&255);
+  }
+  // UTF-8 decode
+  var out="",j=0;
+  while(j<bytes.length){
+    var b=bytes[j++];
+    if(b<128)out+=String.fromCharCode(b);
+    else if(b>191&&b<224)out+=String.fromCharCode(((b&31)<<6)|(bytes[j++]&63));
+    else if(b>223&&b<240)out+=String.fromCharCode(((b&15)<<12)|((bytes[j++]&63)<<6)|(bytes[j++]&63));
+    else{var cp=(((b&7)<<18)|((bytes[j++]&63)<<12)|((bytes[j++]&63)<<6)|(bytes[j++]&63))-65536;
+      out+=String.fromCharCode(0xD800+(cp>>10),0xDC00+(cp&1023));}
+  }
+  return out;
+}
+
+/* Build the SOAP 1.2 runReport envelope. SQL goes in CDATA — a "]]>" inside the
+   SQL would break out of the CDATA section, so it is refused outright. */
+function t2sBipEnvelope(sql,reportPath){
+  if(!sql||!String(sql).trim())return {error:"BIP engine: empty SQL"};
+  if(String(sql).indexOf("]]>")>=0)return {error:"BIP engine: SQL may not contain the sequence ]]>"};
+  if(!reportPath||!/^\/.+\.xdo$/i.test(String(reportPath).trim()))
+    return {error:"BIP engine: report path must be a catalog path ending in .xdo (e.g. /Custom/Talk2Sql/T2S_SQL.xdo)"};
+  var xml='<?xml version="1.0" encoding="UTF-8"?>'
+    +'<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:pub="http://xmlns.oracle.com/oxp/service/PublicReportService">'
+    +'<soap:Body><pub:runReport><pub:reportRequest>'
+    +'<pub:attributeFormat>xml</pub:attributeFormat>'
+    +'<pub:byPassCache>true</pub:byPassCache>'
+    +'<pub:reportAbsolutePath>'+t2sBipXmlEsc(String(reportPath).trim())+'</pub:reportAbsolutePath>'
+    +'<pub:sizeOfDataChunkDownload>-1</pub:sizeOfDataChunkDownload>'
+    +'<pub:parameterNameValues><pub:item>'
+    +'<pub:name>p_sql</pub:name>'
+    +'<pub:values><pub:item><![CDATA['+sql+']]></pub:item></pub:values>'
+    +'</pub:item></pub:parameterNameValues>'
+    +'</pub:reportRequest></pub:runReport></soap:Body></soap:Envelope>';
+  return {xml:xml};
+}
+
+/* Parse the SOAP response: a Fault → verbatim error; otherwise extract and
+   base64-decode <reportBytes>. Returns {error} | {dataXml}. */
+function t2sBipParseSoap(text){
+  var s=String(text||"");
+  var fault=s.match(/<(?:\w+:)?faultstring[^>]*>([\s\S]*?)<\/(?:\w+:)?faultstring>/i)
+        ||s.match(/<(?:\w+:)?Text[^>]*>([\s\S]*?)<\/(?:\w+:)?Text>/i);
+  if(/<(?:\w+:)?Fault[\s>]/i.test(s))return {error:"BIP fault: "+(fault?t2sBipXmlUnesc(fault[1]).trim():"unspecified SOAP fault")};
+  var rb=s.match(/<(?:\w+:)?reportBytes[^>]*>([\s\S]*?)<\/(?:\w+:)?reportBytes>/i);
+  if(!rb||!rb[1].trim())return {error:"BIP response contained no report data (missing reportBytes)"};
+  var dataXml;
+  try{dataXml=t2sBipB64Decode(rb[1].trim());}
+  catch(e){return {error:"BIP reportBytes could not be decoded"};}
+  if(!dataXml||!dataXml.trim())return {error:"BIP returned an empty report payload"};
+  return {dataXml:dataXml};
+}
+
+/* Convert BIP's flat data XML (<DATA_DS><G_1><COL>v</COL>…</G_1>…</DATA_DS>) into
+   {cols, rows}. Generic over group/column names: rows = repeated children of the
+   root; cols = union of leaf tags in row order. An empty rowset is {cols:[],rows:[]}
+   — explicitly empty, never a placeholder row. */
+function t2sBipRowsFromXml(xml){
+  var s=String(xml||"").replace(/<\?xml[\s\S]*?\?>/,"").trim();
+  if(!s)return {error:"Empty report data"};
+  // ORA- errors sometimes come back inside the payload — surface them verbatim.
+  var ora=s.match(/ORA-\d{5}[^<\n]*/);
+  if(ora)return {error:"Oracle error from BIP: "+t2sBipXmlUnesc(ora[0]).trim()};
+  var root=s.match(/^<([\w.:-]+)[^>]*>([\s\S]*)<\/\1>$/);
+  if(!root)return {error:"Unrecognized BIP data format (no XML rowset)"};
+  var body=root[2];
+  var rowRe=/<([\w.:-]+)[^>]*>([\s\S]*?)<\/\1>/g,rm,cols=[],seen={},rows=[],rawRows=[];
+  while((rm=rowRe.exec(body))!==null)rawRows.push(rm[2]);
+  if(!rawRows.length)return {cols:[],rows:[]};
+  var cellRe=/<([\w.:-]+)[^>]*>([\s\S]*?)<\/\1>|<([\w.:-]+)[^>]*\/>/g;
+  for(var i=0;i<rawRows.length;i++){
+    var obj={},cm;
+    cellRe.lastIndex=0;
+    while((cm=cellRe.exec(rawRows[i]))!==null){
+      var tag=cm[1]||cm[3],val=cm[1]?t2sBipXmlUnesc(cm[2]):null;
+      obj[tag]=val;
+      if(!seen[tag]){seen[tag]=1;cols.push(tag);}
+    }
+    rows.push(obj);
+  }
+  if(!cols.length)return {error:"BIP rowset had rows but no readable columns"};
+  return {cols:cols,rows:rows.map(function(o){return cols.map(function(c){return (c in o)?o[c]:null;});})};
+}
+
+/* BIP choke point — the exact analog of t2sProcessResponse. Turns a raw SOAP HTTP
+   outcome into exactly one of error | empty | rows. Rows are ONLY produced from a
+   live 2xx SOAP body that decodes to a real rowset, and always carry provenance. */
+function t2sProcessBipResponse(http,ctx){
+  ctx=ctx||{};
+  if(http.networkError)return {kind:"error",message:"Network error — could not reach "+(ctx.instance||"the instance")+" (BIP service)."};
+  if(http.timeout)return {kind:"error",message:"Timeout contacting "+(ctx.instance||"the instance")+" (BIP runReport can be slow on large queries)."};
+  if(http.status===0||http.status>=400){
+    var soapErr=t2sBipParseSoap(http.responseText);
+    return {kind:"error",message:"HTTP "+http.status+" — "+(soapErr.error||"BIP request rejected"),raw:http.responseText||""};
+  }
+  var parsed=t2sBipParseSoap(http.responseText);
+  if(parsed.error)return {kind:"error",message:parsed.error};
+  var rs=t2sBipRowsFromXml(parsed.dataXml);
+  if(rs.error)return {kind:"error",message:rs.error};
+  if(!rs.rows.length)return {kind:"empty",rowCount:0,prov:t2sProvenance(ctx,0)};
+  return {kind:"rows",cols:rs.cols,rows:rs.rows,note:ctx.note||"",prov:t2sProvenance(ctx,rs.rows.length)};
+}
+
 /* ===== end executor ===== */
 
 
@@ -1914,7 +2156,7 @@ async function loadQPanel(btn){
   if(!(ST.conn&&ST.url)){fail("Not connected. Connect to Oracle Fusion to run live data.");return;}
   var t0=Date.now();
   try{
-    var payload=await queryREST(sql);
+    var payload=await (ST.engine==="bip"?queryBIP(sql):queryREST(sql));
     var kind=t2sAssertRenderable(payload); // throws unless rows carry live provenance
     var elapsed=((Date.now()-t0)/1000).toFixed(2);
     if(kind==="error"){fail(payload.message);return;}
@@ -8268,7 +8510,9 @@ function cfgPrintRolesReport(){
     /* Activate immediately */
     if(typeof ST!=='undefined'){
       Object.assign(ST,{conn:true, url:p.url, user:p.user, pass:effectivePass,
-        apiKey:realPK, orgId:p.orgId||'', authMode:pmode, oauth:(pmode==='oauth'?(p.oauth||null):null)});
+        apiKey:realPK, orgId:p.orgId||'', authMode:pmode, oauth:(pmode==='oauth'?(p.oauth||null):null),
+        engine:(p.engine==='bip'&&p.bip&&p.bip.reportPath)?'bip':'rest', bip:(p.bip&&p.bip.reportPath)?{reportPath:p.bip.reportPath}:null});
+      var esEl=document.getElementById('engineSel');if(esEl)esEl.value=ST.engine;
     }
     /* OAuth profiles: re-arm the main-process Token Manager using the keychain-stored
        secret. If the secret isn't on file, queries surface an honest error and the
@@ -8310,6 +8554,8 @@ function cfgPrintRolesReport(){
       /* clientSecret is NEVER stored in a profile — it lives encrypted in the OS keychain (main process) */
       prof.oauth={tokenUrl:gv('fOauthTokenUrl'),clientId:gv('fOauthClientId'),scope:gv('fOauthScope')};
     }
+    prof.engine=(typeof ST!=='undefined'&&ST.engine==='bip')?'bip':'rest';
+    if(typeof ST!=='undefined'&&ST.bip&&ST.bip.reportPath)prof.bip={reportPath:ST.bip.reportPath};
     if(idx>=0)a[idx]=prof;else a.push(prof);
     saveP(a);render();
     if(typeof toast==='function')toast('Profile "'+name+'" saved','ok');else alert('Saved!');

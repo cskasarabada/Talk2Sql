@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // keychain-stored secret live in the main process only; the renderer just asks
   // for authorized GETs and receives raw {status,responseText}|{networkError}.
   oauthConnect: (cfg) => ipcRenderer.invoke('oauth-connect', cfg),
-  oauthFetch: (url) => ipcRenderer.invoke('oauth-fetch', { url }),
+  oauthFetch: (url, opts) => ipcRenderer.invoke('oauth-fetch', Object.assign({ url }, opts || {})),
   oauthClear: (opts) => ipcRenderer.invoke('oauth-clear', opts || {}),
   onMenuEvent: (cb) => {
     ['menu-run','menu-save','menu-new-tab','menu-format','menu-explain',
