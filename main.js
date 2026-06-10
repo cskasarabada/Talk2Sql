@@ -233,6 +233,18 @@ ipcMain.on('profiles-save', (event, json) => {
   catch (e) { event.returnValue = false; }
 });
 
+// Durable app settings (engine choice, BIP report path, …) — localStorage is
+// wiped on file:// reloads, so settings persist to userData like profiles do.
+const SETTINGS_FILE = path.join(app.getPath('userData'), 'talk2sql-settings.json');
+ipcMain.on('settings-load', (event) => {
+  try { event.returnValue = fs.existsSync(SETTINGS_FILE) ? fs.readFileSync(SETTINGS_FILE, 'utf8') : ''; }
+  catch (e) { event.returnValue = ''; }
+});
+ipcMain.on('settings-save', (event, json) => {
+  try { fs.writeFileSync(SETTINGS_FILE, json || '{}'); event.returnValue = true; }
+  catch (e) { event.returnValue = false; }
+});
+
 ipcMain.handle('toggle-maximize', () => {
   if (!win) return;
   if (win.isMaximized()) {

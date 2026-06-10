@@ -52,6 +52,11 @@ console.log("\n(1) ENVELOPE — builds correctly, refuses CDATA breakout and bad
   ok(t2sBipEnvelope("SELECT ']]>' FROM dual", "/Custom/x.xdo").error, "CDATA breakout sequence refused");
   ok(t2sBipEnvelope(ctx.sql, "not-a-path").error, "non-.xdo report path refused");
   ok(t2sBipEnvelope("", "/Custom/x.xdo").error, "empty SQL refused");
+  const w = t2sBipEnvelope(ctx.sql, "/Custom/x.xdo", { user: "amy<&>", pass: 'p"w' });
+  ok(w.xml.indexOf("<wsse:UsernameToken>") > 0 && w.xml.indexOf("amy&lt;&amp;&gt;") > 0, "WSS UsernameToken added, credentials XML-escaped");
+  ok(w.xml.indexOf("mustUnderstand") < 0 && w.xml.indexOf("Timestamp") < 0, "no mustUnderstand/Timestamp decorations (OWSM rejects them)");
+  ok(w.xml.indexOf("http://www.w3.org/2003/05/soap-envelope") > 0, "SOAP 1.2 envelope (the service rejects 1.1/text-xml)");
+  ok(t2sBipEnvelope(ctx.sql, "/Custom/x.xdo").xml.indexOf("wsse:") < 0, "no WSS header when no credentials passed (OAuth mode)");
 }
 
 console.log("\n(2) HAPPY PATH — live rowset reaches the grid with provenance");

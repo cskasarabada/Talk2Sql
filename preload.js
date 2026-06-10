@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleMaximize: () => ipcRenderer.invoke('toggle-maximize'),
   loadProfiles: () => { try { return ipcRenderer.sendSync('profiles-load'); } catch (e) { return ''; } },
   saveProfiles: (json) => { try { return ipcRenderer.sendSync('profiles-save', json); } catch (e) { return false; } },
+  loadSettings: () => { try { return ipcRenderer.sendSync('settings-load'); } catch (e) { return ''; } },
+  saveSettings: (json) => { try { return ipcRenderer.sendSync('settings-save', json); } catch (e) { return false; } },
   // SSO (federated) auth — optional. The Basic-auth path never calls these.
   ssoLogin: (baseUrl) => ipcRenderer.invoke('sso-login', baseUrl),
   ssoFetch: (url) => ipcRenderer.invoke('sso-fetch', { url }),

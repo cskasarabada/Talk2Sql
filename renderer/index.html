@@ -501,6 +501,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     <input id="fBipPath" type="text" placeholder="/Custom/Talk2Sql/T2S_SQL.xdo"/>
     <div style="font-size:9px;color:var(--t3);margin-top:3px">The .xdo path shown in the BIP catalog after step 4 below</div>
   </div>
+  <div style="font-size:10px;color:var(--t3);margin:-2px 0 8px;line-height:1.5">Service endpoint (derived from your active connection — change it via ⌘⇧C):<br/><code id="bipEndpointLbl" style="font-size:10px;color:var(--ac)">connect first</code></div>
   <div style="font-size:11px;color:var(--t1);line-height:1.7">
     <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:1px;margin:10px 0 6px">CREATE THE DATA MODEL (ONCE, IN /xmlpserver)</div>
     <ol style="margin:0;padding-left:20px">
@@ -1158,8 +1159,15 @@ function maybeShowOauthChecklist(){
 window._openBipCfg=function(){
   var f=document.getElementById("fBipPath");
   if(f)f.value=(ST.bip&&ST.bip.reportPath)||"";
+  var lbl=document.getElementById("bipEndpointLbl");
+  if(lbl)lbl.textContent=ST.url?(ST.url.replace(/\/$/,"")+"/xmlpserver/services/ExternalReportWSSService"):"not connected — connect first (⌘⇧C)";
   openModal("bipModal");
 };
+function _persistEngineCfg(){
+  var json=JSON.stringify({engine:ST.engine,bip:ST.bip});
+  try{if(window.electronAPI&&window.electronAPI.saveSettings){window.electronAPI.saveSettings(json);return;}}catch(e){}
+  try{localStorage.setItem("t2sEngineCfg",json);}catch(e){} // browser fallback only
+}
 window._saveBipCfg=function(){
   var p=(document.getElementById("fBipPath")||{value:""}).value.trim();
   if(p&&!/^\/.+\.xdo$/i.test(p)){toast("Report path must start with / and end in .xdo","er");return;}
@@ -1167,14 +1175,27 @@ window._saveBipCfg=function(){
   var es=document.getElementById("engineSel");
   if(p){ST.engine="bip";if(es)es.value="bip";}
   else if(ST.engine==="bip"){ST.engine="rest";if(es)es.value="rest";}
+  _persistEngineCfg();
   closeModal("bipModal");
   toast(p?"BIP SQL engine configured ✓":"BIP path cleared — engine back to REST","ok");
 };
 (function(){
   var es=document.getElementById("engineSel");
   if(!es)return;
+  // Survive reloads AND relaunches: restore engine choice + BIP path from the
+  // durable settings file (localStorage is wiped on file:// reloads).
+  try{
+    var raw=(window.electronAPI&&window.electronAPI.loadSettings)?window.electronAPI.loadSettings():localStorage.getItem("t2sEngineCfg");
+    var saved=JSON.parse(raw||"null");
+    if(saved){
+      ST.bip=(saved.bip&&saved.bip.reportPath)?{reportPath:saved.bip.reportPath}:null;
+      ST.engine=(saved.engine==="bip"&&ST.bip)?"bip":"rest";
+      es.value=ST.engine;
+    }
+  }catch(e){}
   es.addEventListener("change",function(){
     ST.engine=(es.value==="bip")?"bip":"rest";
+    _persistEngineCfg();
     if(ST.engine==="bip"&&!(ST.bip&&ST.bip.reportPath))window._openBipCfg(); // needs the one-time setup first
   });
 })();
@@ -1447,7 +1468,7 @@ function t2sAuthGet(url){
 /* POST transport for the BIP engine — same posture as t2sAuthGet: raw outcome only.
    OAuth = main-process Bearer POST (pinned to /xmlpserver/). Basic = XHR with Basic
    auth. SSO sessions can't call the SOAP service — honest error, no fallback. */
-function t2sAuthPost(url,body,contentType){
+function t2sAuthPost(url,body,contentType,skipBasicHeader){
   if(ST.authMode==="oauth"){
     if(!(window.electronAPI&&window.electronAPI.oauthFetch))return Promise.resolve({networkError:true});
     return window.electronAPI.oauthFetch(url,{method:"POST",body:body,contentType:contentType,accept:"application/soap+xml, text/xml, */*"}).then(function(r){
@@ -1459,7 +1480,9 @@ function t2sAuthPost(url,body,contentType){
   return new Promise(function(resolve){
     var xhr=new XMLHttpRequest();
     xhr.open("POST",url,true);
-    xhr.setRequestHeader("Authorization","Basic "+btoa(ST.user+":"+ST.pass));
+    // When credentials travel in the WS-Security header, do NOT also send HTTP
+    // Basic — OWSM can process the transport header first and reject the call.
+    if(!skipBasicHeader)xhr.setRequestHeader("Authorization","Basic "+btoa(ST.user+":"+ST.pass));
     xhr.setRequestHeader("Content-Type",contentType||"application/soap+xml; charset=UTF-8");
     xhr.timeout=120000; // BIP executes the SQL server-side — allow long queries
     xhr.onload=function(){resolve({status:xhr.status,responseText:xhr.responseText});};
@@ -1480,9 +1503,13 @@ async function queryBIP(sql){
   if(ST.authMode==="sso")return {kind:"error",message:"BIP engine needs Basic or OAuth auth — the SSO session-cookie mode cannot call the SOAP service."};
   var ctx={instance:instance,endpoint:"BIP "+rp,sql:sql,connectionId:instance};
   document.getElementById("resEp").textContent="→ BIP runReport"+(ST.authMode==="oauth"?" (OAuth)":"");
-  var env=t2sBipEnvelope(sql,rp);
+  // Basic mode: credentials go into the WS-Security header ONLY — the WSS service's
+  // OWSM policy reads the SOAP header (plain HTTP Basic 401s, and sending both can
+  // make OWSM reject the call).
+  var wss=(ST.authMode==="basic"&&ST.user)?{user:ST.user,pass:ST.pass}:null;
+  var env=t2sBipEnvelope(sql,rp,wss);
   if(env.error)return {kind:"error",message:env.error};
-  var http=await t2sAuthPost(base+"/xmlpserver/services/ExternalReportWSSService",env.xml,"application/soap+xml; charset=UTF-8");
+  var http=await t2sAuthPost(base+"/xmlpserver/services/ExternalReportWSSService",env.xml,"application/soap+xml; charset=UTF-8",!!wss);
   return t2sProcessBipResponse(http,ctx); // BIP choke point — error | empty | rows only
 }
 
@@ -1860,14 +1887,31 @@ function t2sBipB64Decode(b64){
 }
 
 /* Build the SOAP 1.2 runReport envelope. SQL goes in CDATA — a "]]>" inside the
-   SQL would break out of the CDATA section, so it is refused outright. */
-function t2sBipEnvelope(sql,reportPath){
+   SQL would break out of the CDATA section, so it is refused outright.
+   wss (optional, Basic mode): {user,pass} adds a WS-Security UsernameToken header —
+   ExternalReportWSSService's OWSM policy authenticates from the SOAP header, and
+   many pods return 401 to plain HTTP Basic without it. Values are XML-escaped. */
+function t2sBipEnvelope(sql,reportPath,wss){
   if(!sql||!String(sql).trim())return {error:"BIP engine: empty SQL"};
   if(String(sql).indexOf("]]>")>=0)return {error:"BIP engine: SQL may not contain the sequence ]]>"};
   if(!reportPath||!/^\/.+\.xdo$/i.test(String(reportPath).trim()))
     return {error:"BIP engine: report path must be a catalog path ending in .xdo (e.g. /Custom/Talk2Sql/T2S_SQL.xdo)"};
+  var header="";
+  if(wss&&wss.user){
+    // Exactly Oracle's documented ExternalReportWSSService header shape — plain
+    // UsernameToken with PasswordText, nothing else. mustUnderstand / Timestamp /
+    // wsu:Id decorations have all been observed to trigger OWSM "InvalidSecurity"
+    // on Fusion pods. SOAP 1.2 envelope (the service rejects text/xml).
+    header='<soap:Header>'
+      +'<wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">'
+      +'<wsse:UsernameToken>'
+      +'<wsse:Username>'+t2sBipXmlEsc(wss.user)+'</wsse:Username>'
+      +'<wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">'+t2sBipXmlEsc(wss.pass||"")+'</wsse:Password>'
+      +'</wsse:UsernameToken></wsse:Security></soap:Header>';
+  }
   var xml='<?xml version="1.0" encoding="UTF-8"?>'
     +'<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:pub="http://xmlns.oracle.com/oxp/service/PublicReportService">'
+    +header
     +'<soap:Body><pub:runReport><pub:reportRequest>'
     +'<pub:attributeFormat>xml</pub:attributeFormat>'
     +'<pub:byPassCache>true</pub:byPassCache>'
