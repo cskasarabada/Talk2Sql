@@ -66,6 +66,19 @@ console.log("\n(2) HAPPY PATH — live rowset reaches the grid with provenance")
   ok(rowsThatReachGrid(p).length === 2, "passes the render boundary");
 }
 
+console.log("\n(2b) PARAMETER ECHO — <P_SQL> tag (Include Parameter Tags on) is NOT a row");
+{
+  const data = '<DATA_DS><P_SQL>SELECT party_name FROM hz_parties</P_SQL>' +
+               '<G_1><PARTY_NAME>Acme</PARTY_NAME></G_1></DATA_DS>';
+  const p = t2sProcessBipResponse({ status: 200, responseText: soapWrap(data) }, ctx);
+  ok(p.kind === "rows" && p.rows.length === 1, "exactly 1 row — echo skipped, no phantom row");
+  ok(p.cols.join(",") === "PARTY_NAME", "columns unaffected by the echo element");
+  // echo only, no rowset → honest empty
+  const p2 = t2sProcessBipResponse({ status: 200, responseText:
+    soapWrap('<DATA_DS><P_SQL>SELECT x FROM y</P_SQL></DATA_DS>') }, ctx);
+  ok(p2.kind === "empty", "parameter echo alone is an explicit empty, not a fake row");
+}
+
 console.log("\n(3) EMPTY ROWSET — explicit empty, never a placeholder row");
 {
   const p = t2sProcessBipResponse({ status: 200, responseText: soapWrap("<DATA_DS></DATA_DS>") }, ctx);

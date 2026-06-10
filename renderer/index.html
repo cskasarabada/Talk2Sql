@@ -505,9 +505,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     <div style="font-size:9px;font-weight:700;color:var(--t3);letter-spacing:1px;margin:10px 0 6px">CREATE THE DATA MODEL (ONCE, IN /xmlpserver)</div>
     <ol style="margin:0;padding-left:20px">
       <li>Open <b>BI Publisher</b> → New → <b>Data Model</b>.</li>
-      <li>Add a <b>Parameter</b>: name <code style="color:var(--ac)">p_sql</code>, type String, default value <code style="color:var(--ac)">SELECT 1 AS ONE FROM DUAL</code>.</li>
-      <li>Add a <b>SQL Query</b> dataset (name G_1, Standard SQL) with the query exactly:<br/><code style="font-size:10px;color:var(--ac)">&amp;p_sql</code><br/><span style="color:var(--t3)">(the lexical reference substitutes your whole query — same pattern the JDBC-over-BIP drivers use)</span></li>
-      <li>Save as <code style="color:var(--ac)">/Custom/Talk2Sql/T2S_SQL_DM</code>, then create a <b>Report</b> on it (any minimal layout), save as <code style="color:var(--ac)">/Custom/Talk2Sql/T2S_SQL</code> — the path above gets <code>.xdo</code>.</li>
+      <li>Add a <b>Parameter</b>: name <code style="color:var(--ac)">p_sql</code>, type String, default value <code style="color:var(--ac)">SELECT 1 AS ONE FROM DUAL</code> (no trailing semicolon).</li>
+      <li>Add a <b>SQL Query</b> dataset (name G_1, Standard SQL) with the query exactly:<br/><code style="font-size:10px;color:var(--ac)">SELECT * FROM (&amp;p_sql)</code><br/><span style="color:var(--t3)">(lexical wrapper — plain &amp;p_sql alone throws ORA-17128; when the lexical-value dialog prompts, enter the full default query)</span></li>
+      <li>In the left tree click <b>Properties</b> (root node) and set <b>Default Data Source</b> = <code style="color:var(--ac)">ApplicationDB_FSCM</code> — without it View Data fails with a null-connection error. Then Data tab → View → <b>Save As Sample Data</b>.</li>
+      <li>Save the model (e.g. <code style="color:var(--ac)">/Custom/Argano/T2S_SQL_DM</code>), then create a <b>Report</b> on it (any minimal layout), save alongside it — the path above gets <code>.xdo</code>.</li>
       <li>Grant the connecting user (or OAuth service identity) a role that can <b>run</b> the report (e.g. BI Consumer + catalog permission).</li>
     </ol>
     <div style="margin-top:12px;padding:8px 10px;border:1px solid var(--b1);border-radius:6px;font-size:10px;color:var(--t3);line-height:1.6">
@@ -1910,7 +1911,11 @@ function t2sBipRowsFromXml(xml){
   if(!root)return {error:"Unrecognized BIP data format (no XML rowset)"};
   var body=root[2];
   var rowRe=/<([\w.:-]+)[^>]*>([\s\S]*?)<\/\1>/g,rm,cols=[],seen={},rows=[],rawRows=[];
-  while((rm=rowRe.exec(body))!==null)rawRows.push(rm[2]);
+  while((rm=rowRe.exec(body))!==null){
+    // Rows are elements with child elements. Text-only children (e.g. the <P_SQL>
+    // parameter echo when "Include Parameter Tags" is on) are metadata, not rows.
+    if(/<[\w.:-]+[^>]*(\/>|>)/.test(rm[2]))rawRows.push(rm[2]);
+  }
   if(!rawRows.length)return {cols:[],rows:[]};
   var cellRe=/<([\w.:-]+)[^>]*>([\s\S]*?)<\/\1>|<([\w.:-]+)[^>]*\/>/g;
   for(var i=0;i<rawRows.length;i++){
