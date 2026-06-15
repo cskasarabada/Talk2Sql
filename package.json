@@ -1,9 +1,11 @@
 {
   "name": "talk2sql",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "Talk2Sql — Oracle Fusion Desktop Explorer + ICM Intelligence Hub + App Configurations",
   "main": "main.js",
-  "author": { "name": "Chandra Kasarabada" },
+  "author": {
+    "name": "Chandra Kasarabada"
+  },
   "license": "MIT",
   "scripts": {
     "test": "node test/t2s-guard.test.js && node test/oauth-refresh.test.js && node test/bip-engine.test.js",
@@ -15,13 +17,36 @@
   "build": {
     "appId": "com.ck.talk2sql",
     "productName": "Talk2Sql",
-    "files": ["main.js","preload.js","oauth-manager.js","renderer/**/*","assets/**/*"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "oauth-manager.js",
+      "renderer/**/*",
+      "assets/**/*"
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "darkModeSupport": true,
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
