@@ -1512,10 +1512,22 @@ async function queryBIP(sql){
   var rp=(ST.bip&&ST.bip.reportPath)||"";
   if(!rp)return {kind:"error",message:"BIP engine: no report path configured. Click the engine selector's ⚙ to set the catalog path of the Talk2Sql report (e.g. /Custom/Talk2Sql/T2S_SQL.xdo) — see the one-time setup checklist."};
   var ctx={instance:instance,endpoint:"BIP "+rp,sql:sql,connectionId:instance};
-  document.getElementById("resEp").textContent="→ BIP runReport"+(ST.authMode==="oauth"?" (OAuth)":ST.authMode==="sso"?" (SSO)":"");
+  document.getElementById("resEp").textContent="→ BIP run"+(ST.authMode==="oauth"?" (OAuth)":ST.authMode==="sso"?" (SSO/REST)":"");
+
+  // SSO mode → BI Publisher REST API. The WSS SOAP endpoint needs a WS-Security
+  // header and rejects a session cookie, but the REST run endpoint accepts the
+  // interactive-login session — the CloudSQL-style path for federated pods.
+  if(ST.authMode==="sso"){
+    var rb=t2sBipRestBody(sql);
+    if(rb.error)return {kind:"error",message:rb.error};
+    var restUrl=base+"/xmlpserver/services/rest/v1/reports/"+t2sBipRestPath(rp)+"/run";
+    var rhttp=await t2sAuthPost(restUrl,rb.body,rb.contentType);
+    return t2sProcessBipRestResponse(rhttp,ctx); // REST choke point — error | empty | rows only
+  }
+
   // Basic mode: credentials go into the WS-Security header ONLY — the WSS service's
   // OWSM policy reads the SOAP header (plain HTTP Basic 401s, and sending both can
-  // make OWSM reject the call).
+  // make OWSM reject the call). OAuth: Bearer on the same SOAP endpoint.
   var wss=(ST.authMode==="basic"&&ST.user)?{user:ST.user,pass:ST.pass}:null;
   var env=t2sBipEnvelope(sql,rp,wss);
   if(env.error)return {kind:"error",message:env.error};
@@ -1998,6 +2010,81 @@ function t2sProcessBipResponse(http,ctx){
     return {kind:"error",message:"HTTP "+http.status+" — "+(soapErr.error||"BIP request rejected"),raw:http.responseText||""};
   }
   var parsed=t2sBipParseSoap(http.responseText);
+  if(parsed.error)return {kind:"error",message:parsed.error};
+  var rs=t2sBipRowsFromXml(parsed.dataXml);
+  if(rs.error)return {kind:"error",message:rs.error};
+  if(!rs.rows.length)return {kind:"empty",rowCount:0,prov:t2sProvenance(ctx,0)};
+  return {kind:"rows",cols:rs.cols,rows:rs.rows,note:ctx.note||"",prov:t2sProvenance(ctx,rs.rows.length)};
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   BIP REST API path — used for SSO (session-cookie) auth, because the WSS SOAP
+   endpoint requires a WS-Security header and 401s a cookie. The REST API
+   (/xmlpserver/services/rest/v1/reports/{path}/run) accepts the SSO session
+   cookie the same way the BI Publisher UI does — this is how CloudSQL-style tools
+   query federated pods. Pure builders/parsers so the guard test covers them; the
+   result still flows into the SAME error|empty|rows contract with provenance. No
+   fabrication path: faults, non-2xx, and unparseable bodies are explicit errors.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Catalog path → REST path: relative to Shared Folders, no .xdo, slashes %2F.
+   e.g. /Custom/Argano/T2S_SQL.xdo → Custom%2FArgano%2FT2S_SQL */
+function t2sBipRestPath(reportPath){
+  var p=String(reportPath||"").trim().replace(/^\/+/,"").replace(/\.xdo$/i,"");
+  return p.split("/").map(function(seg){return encodeURIComponent(seg);}).join("%2F");
+}
+
+/* Build the multipart/form-data body with the single ReportRequest JSON part.
+   SQL rides in JSON (no CDATA concerns). Returns {body, contentType}. */
+function t2sBipRestBody(sql){
+  if(!sql||!String(sql).trim())return {error:"BIP engine: empty SQL"};
+  var boundary="----t2sBIP"+Date.now()+Math.floor(Math.random()*1e9).toString(36);
+  var req={byPassCache:true,attributeFormat:"xml",
+    parameterNameValues:{listOfParamNameValues:[{name:"p_sql",values:[String(sql)]}]}};
+  var body="--"+boundary+"\r\n"
+    +'Content-Disposition: form-data; name="ReportRequest"\r\n'
+    +"Content-Type: application/json\r\n\r\n"
+    +JSON.stringify(req)+"\r\n"
+    +"--"+boundary+"--\r\n";
+  return {body:body, contentType:"multipart/form-data; boundary="+boundary};
+}
+
+/* Pull the report data out of the multipart REST response. The body has a
+   ReportResponse (JSON metadata) part and a ReportOutput (the data XML) part.
+   Returns {dataXml} | {error}. Tolerates a plain-XML body too. */
+function t2sBipParseRestMultipart(text){
+  var s=String(text||"");
+  var m=s.match(/^\s*(--[^\r\n]+)\r?\n/);
+  if(!m){
+    if(/<\?xml|<DATA_DS|<[A-Za-z][\w.:-]*[\s>]/.test(s))return {dataXml:s}; // some configs return raw XML
+    var f0=s.match(/faultstring[^>]*>([\s\S]*?)</i);
+    return {error:"Unexpected BIP REST response"+(f0?": "+f0[1].trim():" (not multipart, not XML)")};
+  }
+  var boundary=m[1].trim();
+  var parts=s.split(boundary);
+  for(var i=0;i<parts.length;i++){
+    if(/name="ReportOutput"/i.test(parts[i])){
+      var idx=parts[i].search(/\r?\n\r?\n/);
+      if(idx<0)continue;
+      var content=parts[i].slice(idx).replace(/^\r?\n\r?\n/,"");
+      content=content.replace(/\r?\n--\s*$/,"").replace(/\s+$/,"");
+      return {dataXml:content};
+    }
+  }
+  var f=s.match(/faultstring[^>]*>([\s\S]*?)</i);
+  return {error:"BIP REST response had no ReportOutput part"+(f?": "+f[1].trim():"")};
+}
+
+/* REST choke point — analog of t2sProcessBipResponse for the SSO/REST path. */
+function t2sProcessBipRestResponse(http,ctx){
+  ctx=ctx||{};
+  if(http.networkError)return {kind:"error",message:"Network error — could not reach "+(ctx.instance||"the instance")+" (BIP REST)."};
+  if(http.timeout)return {kind:"error",message:"Timeout contacting "+(ctx.instance||"the instance")+" (BIP REST run can be slow on large queries)."};
+  if(http.status===0||http.status>=400){
+    var detail=t2sBipParseRestMultipart(http.responseText);
+    return {kind:"error",message:"HTTP "+http.status+" — "+(detail.error||"BIP REST request rejected")+(http.status===401?" (the SSO session was not accepted — re-sign-in, or your account may lack the BI Author/Administrator role)":http.status===404?" (report path not found — it is relative to Shared Folders, no .xdo)":""),raw:http.responseText||""};
+  }
+  var parsed=t2sBipParseRestMultipart(http.responseText);
   if(parsed.error)return {kind:"error",message:parsed.error};
   var rs=t2sBipRowsFromXml(parsed.dataXml);
   if(rs.error)return {kind:"error",message:rs.error};

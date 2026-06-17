@@ -25,8 +25,10 @@ if (s < 0 || e < 0) { console.error("Could not locate the embedded executor bloc
 const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(html.slice(s, e) +
-  "\nthis.__api={t2sBipEnvelope,t2sBipParseSoap,t2sBipRowsFromXml,t2sProcessBipResponse,t2sBipB64Decode,t2sAssertRenderable};", sandbox);
-const { t2sBipEnvelope, t2sBipParseSoap, t2sBipRowsFromXml, t2sProcessBipResponse, t2sBipB64Decode, t2sAssertRenderable } = sandbox.__api;
+  "\nthis.__api={t2sBipEnvelope,t2sBipParseSoap,t2sBipRowsFromXml,t2sProcessBipResponse,t2sBipB64Decode,t2sAssertRenderable," +
+  "t2sBipRestPath,t2sBipRestBody,t2sBipParseRestMultipart,t2sProcessBipRestResponse};", sandbox);
+const { t2sBipEnvelope, t2sBipParseSoap, t2sBipRowsFromXml, t2sProcessBipResponse, t2sBipB64Decode, t2sAssertRenderable,
+        t2sBipRestPath, t2sBipRestBody, t2sBipParseRestMultipart, t2sProcessBipRestResponse } = sandbox.__api;
 
 let failures = 0;
 const ok = (cond, msg) => { console.log((cond ? "  PASS  " : "  FAIL  ") + msg); if (!cond) failures++; };
@@ -144,6 +146,52 @@ console.log("\n(9) B64 DECODER — UTF-8 round trip");
 {
   const txt = '<R><C>Müller — “quotes” ✓</C></R>';
   ok(t2sBipB64Decode(Buffer.from(txt, "utf8").toString("base64")) === txt, "multi-byte UTF-8 decodes exactly");
+}
+
+console.log("\n(10) REST PATH ENCODING — relative to Shared Folders, no .xdo, slashes %2F");
+{
+  ok(t2sBipRestPath("/Custom/Argano/T2S_SQL.xdo") === "Custom%2FArgano%2FT2S_SQL", "leading slash + .xdo stripped, slashes encoded");
+  ok(t2sBipRestPath("/Custom/My Reports/T2S.xdo") === "Custom%2FMy%20Reports%2FT2S", "spaces in folder names encoded");
+}
+
+console.log("\n(11) REST MULTIPART BODY — single ReportRequest JSON part, SQL in p_sql");
+{
+  const b = t2sBipRestBody(ctx.sql);
+  ok(/multipart\/form-data; boundary=/.test(b.contentType), "multipart content type with boundary");
+  ok(b.body.indexOf('name="ReportRequest"') > 0, "ReportRequest part present");
+  ok(b.body.indexOf('"p_sql"') > 0 && b.body.indexOf(ctx.sql) > 0, "p_sql parameter carries the SQL");
+  ok(t2sBipRestBody("").error, "empty SQL refused");
+}
+
+function restMultipart(dataXml) {
+  const b = "Bnd_42";
+  return "--" + b + "\r\nContent-Type: application/json\r\nContent-Disposition: form-data; name=\"ReportResponse\"\r\n\r\n" +
+    '{"reportContentType":"text/xml"}\r\n--' + b +
+    "\r\nContent-Type: application/octet-stream\r\nContent-Disposition: form-data; name=\"ReportOutput\"\r\n\r\n" +
+    dataXml + "\r\n--" + b + "--\r\n";
+}
+
+console.log("\n(12) REST RESPONSE — live rows from the ReportOutput part, with provenance");
+{
+  const data = '<?xml version="1.0"?><DATA_DS><G_1><ONE>1</ONE></G_1></DATA_DS>';
+  const p = t2sProcessBipRestResponse({ status: 200, responseText: restMultipart(data) }, ctx);
+  ok(p.kind === "rows" && p.rows.length === 1 && p.rows[0][0] === "1", "ReportOutput XML parsed to rows");
+  ok(p.prov && p.prov.live === true, "provenance stamped");
+  ok(rowsThatReachGrid(p).length === 1, "passes the render boundary");
+}
+
+console.log("\n(13) REST 401 — SSO session rejected → honest error, no rows");
+{
+  const p = t2sProcessBipRestResponse({ status: 401, responseText: "" }, ctx);
+  ok(p.kind === "error" && /401/.test(p.message) && /SSO session/.test(p.message), "401 explains the SSO/role cause");
+  ok(rowsThatReachGrid(p).length === 0, "0 rows reach the grid");
+}
+
+console.log("\n(14) REST empty + transport failures");
+{
+  ok(t2sProcessBipRestResponse({ status: 200, responseText: restMultipart("<DATA_DS></DATA_DS>") }, ctx).kind === "empty", "empty rowset → empty");
+  ok(t2sProcessBipRestResponse({ networkError: true }, ctx).kind === "error", "networkError → error");
+  ok(t2sProcessBipRestResponse({ status: 404, responseText: "" }, ctx).kind === "error", "404 → error");
 }
 
 console.log("\n" + (failures ? failures + " GUARD FAILURE(S)" : "ALL BIP GUARDS PASS"));
