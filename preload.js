@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // SSO (federated) auth — optional. The Basic-auth path never calls these.
   ssoLogin: (baseUrl) => ipcRenderer.invoke('sso-login', baseUrl),
   ssoFetch: (url) => ipcRenderer.invoke('sso-fetch', { url }),
+  ssoPost: (url, body, contentType) => ipcRenderer.invoke('sso-post', { url, body, contentType }),
   ssoClear: () => ipcRenderer.invoke('sso-clear'),
   // OAuth client-credentials (Bearer) — for SAML-federated pods. The token and the
   // keychain-stored secret live in the main process only; the renderer just asks

@@ -513,7 +513,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
       <li>Grant the connecting user (or OAuth service identity) a role that can <b>run</b> the report (e.g. BI Consumer + catalog permission).</li>
     </ol>
     <div style="margin-top:12px;padding:8px 10px;border:1px solid var(--b1);border-radius:6px;font-size:10px;color:var(--t3);line-height:1.6">
-      🛡 The read-only gate still applies — only SELECT/WITH leaves the app. Auth: works over <b>Basic</b> and <b>OAuth</b> (not the SSO cookie mode). Results carry the same verification stamp; failures surface verbatim — never invented rows.<br/>
+      🛡 The read-only gate still applies — only SELECT/WITH leaves the app. Auth: works over <b>Basic</b>, <b>OAuth</b>, and <b>SSO</b> (sign in interactively — BI Publisher trusts the SSO session; needs the BI Author / BI Administrator role). Results carry the same verification stamp; failures surface verbatim — never invented rows.<br/>
       ⚠ Large results: BIP truncates very large outputs per call — add a WHERE/ROWNUM filter rather than SELECT * on huge tables.
     </div>
   </div>
@@ -1113,11 +1113,13 @@ async function explainSQL(){
 /* ═══════════════════════════════════════
    CONNECTION
 ═══════════════════════════════════════ */
-/* SSO (session-cookie) is built but hidden by default — federated pods reject the
-   cookie route for REST. Set SSO_ENABLED=true to expose it again.
-   OAuth (client-credentials Bearer) is the supported path for SAML-federated pods
-   and is visible by default. */
-var SSO_ENABLED=false;
+/* SSO (interactive session-cookie login) — the CloudSQL-style path for federated
+   pods. You sign in once through the embedded browser; BI Publisher trusts that SSO
+   session, so the BIP engine can run SQL through it. (REST still rejects the cookie,
+   so SSO mode is meant to be used WITH the BIP engine.) Needs the BI Author /
+   BI Administrator role on your Fusion account.
+   OAuth (client-credentials Bearer) remains the machine-to-machine alternative. */
+var SSO_ENABLED=true;
 var OAUTH_ENABLED=true;
 (function(){try{
   var r=document.getElementById("authModeRow");if(r)r.style.display=(SSO_ENABLED||OAUTH_ENABLED)?"":"none";
@@ -1231,8 +1233,9 @@ async function doConnectOAuth(){
   if(sp)sp.classList.remove("go");
 }
 
-/* SSO (federated) connect — opens the Oracle URL for interactive login, then
-   verifies the session can actually fetch. No credentials stored; no fabrication. */
+/* SSO (federated) connect — opens the Oracle URL for interactive login. The
+   resulting session is used by the BIP engine to run SQL through BI Publisher
+   (which trusts the SSO session). No credentials stored; no fabrication. */
 async function doConnectSSO(){
   var url=document.getElementById("fUrl").value.trim().replace(/\/$/,"");
   if(!url){toast("Enter the Oracle instance URL","er");return;}
@@ -1241,18 +1244,18 @@ async function doConnectSSO(){
   try{
     var res=await window.electronAPI.ssoLogin(url);
     if(!res||!res.ok){toast("SSO login cancelled or failed","er");if(sp)sp.classList.remove("go");return;}
-    // Real read-only probe through the session — confirms cookies actually authorize REST.
-    var probe=await window.electronAPI.ssoFetch(url+"/fscmRestApi/resources/latest/?limit=1&onlyData=true");
-    if(probe&&(probe.networkError||(probe.status&&probe.status>=400))){
-      toast("Signed in, but the session can't reach REST"+(probe.status?" (HTTP "+probe.status+")":"")+" — this pod may require OAuth or a local account","wa");
-    }
     ST.apiKey=(document.getElementById("fApiKey")||{value:""}).value.trim();
     Object.assign(ST,{conn:true,url:url,user:"",pass:"",authMode:"sso"});
     if(window._persistApiKey)window._persistApiKey(ST.apiKey);
+    // SSO sessions run SQL through BI Publisher, not REST — default to the BIP engine
+    // if a report path is configured, so the user lands on the working path.
+    if(ST.bip&&ST.bip.reportPath){ST.engine="bip";var es=document.getElementById("engineSel");if(es)es.value="bip";try{_persistEngineCfg();}catch(e){}}
     document.getElementById("dot").className="dot on";
     document.getElementById("connLbl").textContent=(url.replace("https://","").split("/")[0].slice(0,30))+" · SSO";
     document.getElementById("btnDisconn").style.display="inline-flex";
-    closeModal("connModal");toast("Connected via SSO ✓","ok");
+    closeModal("connModal");
+    var ready=(ST.bip&&ST.bip.reportPath);
+    toast(ready?"Connected via SSO ✓ — BIP engine ready":"Connected via SSO ✓ — set the BIP report path (⚙) to run SQL","ok");
   }catch(e){toast("SSO error: "+e.message,"er");}
   if(sp)sp.classList.remove("go");
 }
@@ -1466,8 +1469,10 @@ function t2sAuthGet(url){
 }
 
 /* POST transport for the BIP engine — same posture as t2sAuthGet: raw outcome only.
-   OAuth = main-process Bearer POST (pinned to /xmlpserver/). Basic = XHR with Basic
-   auth. SSO sessions can't call the SOAP service — honest error, no fallback. */
+   OAuth = main-process Bearer POST (pinned to /xmlpserver/). SSO = main-process POST
+   carrying the interactive-login session cookies (BI Publisher trusts the SSO
+   session — the CloudSQL-style path for federated pods). Basic = XHR with Basic auth.
+   All feed the SAME t2sProcessBipResponse guard, so none can fabricate rows. */
 function t2sAuthPost(url,body,contentType,skipBasicHeader){
   if(ST.authMode==="oauth"){
     if(!(window.electronAPI&&window.electronAPI.oauthFetch))return Promise.resolve({networkError:true});
@@ -1476,7 +1481,13 @@ function t2sAuthPost(url,body,contentType,skipBasicHeader){
       return {status:r.status,responseText:r.responseText};
     }).catch(function(){return {networkError:true};});
   }
-  if(ST.authMode==="sso")return Promise.resolve({networkError:true});
+  if(ST.authMode==="sso"){
+    if(!(window.electronAPI&&window.electronAPI.ssoPost))return Promise.resolve({networkError:true});
+    return window.electronAPI.ssoPost(url,body,contentType).then(function(r){
+      if(!r||r.networkError)return {networkError:true};
+      return {status:r.status,responseText:r.responseText};
+    }).catch(function(){return {networkError:true};});
+  }
   return new Promise(function(resolve){
     var xhr=new XMLHttpRequest();
     xhr.open("POST",url,true);
@@ -1500,9 +1511,8 @@ async function queryBIP(sql){
   var instance=t2sInstanceName(ST.url);
   var rp=(ST.bip&&ST.bip.reportPath)||"";
   if(!rp)return {kind:"error",message:"BIP engine: no report path configured. Click the engine selector's ⚙ to set the catalog path of the Talk2Sql report (e.g. /Custom/Talk2Sql/T2S_SQL.xdo) — see the one-time setup checklist."};
-  if(ST.authMode==="sso")return {kind:"error",message:"BIP engine needs Basic or OAuth auth — the SSO session-cookie mode cannot call the SOAP service."};
   var ctx={instance:instance,endpoint:"BIP "+rp,sql:sql,connectionId:instance};
-  document.getElementById("resEp").textContent="→ BIP runReport"+(ST.authMode==="oauth"?" (OAuth)":"");
+  document.getElementById("resEp").textContent="→ BIP runReport"+(ST.authMode==="oauth"?" (OAuth)":ST.authMode==="sso"?" (SSO)":"");
   // Basic mode: credentials go into the WS-Security header ONLY — the WSS service's
   // OWSM policy reads the SOAP header (plain HTTP Basic 401s, and sending both can
   // make OWSM reject the call).

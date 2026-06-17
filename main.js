@@ -53,6 +53,35 @@ ipcMain.handle('sso-fetch', async (event, opts) => {
   });
 });
 
+// Issue a read-only POST using the SSO session's cookies — used by the BIP engine
+// to call BI Publisher's runReport SOAP service. This is how SSO-enabled pods are
+// queried for SQL (CloudSQL-style): the interactive login establishes the session,
+// and BI Publisher trusts that SSO session even though REST rejects it. Returns the
+// same {status, responseText} | {networkError:true} shape, so it feeds the SAME
+// t2sProcessBipResponse guard — SSO can never fabricate rows here either.
+ipcMain.handle('sso-post', async (event, opts) => {
+  const url = (opts && opts.url) || '';
+  const bodyOut = (opts && opts.body) || '';
+  const contentType = (opts && opts.contentType) || 'application/soap+xml; charset=UTF-8';
+  return new Promise((resolve) => {
+    let body = '';
+    let req;
+    try {
+      req = net.request({ method: 'POST', url: url, session: session.fromPartition(SSO_PARTITION), useSessionCookies: true });
+    } catch (e) { resolve({ networkError: true, message: String(e) }); return; }
+    req.setHeader('Content-Type', contentType);
+    req.setHeader('Accept', 'application/soap+xml, text/xml, */*');
+    req.on('response', (resp) => {
+      resp.on('data', (chunk) => { body += chunk.toString(); });
+      resp.on('end', () => resolve({ status: resp.statusCode, responseText: body }));
+      resp.on('error', () => resolve({ networkError: true }));
+    });
+    req.on('error', (err) => resolve({ networkError: true, message: String(err) }));
+    req.write(bodyOut);
+    req.end();
+  });
+});
+
 // Clear the SSO session (sign out / switch customer).
 ipcMain.handle('sso-clear', async () => {
   try { await session.fromPartition(SSO_PARTITION).clearStorageData(); return { ok: true }; }
