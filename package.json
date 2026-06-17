@@ -1,6 +1,6 @@
 {
   "name": "talk2sql",
-  "version": "3.3.0",
+  "version": "3.3.2",
   "description": "Talk2Sql — Oracle Fusion Desktop Explorer + ICM Intelligence Hub + App Configurations",
   "main": "main.js",
   "author": {
