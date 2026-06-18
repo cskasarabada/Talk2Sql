@@ -539,7 +539,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div id="top">
-  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v3.0.1</span></div>
+  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v3.4.0</span></div>
   <div class="sep"></div>
   <div class="conn-pill" id="connPill"><div class="dot" id="dot"></div><span id="connLbl">Click to connect</span></div>
   <button class="btn b-ghost" id="btnDisconn" style="font-size:10px;padding:3px 8px;display:none">✕</button>
@@ -1070,7 +1070,7 @@ async function callAI(prompt,maxT,sys){
     xhr.onerror=function(){reject(new Error("Network error calling Claude API"));};
     xhr.ontimeout=function(){reject(new Error("Claude API timeout"));};
     xhr.send(JSON.stringify({
-      model:"claude-sonnet-4-20250514",
+      model:"claude-sonnet-4-6",
       max_tokens:maxT||600,
       system:sys||("Oracle Fusion SQL expert. Module: "+ST.mod),
       messages:[{role:"user",content:prompt}]
@@ -1413,7 +1413,8 @@ async function runQuery(){
   if(!(ST.conn&&ST.url)){t2sRenderError("Not connected. Connect to an Oracle Fusion instance (⌘⇧C) to run live data.");document.getElementById("prog").className="prog";return;}
   var t0=Date.now();
   try{
-    var payload=await (ST.engine==="bip"?queryBIP(sql):queryREST(sql));
+    // SSO sessions can't use REST (federated pods 401 it) — always go through BIP.
+    var payload=await ((ST.engine==="bip"||ST.authMode==="sso")?queryBIP(sql):queryREST(sql));
     var kind=t2sAssertRenderable(payload); // throws unless rows carry live provenance
     var elapsed=((Date.now()-t0)/1000).toFixed(2);
     if(kind==="error"){t2sRenderError(payload.message);}
@@ -1512,27 +1513,16 @@ async function queryBIP(sql){
   var rp=(ST.bip&&ST.bip.reportPath)||"";
   if(!rp)return {kind:"error",message:"BIP engine: no report path configured. Click the engine selector's ⚙ to set the catalog path of the Talk2Sql report (e.g. /Custom/Talk2Sql/T2S_SQL.xdo) — see the one-time setup checklist."};
   var ctx={instance:instance,endpoint:"BIP "+rp,sql:sql,connectionId:instance};
-  document.getElementById("resEp").textContent="→ BIP run"+(ST.authMode==="oauth"?" (OAuth)":ST.authMode==="sso"?" (SSO/REST)":"");
-
-  // SSO mode → BI Publisher REST API. The WSS SOAP endpoint needs a WS-Security
-  // header and rejects a session cookie, but the REST run endpoint accepts the
-  // interactive-login session — the CloudSQL-style path for federated pods.
-  if(ST.authMode==="sso"){
-    var rb=t2sBipRestBody(sql);
-    if(rb.error)return {kind:"error",message:rb.error};
-    var restUrl=base+"/xmlpserver/services/rest/v1/reports/"+t2sBipRestPath(rp)+"/run";
-    var rhttp=await t2sAuthPost(restUrl,rb.body,rb.contentType);
-    return t2sProcessBipRestResponse(rhttp,ctx); // REST choke point — error | empty | rows only
-  }
-
-  // Basic mode: credentials go into the WS-Security header ONLY — the WSS service's
-  // OWSM policy reads the SOAP header (plain HTTP Basic 401s, and sending both can
-  // make OWSM reject the call). OAuth: Bearer on the same SOAP endpoint.
+  document.getElementById("resEp").textContent="→ BIP runReport"+(ST.authMode==="oauth"?" (OAuth)":ST.authMode==="sso"?" (SSO)":"");
+  // SOAP runReport on ExternalReportWSSService — the OFJDBC method. The service
+  // account authenticates via the WS-Security UsernameToken; the report (a data-
+  // capable one like OFJDBC's RP_ARB, NOT an interactive xpt layout) returns the
+  // data XML for attributeFormat=xml. Same guard, provenance, no fabrication.
   var wss=(ST.authMode==="basic"&&ST.user)?{user:ST.user,pass:ST.pass}:null;
   var env=t2sBipEnvelope(sql,rp,wss);
   if(env.error)return {kind:"error",message:env.error};
   var http=await t2sAuthPost(base+"/xmlpserver/services/ExternalReportWSSService",env.xml,"application/soap+xml; charset=UTF-8",!!wss);
-  return t2sProcessBipResponse(http,ctx); // BIP choke point — error | empty | rows only
+  return t2sProcessBipResponse(http,ctx); // SOAP choke point — error | empty | rows only
 }
 
 /* queryREST resolves EXACTLY ONE of t2sProcessResponse's outcomes: error | empty | rows.
@@ -1543,8 +1533,11 @@ async function queryREST(sql){
   var m=sql.match(/FROM\s+(\w+)/i),tn=m?m[1].toUpperCase():"";
   var ep=REST_MAP[tn];
   if(!ep){
+    // No REST business-resource mapping for this table. If a BIP report is configured,
+    // run real SQL through BI Publisher instead of erroring — BIP handles any table/join.
+    if(ST.bip&&ST.bip.reportPath)return queryBIP(sql);
     document.getElementById("resEp").textContent="→ (no REST resource)";
-    return {kind:"error",message:(tn||"This table")+" has no Oracle Fusion REST resource mapped. Fusion REST exposes business resources (e.g. opportunities, accounts, invoices), not raw tables or _VL views. Map it, or add a REST_MAP entry for "+(tn||"it")+"."};
+    return {kind:"error",message:(tn||"This table")+" has no Oracle Fusion REST resource mapped. Fusion REST exposes business resources (e.g. opportunities, accounts, invoices), not raw tables or _VL views. Map it, switch the engine to BIP SQL, or add a REST_MAP entry for "+(tn||"it")+"."};
   }
   var fetchLim=500;
   var ctx={instance:instance,endpoint:ep,sql:sql,connectionId:instance,fetchLim:fetchLim};
@@ -1920,13 +1913,17 @@ function t2sBipEnvelope(sql,reportPath,wss){
     return {error:"BIP engine: report path must be a catalog path ending in .xdo (e.g. /Custom/Talk2Sql/T2S_SQL.xdo)"};
   var header="";
   if(wss&&wss.user){
-    // Exactly Oracle's documented ExternalReportWSSService header shape — plain
-    // UsernameToken with PasswordText, nothing else. mustUnderstand / Timestamp /
-    // wsu:Id decorations have all been observed to trigger OWSM "InvalidSecurity"
-    // on Fusion pods. SOAP 1.2 envelope (the service rejects text/xml).
+    // Full OWSM-standard WS-Security header: Timestamp + UsernameToken(PasswordText),
+    // mustUnderstand=1. Oracle's wss_username_token_over_ssl policy expects the
+    // Timestamp. SOAP 1.2 envelope (the service rejects SOAP 1.1 / text/xml).
+    var now=new Date(),exp=new Date(now.getTime()+5*60*1000);
+    var iso=function(d){return d.toISOString().replace(/\.\d{3}Z$/,"Z");};
     header='<soap:Header>'
-      +'<wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">'
-      +'<wsse:UsernameToken>'
+      +'<wsse:Security soap:mustUnderstand="1"'
+      +' xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"'
+      +' xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">'
+      +'<wsu:Timestamp wsu:Id="TS-1"><wsu:Created>'+iso(now)+'</wsu:Created><wsu:Expires>'+iso(exp)+'</wsu:Expires></wsu:Timestamp>'
+      +'<wsse:UsernameToken wsu:Id="UT-1">'
       +'<wsse:Username>'+t2sBipXmlEsc(wss.user)+'</wsse:Username>'
       +'<wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">'+t2sBipXmlEsc(wss.pass||"")+'</wsse:Password>'
       +'</wsse:UsernameToken></wsse:Security></soap:Header>';
@@ -1967,13 +1964,16 @@ function t2sBipParseSoap(text){
    {cols, rows}. Generic over group/column names: rows = repeated children of the
    root; cols = union of leaf tags in row order. An empty rowset is {cols:[],rows:[]}
    — explicitly empty, never a placeholder row. */
-function t2sBipRowsFromXml(xml){
-  var s=String(xml||"").replace(/<\?xml[\s\S]*?\?>/,"").trim();
+function t2sBipRowsFromXml(xml,_depth){
+  _depth=_depth||0;
+  var s=String(xml||"").replace(/<\?xml[\s\S]*?\?>/gi,"").replace(/<!DOCTYPE[\s\S]*?>/gi,"").replace(/<!--[\s\S]*?-->/g,"").trim();
   if(!s)return {error:"Empty report data"};
   // ORA- errors sometimes come back inside the payload — surface them verbatim.
   var ora=s.match(/ORA-\d{5}[^<\n]*/);
   if(ora)return {error:"Oracle error from BIP: "+t2sBipXmlUnesc(ora[0]).trim()};
-  var root=s.match(/^<([\w.:-]+)[^>]*>([\s\S]*)<\/\1>$/);
+  // Root element = first element matched to its closing tag. No ^…$ anchors, so it
+  // tolerates namespaces/attributes on the root and any surrounding whitespace.
+  var root=s.match(/<([\w.:-]+)(?:\s[^>]*)?>([\s\S]*)<\/\1\s*>/);
   if(!root)return {error:"Unrecognized BIP data format (no XML rowset)"};
   var body=root[2];
   var rowRe=/<([\w.:-]+)[^>]*>([\s\S]*?)<\/\1>/g,rm,cols=[],seen={},rows=[],rawRows=[];
@@ -1995,7 +1995,43 @@ function t2sBipRowsFromXml(xml){
     rows.push(obj);
   }
   if(!cols.length)return {error:"BIP rowset had rows but no readable columns"};
-  return {cols:cols,rows:rows.map(function(o){return cols.map(function(c){return (c in o)?o[c]:null;});})};
+  var out={cols:cols,rows:rows.map(function(o){return cols.map(function(c){return (c in o)?o[c]:null;});})};
+  // OFJDBC-style nesting: the report returns a single column (e.g. RESULT) whose value
+  // is the actual result set serialized as XML (<ROWSET><ROW>…). Unwrap and re-parse.
+  if(_depth<3 && out.cols.length===1 && out.rows.length){
+    var combined=out.rows.map(function(r){return t2sBipXmlUnesc(String(r[0]||""));}).join("");
+    if(/<(?:\w+:)?(?:ROWSET|DATA_DS|ROW)[\s>]/i.test(combined)){
+      if(!/^<\s*(?:\w+:)?(?:ROWSET|DATA_DS)\b/i.test(combined.trim()))combined="<ROWSET>"+combined+"</ROWSET>";
+      var nested=t2sBipRowsFromXml(combined,_depth+1);
+      if(nested&&!nested.error&&nested.cols&&nested.cols.length)return nested;
+    }
+  }
+  return out;
+}
+
+/* Parse the data table out of BIP HTML report output. The xpt report's HTML is a
+   rendered table; we take the table with the most rows, header from its first row.
+   Returns {cols,rows} | {error}. (Used when the report can't emit raw XML/CSV and
+   we fall back to its HTML layout output.) */
+function t2sBipRowsFromHtml(html){
+  var s=String(html||"");
+  var ora=s.match(/ORA-\d{5}[^<\n]*/);
+  if(ora)return {error:"Oracle error from BIP: "+t2sBipXmlUnesc(ora[0]).trim()};
+  var tables=s.match(/<table[\s\S]*?<\/table>/gi)||[];
+  if(!tables.length)return {error:"BIP HTML output contained no data table (the report layout may render via JavaScript — needs an XML/CSV/Data output format instead)."};
+  var best="",bestN=-1;
+  tables.forEach(function(t){var n=(t.match(/<tr[\s>]/gi)||[]).length;if(n>bestN){bestN=n;best=t;}});
+  var trs=best.match(/<tr[\s\S]*?<\/tr>/gi)||[];
+  function cells(tr){
+    var cs=tr.match(/<t[hd][\s\S]*?<\/t[hd]>/gi)||[];
+    return cs.map(function(c){return t2sBipXmlUnesc(c.replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ")).replace(/\s+/g," ").trim();});
+  }
+  if(!trs.length)return {cols:[],rows:[]};
+  var header=cells(trs[0]),rows=[];
+  for(var i=1;i<trs.length;i++){var r=cells(trs[i]);if(r.join("").length)rows.push(r);}
+  if(!header.length)return {error:"BIP HTML table had no readable header row."};
+  rows=rows.map(function(r){var o=[];for(var j=0;j<header.length;j++)o.push(j<r.length?(r[j]===""?null:r[j]):null);return o;});
+  return {cols:header,rows:rows};
 }
 
 /* BIP choke point — the exact analog of t2sProcessResponse. Turns a raw SOAP HTTP
@@ -2011,7 +2047,11 @@ function t2sProcessBipResponse(http,ctx){
   }
   var parsed=t2sBipParseSoap(http.responseText);
   if(parsed.error)return {kind:"error",message:parsed.error};
-  var rs=t2sBipRowsFromXml(parsed.dataXml);
+  // The report emits HTML (its layout output) since this pod's xpt report can't emit
+  // raw XML; parse the rendered table. If a pod CAN emit XML data, fall back to that.
+  var body=parsed.dataXml||"";
+  var isHtml=/<table[\s>]|<\/table>|<!doctype html|<html[\s>]/i.test(body)&&!/<DATA_DS|<G_1[\s>]/i.test(body);
+  var rs=isHtml?t2sBipRowsFromHtml(body):t2sBipRowsFromXml(body);
   if(rs.error)return {kind:"error",message:rs.error};
   if(!rs.rows.length)return {kind:"empty",rowCount:0,prov:t2sProvenance(ctx,0)};
   return {kind:"rows",cols:rs.cols,rows:rs.rows,note:ctx.note||"",prov:t2sProvenance(ctx,rs.rows.length)};
@@ -2030,8 +2070,24 @@ function t2sProcessBipResponse(http,ctx){
 /* Catalog path → REST path: relative to Shared Folders, no .xdo, slashes %2F.
    e.g. /Custom/Argano/T2S_SQL.xdo → Custom%2FArgano%2FT2S_SQL */
 function t2sBipRestPath(reportPath){
+  return t2sBipRestPathCandidates(reportPath)[0];
+}
+
+/* Fusion's catalog root is inconsistent across pods/versions — the REST run
+   endpoint may want the path relative to Shared Folders, with a leading slash,
+   or with the literal "shared" root. Return the realistic encodings in order so
+   queryBIP can try each and use whichever resolves (first non-404 wins). */
+function t2sBipRestPathCandidates(reportPath){
   var p=String(reportPath||"").trim().replace(/^\/+/,"").replace(/\.xdo$/i,"");
-  return p.split("/").map(function(seg){return encodeURIComponent(seg);}).join("%2F");
+  // Drop a leading catalog-root token if the user included it.
+  p=p.replace(/^shared\//i,"").replace(/^Shared Folders\//i,"");
+  var enc=p.split("/").map(function(seg){return encodeURIComponent(seg);}).join("%2F");
+  return [
+    enc,                    // Custom%2FArgano%2FT2S_SQL  (relative to Shared Folders)
+    "%2F"+enc,              // %2FCustom%2FArgano%2FT2S_SQL  (leading slash)
+    "shared%2F"+enc,        // shared%2FCustom%2FArgano%2FT2S_SQL  (literal root)
+    "%2Fshared%2F"+enc      // %2Fshared%2FCustom%2FArgano%2FT2S_SQL
+  ];
 }
 
 /* Build the multipart/form-data body with the single ReportRequest JSON part.
@@ -2092,12 +2148,116 @@ function t2sProcessBipRestResponse(http,ctx){
   return {kind:"rows",cols:rs.cols,rows:rs.rows,note:ctx.note||"",prov:t2sProvenance(ctx,rs.rows.length)};
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   BIP via the /analytics/saw.dll gateway — the cookie-authenticated path that
+   works on Fusion Cloud (where the public REST API is absent and the SOAP WSS
+   endpoint rejects a session cookie). This mirrors what the BI Publisher UI does:
+     1. open the report page to obtain a fresh, session-scoped _sTkn token;
+     2. run it with bipParams carrying the SQL and _xf=xml to get the data XML.
+   Pure builders/parsers so the guard test covers them; the result still flows
+   into the SAME error|empty|rows contract with provenance. No fabrication path.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Report name = last path segment without .xdo. */
+function t2sBipReportName(ap){return String(ap||"").split("/").pop().replace(/\.xdo$/i,"");}
+
+/* The report "open" page URL — its HTML carries the _sTkn we need. */
+function t2sSawOpenUrl(base,ap){
+  var p=String(ap||""); if(p.charAt(0)!=="/")p="/"+p;
+  return base+"/analytics/saw.dll?bipublisherEntry&Action=open&itemType=.xdo"
+    +"&bipPath="+encodeURIComponent(p)
+    +"&path="+encodeURIComponent("/shared"+p);
+}
+
+/* Scrape the session-scoped BIP token from the open page. */
+function t2sSawExtractToken(html){
+  var s=String(html||"");
+  var m=s.match(/_sTkn["'\s:=]+["']?([A-Za-z0-9]{8,})/);
+  return m?m[1]:null;
+}
+
+/* The run URL — bipParams JSON with the SQL (_paramsp_sql), the token (_sTkn),
+   and _xf=xml so the report returns its data XML instead of a rendered layout. */
+function t2sSawRunUrl(base,ap,sql,sTkn){
+  var p=String(ap||""); if(p.charAt(0)!=="/")p="/"+p;
+  var params={"_xmode":"2","_sTkn":sTkn||"","_xiasynch":"","_xpf":"","_xpt":"0",
+    "_dFlag":"false","_edIndex":"0","_dIndex":"0","_rToken":"","_ranDiag":"false",
+    "_xdo":p,"_paramsp_sql":String(sql),"_xt":t2sBipReportName(p),"_xf":"xml","_xautorun":"true"};
+  return base+"/analytics/saw.dll?bipublisherEntry&Action=open&itemType=.xdo"
+    +"&bipPath="+encodeURIComponent(p)
+    +"&bipParams="+encodeURIComponent(JSON.stringify(params))
+    +"&_linkToReport=true";
+}
+
+/* Direct BI Publisher report URL — the documented "Accessing Reports via a URL"
+   method (what SplashBI uses). _xf=xml returns the report DATA; _xpt=1 exports the
+   document (not the viewer shell); _xmode=4 = document only. The data-model param
+   p_sql carries the SQL. Path is relative to Shared Folders (root token dropped),
+   no other transformation. Auth rides on whatever t2sAuthGet sends (Basic header /
+   SSO cookie / Bearer). */
+function t2sBipDirectUrl(base,reportPath,sql){
+  var p=String(reportPath||"").replace(/^\/+/,"").replace(/^shared\//i,"").replace(/^Shared Folders\//i,"");
+  var path=p.split("/").map(function(seg){return encodeURIComponent(seg);}).join("/");
+  return base+"/xmlpserver/"+path
+    +"?_xpt=1&_xf=xml&_xmode=4&p_sql="+encodeURIComponent(String(sql));
+}
+
+/* Choke point for the direct report URL — turns a raw HTTP outcome into exactly one
+   of error | empty | rows. Rows ONLY from a live 2xx body that is real data XML
+   (<DATA_DS>/<ROWSET>). An HTML page (login redirect / xml-not-enabled) or ORA error
+   is an explicit error — never fabricated rows. */
+function t2sProcessBipDirectResponse(http,ctx){
+  ctx=ctx||{};
+  if(http.networkError)return {kind:"error",message:"Network error — could not reach "+(ctx.instance||"the instance")+" (BIP report URL)."};
+  if(http.timeout)return {kind:"error",message:"Timeout running the report (BI Publisher can be slow on large queries)."};
+  if(http.status===0||http.status>=400)return {kind:"error",message:"HTTP "+http.status+" from the BIP report URL"+(http.status===401?" — credentials rejected (check the service-account username/password)":http.status===404?" — report not found at this path (it's relative to Shared Folders, keep the .xdo)":"")+"."};
+  var body=String(http.responseText||"");
+  // Strip a leading BOM + XML declaration so an XHTML error page (which BIP prefixes
+  // with <?xml ...?>) is correctly seen as HTML/error, not mistaken for data.
+  var stripped=body.replace(/^﻿/,"").replace(/<\?xml[\s\S]*?\?>/i,"").trim();
+  // Only real data roots are accepted; anything that looks like an HTML page or a BIP
+  // error document is surfaced verbatim — never parsed into rows.
+  var looksData=/^<(?:\w+:)?(?:DATA_DS|ROWSET)\b/i.test(stripped);
+  if(!looksData && (/^<(?:!doctype|html|[a-z]+:html)\b/i.test(stripped) || /Error\s*Detail|oracle\.xdo\.|PublicReportService|<title>\s*Error|isn't a valid|not authorized|sign ?in/i.test(stripped))){
+    var txt=stripped.replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&[a-z#0-9]+;/gi," ").replace(/\s+/g," ").trim();
+    return {kind:"error",message:"BI Publisher returned an error/HTML page, not data: "+(txt.slice(0,500)||"(no readable text)")};
+  }
+  var ora=body.match(/ORA-\d{5}[^<\n]*/);
+  if(ora)return {kind:"error",message:"Oracle error: "+ora[0].trim()};
+  var rs=t2sBipRowsFromXml(stripped);
+  if(rs.error)return {kind:"error",message:rs.error+"  —  raw response (first 600 chars): "+stripped.slice(0,600).replace(/\s+/g," ").trim()};
+  if(!rs.rows.length)return {kind:"empty",rowCount:0,prov:t2sProvenance(ctx,0)};
+  return {kind:"rows",cols:rs.cols,rows:rs.rows,note:ctx.note||"",prov:t2sProvenance(ctx,rs.rows.length)};
+}
+
+/* saw.dll run choke point — analog of t2sProcessBipResponse. Rows ONLY from a
+   live 2xx data body; an HTML page (login/expired) or fault is an explicit error. */
+function t2sProcessSawResponse(http,ctx){
+  ctx=ctx||{};
+  if(http.networkError)return {kind:"error",message:"Network error — could not reach "+(ctx.instance||"the instance")+" (BIP saw.dll)."};
+  if(http.timeout)return {kind:"error",message:"Timeout running the report via BI Publisher."};
+  if(http.status===0||http.status>=400)return {kind:"error",message:"HTTP "+http.status+" running the report (saw.dll). The SSO session may have expired — reconnect."};
+  var body=String(http.responseText||"");
+  if(/^\s*<(?:!doctype|html)\b/i.test(body)&&!/<DATA_DS|<\?xml/i.test(body))
+    return {kind:"error",message:"Report run returned an HTML page, not data — SSO session likely expired, or this report isn't returning XML data. Re-sign-in and retry."};
+  var ora=body.match(/ORA-\d{5}[^<\n]*/);
+  if(ora)return {kind:"error",message:"Oracle error: "+ora[0].trim()};
+  var rs=t2sBipRowsFromXml(body);
+  if(rs.error)return {kind:"error",message:rs.error};
+  if(!rs.rows.length)return {kind:"empty",rowCount:0,prov:t2sProvenance(ctx,0)};
+  return {kind:"rows",cols:rs.cols,rows:rs.rows,note:ctx.note||"",prov:t2sProvenance(ctx,rs.rows.length)};
+}
+
 /* ===== end executor ===== */
 
 
 /* ═══════════════════════════════════════
    RENDER RESULTS
 ═══════════════════════════════════════ */
+/* Escape any cell/column text before it goes into innerHTML — values containing
+   <, >, &, or " would otherwise break the table markup and mangle the display. */
+function t2sHtmlEsc(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+
 function renderResults(cols,rows,elapsed,ep){
   // Invariant: only provenance-tagged, live-execution rows may render here.
   if(!ST.prov||ST.prov.live!==true){t2sRenderError("Refused to render: result set is missing live-execution provenance.");return;}
@@ -2111,16 +2271,16 @@ function renderResults(cols,rows,elapsed,ep){
     (ST.note?' <span title="'+String(ST.note).replace(/"/g,"&quot;")+'" style="color:var(--a4);font-size:10px">⚠ '+String(ST.note).replace(/</g,"&lt;")+'</span>':'');
   document.getElementById("filtCnt").textContent=display.length+" of "+rows.length;
   var tbl=document.getElementById("resTbl");
-  var ths=cols.map((c,i)=>"<th id='th_"+i+"'>"+c+"</th>").join("");
+  var ths=cols.map((c,i)=>"<th id='th_"+i+"'>"+t2sHtmlEsc(c)+"</th>").join("");
   var trs=display.map((row,ri)=>{
     var tds=row.map((cell,ci)=>{
       if(cell===null||cell===undefined||String(cell).trim()==="")return'<td class="nul">—</td>';
-      var s=String(cell),col=cols[ci]||"",cls="";
+      var s=String(cell),col=cols[ci]||"",cls="",es=t2sHtmlEsc(s);
       if(/^\d+(\.\d+)?$/.test(s)&&!col.endsWith("_ID")&&!col.includes("SEGMENT"))cls="num";
       else if(s==="A"||s==="ACTIVE"||s==="Y"||s==="Posted"||s==="APPROVED")cls="act";
       else if(s==="I"||s==="INACTIVE"||s==="N"||s==="PENDING")cls="ina";
       else if(col.includes("DATE")||/^\d{4}-\d{2}-\d{2}/.test(s))cls="dt";
-      return'<td class="'+cls+'" title="'+s+'">'+s+'</td>';
+      return'<td class="'+cls+'" title="'+es+'">'+es+'</td>';
     }).join("");
     return"<tr><td class='rn'>"+(ri+1)+"</td>"+tds+"</tr>";
   }).join("");
@@ -2140,7 +2300,7 @@ function openRowDetail(row,cols,ri){
   cols.forEach((col,i)=>{
     var val=row[i],valStr=(val===null||val===undefined)?"NULL":String(val);
     var div=document.createElement("div");div.className="rd-field";
-    div.innerHTML='<div class="rd-label">'+col+'</div><div class="rd-value">'+(valStr||"—")+'</div>';
+    div.innerHTML='<div class="rd-label">'+t2sHtmlEsc(col)+'</div><div class="rd-value">'+(t2sHtmlEsc(valStr)||"—")+'</div>';
     grid.appendChild(div);
   });
   document.getElementById("rdOverlay").classList.add("open");
@@ -2302,7 +2462,8 @@ async function loadQPanel(btn){
   if(!(ST.conn&&ST.url)){fail("Not connected. Connect to Oracle Fusion to run live data.");return;}
   var t0=Date.now();
   try{
-    var payload=await (ST.engine==="bip"?queryBIP(sql):queryREST(sql));
+    // SSO sessions can't use REST (federated pods 401 it) — always go through BIP.
+    var payload=await ((ST.engine==="bip"||ST.authMode==="sso")?queryBIP(sql):queryREST(sql));
     var kind=t2sAssertRenderable(payload); // throws unless rows carry live provenance
     var elapsed=((Date.now()-t0)/1000).toFixed(2);
     if(kind==="error"){fail(payload.message);return;}
@@ -2313,8 +2474,8 @@ async function loadQPanel(btn){
       return;
     }
     var cols=payload.cols,rows=payload.rows,prov=payload.prov;
-    var ths=cols.map((c,i)=>`<th>${c}</th>`).join("");
-    var trs=rows.slice(0,100).map((row,ri)=>`<tr><td class="rn">${ri+1}</td>${row.map(c=>`<td>${c==null?'—':String(c).replace(/</g,'&lt;')}</td>`).join("")}</tr>`).join("");
+    var ths=cols.map((c,i)=>`<th>${t2sHtmlEsc(c)}</th>`).join("");
+    var trs=rows.slice(0,100).map((row,ri)=>`<tr><td class="rn">${ri+1}</td>${row.map(c=>`<td>${c==null?'—':t2sHtmlEsc(c)}</td>`).join("")}</tr>`).join("");
     resultEl.innerHTML=`<table class="icm-tbl" style="width:100%;min-width:max-content"><thead><tr><th class="rn">#</th>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
     // Guardrail #8: provenance stamp.
     statusEl.innerHTML=`<span style="color:var(--ok)" title="${prov.endpoint}">✓ Verified against ${prov.instance} at ${new Date(prov.executed_at).toLocaleString()} — ${prov.row_count} rows · ${elapsed}s</span>`;
@@ -3145,7 +3306,7 @@ document.addEventListener("DOMContentLoaded",function(){
 
 #pws{height:calc(100vh - 82px);position:relative;overflow:hidden}
 </style>
-<div id="offline-note"><span>&#10003; Talk2Sql v3.0.1</span>&nbsp;&middot;&nbsp;<a href="https://github.com/cskasarabada/Talk2Sql" target="_blank" style="color:#4dabf7">github.com/cskasarabada/Talk2Sql</a></div>
+<div id="offline-note"><span>&#10003; Talk2Sql v3.4.0</span>&nbsp;&middot;&nbsp;<a href="https://github.com/cskasarabada/Talk2Sql" target="_blank" style="color:#4dabf7">github.com/cskasarabada/Talk2Sql</a></div>
 
 
 <!-- ══════════════ APP CONFIGURATIONS DRAWER v2.0.0 ══════════════ -->
@@ -3274,8 +3435,8 @@ document.addEventListener("DOMContentLoaded",function(){
     <div class="cfg-row">
       <span class="cfg-lbl">NLP model</span>
       <select class="cfg-sel" id="cfg-nlpmodel">
-        <option value="claude-sonnet-4-20250514" selected>Claude Sonnet 4</option>
-        <option value="claude-opus-4-20250514">Claude Opus 4</option>
+        <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>
+        <option value="claude-opus-4-8">Claude Opus 4.8</option>
         <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
       </select>
     </div>
@@ -3315,7 +3476,7 @@ document.addEventListener("DOMContentLoaded",function(){
   <!-- ADVANCED -->
   <div class="cfg-sec" id="sec-advanced">
     <h3>App Info</h3>
-    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v3.0.1</span></div>
+    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v3.4.0</span></div>
     <div class="cfg-row"><span class="cfg-lbl">Repo</span><a href="#" id="cfg-repo-link" style="font-size:11px;color:var(--a1);font-family:var(--mono)">cskasarabada/Talk2Sql</a></div>
     <div class="cfg-row"><span class="cfg-lbl">Electron mode</span><span id="cfg-electron-mode" style="font-size:11px;font-family:var(--mono);color:var(--t3)">Detecting...</span></div>
 
@@ -3376,7 +3537,7 @@ document.addEventListener("DOMContentLoaded",function(){
     zebraRows:true, compactRows:false, rowHover:true,
     defaultLimit:100, autoFormat:false, wrapLines:true, lineNumbers:true,
     saveHistory:true, maxSaved:50, nlpAutoRun:false,
-    nlpModel:'claude-sonnet-4-20250514',
+    nlpModel:'claude-sonnet-4-6',
     apiKey:'', maxTokens:1000, nlpTimeout:30,
     restTimeout:15, demoFallback:true, restLog:false
   };

@@ -1,13 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="100" fill="#0f1117"/>
-  <rect x="40" y="40" width="432" height="432" rx="80" fill="#161b27"/>
-  <!-- Database cylinder -->
-  <ellipse cx="256" cy="160" rx="130" ry="35" fill="#4dabf7" opacity="0.9"/>
-  <rect x="126" y="160" width="260" height="120" fill="#1971c2"/>
-  <ellipse cx="256" cy="280" rx="130" ry="35" fill="#4dabf7" opacity="0.9"/>
-  <!-- Lightning bolt / SQL symbol -->
-  <path d="M276 185 L236 260 L266 260 L236 335 L296 245 L264 245 Z" fill="#fcc419"/>
-  <!-- Bottom accent line -->
-  <rect x="80" y="380" width="352" height="6" rx="3" fill="#4dabf7" opacity="0.4"/>
-  <rect x="80" y="396" width="220" height="6" rx="3" fill="#4dabf7" opacity="0.25"/>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF9A3D"/>
+      <stop offset=".52" stop-color="#FF5C00"/>
+      <stop offset="1" stop-color="#E8336B"/>
+    </linearGradient>
+    <linearGradient id="db" x1="0" y1="330" x2="0" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF7A2A"/>
+      <stop offset="1" stop-color="#E8336B"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#6e1a00" flood-opacity="0.26"/>
+    </filter>
+  </defs>
+
+  <!-- background rounded square -->
+  <rect x="74" y="74" width="876" height="876" rx="206" fill="url(#bg)"/>
+  <rect x="74" y="74" width="876" height="420" rx="206" fill="#ffffff" opacity="0.08"/>
+
+  <!-- top text -->
+  <text x="512" y="246" text-anchor="middle" font-family="DejaVu Sans, Arial, Helvetica, sans-serif"
+        font-weight="bold" font-size="118" fill="#ffffff" letter-spacing="6">TALK 2</text>
+
+  <!-- speech bubble (white) with tail -->
+  <g filter="url(#soft)">
+    <path d="M322 300
+             H702 a74 74 0 0 1 74 74
+             V520 a74 74 0 0 1 -74 74
+             H470
+             l-74 76 -6 -76
+             H322 a74 74 0 0 1 -74 -74
+             V374 a74 74 0 0 1 74 -74 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- database cylinder inside the bubble -->
+  <g fill="url(#db)">
+    <path d="M396 384 V498 a116 36 0 0 0 232 0 V384 a116 36 0 0 1 -232 0 Z"/>
+    <ellipse cx="512" cy="384" rx="116" ry="36"/>
+  </g>
+  <path d="M396 432 a116 36 0 0 0 232 0" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" opacity="0.92"/>
+  <path d="M396 470 a116 36 0 0 0 232 0" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" opacity="0.92"/>
+
+  <!-- bottom text -->
+  <text x="512" y="868" text-anchor="middle" font-family="DejaVu Sans, Arial, Helvetica, sans-serif"
+        font-weight="bold" font-size="232" fill="#ffffff" letter-spacing="10">SQL</text>
 </svg>

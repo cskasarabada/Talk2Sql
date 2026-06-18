@@ -1,0 +1,62 @@
+# .github/workflows/release.yml
+# Talk2Sql — build DMG (macOS) + EXE (Windows) and publish them to a GitHub Release.
+#
+# HOW IT FIRES:
+#   Push a version tag, e.g.  git tag v3.2.1 && git push origin v3.2.1
+#   GitHub spins up a macOS runner and a Windows runner, each builds its
+#   installer with electron-builder, and uploads it to the Release for that tag.
+#
+# WHY IT WORKS WITH YOUR REPO AS-IS:
+#   package.json already declares the build targets (mac dmg x64+arm64, win nsis
+#   x64) and "publish": { provider: github }. electron-builder reads that and
+#   pushes the artifacts to the matching Release using the built-in GITHUB_TOKEN.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'          # any tag like v3.2.1, v3.3.0, ...
+  workflow_dispatch:   # also lets you run it manually from the Actions tab
+
+permissions:
+  contents: write      # needed so electron-builder can create/upload the Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest      # produces the .dmg (x64 + arm64)
+          - os: windows-latest    # produces the .exe (NSIS installer)
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run guard tests
+        run: npm test
+
+      - name: Build & publish (macOS — DMG)
+        if: matrix.os == 'macos-latest'
+        run: npx electron-builder --mac --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No Apple signing certs configured — build unsigned (matches current releases).
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Build & publish (Windows — EXE)
+        if: matrix.os == 'windows-latest'
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

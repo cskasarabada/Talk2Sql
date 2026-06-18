@@ -26,9 +26,13 @@ const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(html.slice(s, e) +
   "\nthis.__api={t2sBipEnvelope,t2sBipParseSoap,t2sBipRowsFromXml,t2sProcessBipResponse,t2sBipB64Decode,t2sAssertRenderable," +
-  "t2sBipRestPath,t2sBipRestBody,t2sBipParseRestMultipart,t2sProcessBipRestResponse};", sandbox);
+  "t2sBipRestPath,t2sBipRestPathCandidates,t2sBipRestBody,t2sBipParseRestMultipart,t2sProcessBipRestResponse," +
+  "t2sBipReportName,t2sSawOpenUrl,t2sSawExtractToken,t2sSawRunUrl,t2sProcessSawResponse,t2sBipRowsFromHtml," +
+  "t2sBipDirectUrl,t2sProcessBipDirectResponse};", sandbox);
 const { t2sBipEnvelope, t2sBipParseSoap, t2sBipRowsFromXml, t2sProcessBipResponse, t2sBipB64Decode, t2sAssertRenderable,
-        t2sBipRestPath, t2sBipRestBody, t2sBipParseRestMultipart, t2sProcessBipRestResponse } = sandbox.__api;
+        t2sBipRestPath, t2sBipRestPathCandidates, t2sBipRestBody, t2sBipParseRestMultipart, t2sProcessBipRestResponse,
+        t2sBipReportName, t2sSawOpenUrl, t2sSawExtractToken, t2sSawRunUrl, t2sProcessSawResponse, t2sBipRowsFromHtml,
+        t2sBipDirectUrl, t2sProcessBipDirectResponse } = sandbox.__api;
 
 let failures = 0;
 const ok = (cond, msg) => { console.log((cond ? "  PASS  " : "  FAIL  ") + msg); if (!cond) failures++; };
@@ -51,12 +55,13 @@ console.log("\n(1) ENVELOPE — builds correctly, refuses CDATA breakout and bad
   const env = t2sBipEnvelope(ctx.sql, "/Custom/Talk2Sql/T2S_SQL.xdo");
   ok(env.xml && env.xml.indexOf("<![CDATA[" + ctx.sql + "]]>") > 0, "SQL travels inside CDATA");
   ok(env.xml.indexOf("<pub:name>p_sql</pub:name>") > 0, "p_sql parameter present");
+  ok(env.xml.indexOf("<pub:attributeFormat>xml</pub:attributeFormat>") > 0, "requests xml (raw data; report must allow it — no interactive layout)");
   ok(t2sBipEnvelope("SELECT ']]>' FROM dual", "/Custom/x.xdo").error, "CDATA breakout sequence refused");
   ok(t2sBipEnvelope(ctx.sql, "not-a-path").error, "non-.xdo report path refused");
   ok(t2sBipEnvelope("", "/Custom/x.xdo").error, "empty SQL refused");
   const w = t2sBipEnvelope(ctx.sql, "/Custom/x.xdo", { user: "amy<&>", pass: 'p"w' });
-  ok(w.xml.indexOf("<wsse:UsernameToken>") > 0 && w.xml.indexOf("amy&lt;&amp;&gt;") > 0, "WSS UsernameToken added, credentials XML-escaped");
-  ok(w.xml.indexOf("mustUnderstand") < 0 && w.xml.indexOf("Timestamp") < 0, "no mustUnderstand/Timestamp decorations (OWSM rejects them)");
+  ok(w.xml.indexOf("<wsse:UsernameToken") > 0 && w.xml.indexOf("amy&lt;&amp;&gt;") > 0, "WSS UsernameToken added, credentials XML-escaped");
+  ok(w.xml.indexOf("mustUnderstand") > 0 && /<wsu:Timestamp[\s\S]*<wsu:Created>\d{4}-\d{2}-\d{2}T/.test(w.xml), "full OWSM header: mustUnderstand + Timestamp present");
   ok(w.xml.indexOf("http://www.w3.org/2003/05/soap-envelope") > 0, "SOAP 1.2 envelope (the service rejects 1.1/text-xml)");
   ok(t2sBipEnvelope(ctx.sql, "/Custom/x.xdo").xml.indexOf("wsse:") < 0, "no WSS header when no credentials passed (OAuth / SSO mode)");
 }
@@ -152,6 +157,10 @@ console.log("\n(10) REST PATH ENCODING — relative to Shared Folders, no .xdo, 
 {
   ok(t2sBipRestPath("/Custom/Argano/T2S_SQL.xdo") === "Custom%2FArgano%2FT2S_SQL", "leading slash + .xdo stripped, slashes encoded");
   ok(t2sBipRestPath("/Custom/My Reports/T2S.xdo") === "Custom%2FMy%20Reports%2FT2S", "spaces in folder names encoded");
+  const cands = t2sBipRestPathCandidates("/shared/Custom/Argano/T2S_SQL.xdo");
+  ok(cands.length === 4, "four path candidates produced");
+  ok(cands[0] === "Custom%2FArgano%2FT2S_SQL", "leading 'shared' root dropped from primary candidate");
+  ok(cands.indexOf("%2Fshared%2FCustom%2FArgano%2FT2S_SQL") >= 0, "literal-root variant included as fallback");
 }
 
 console.log("\n(11) REST MULTIPART BODY — single ReportRequest JSON part, SQL in p_sql");
@@ -192,6 +201,105 @@ console.log("\n(14) REST empty + transport failures");
   ok(t2sProcessBipRestResponse({ status: 200, responseText: restMultipart("<DATA_DS></DATA_DS>") }, ctx).kind === "empty", "empty rowset → empty");
   ok(t2sProcessBipRestResponse({ networkError: true }, ctx).kind === "error", "networkError → error");
   ok(t2sProcessBipRestResponse({ status: 404, responseText: "" }, ctx).kind === "error", "404 → error");
+}
+
+console.log("\n(15) SAW.DLL URLs — open page + run carry the right path, token, SQL, xml format");
+{
+  const base = "https://pod.fa.ocs.oraclecloud.com";
+  const ap = "/Custom/Argano/T2S_SQL.xdo";
+  ok(t2sBipReportName(ap) === "T2S_SQL", "report name derived (no .xdo)");
+  const openU = t2sSawOpenUrl(base, ap);
+  ok(openU.indexOf("bipublisherEntry") > 0 && openU.indexOf("Action=open") > 0, "open URL hits the bipublisherEntry gateway");
+  ok(openU.indexOf("path=" + encodeURIComponent("/shared/Custom/Argano/T2S_SQL.xdo")) > 0, "open URL uses the /shared catalog path");
+  const runU = t2sSawRunUrl(base, ap, "SELECT 1 AS ONE FROM DUAL", "TKN123");
+  ok(runU.indexOf("TKN123") > 0, "run URL carries the scraped _sTkn");
+  ok(decodeURIComponent(runU).indexOf('"_paramsp_sql":"SELECT 1 AS ONE FROM DUAL"') > 0, "run URL carries the SQL in _paramsp_sql");
+  ok(decodeURIComponent(runU).indexOf('"_xf":"xml"') > 0, "run URL requests xml data (not pdf)");
+}
+
+console.log("\n(16) SAW.DLL TOKEN SCRAPE");
+{
+  ok(t2sSawExtractToken('var x={_sTkn:"f864576019ed670c680",a:1}') === "f864576019ed670c680", "extracts _sTkn from JS");
+  ok(t2sSawExtractToken('"_sTkn":"abc123DEF456"') === "abc123DEF456", "extracts quoted _sTkn");
+  ok(t2sSawExtractToken("<html>no token here</html>") === null, "no token → null (caller errors, never fabricates)");
+}
+
+console.log("\n(17) SAW.DLL RESPONSE — data rows vs HTML/expired/ORA");
+{
+  const data = '<?xml version="1.0"?><DATA_DS><G_1><ONE>1</ONE></G_1></DATA_DS>';
+  const p = t2sProcessSawResponse({ status: 200, responseText: data }, ctx);
+  ok(p.kind === "rows" && p.rows.length === 1 && p.prov.live === true, "data XML → rows with provenance");
+  ok(rowsThatReachGrid(p).length === 1, "passes render boundary");
+  const h = t2sProcessSawResponse({ status: 200, responseText: "<!DOCTYPE html><html><body>Sign In</body></html>" }, ctx);
+  ok(h.kind === "error" && /HTML page/.test(h.message), "login/expired HTML → explicit error, no rows");
+  ok(rowsThatReachGrid(h).length === 0, "HTML page yields 0 rows");
+  ok(t2sProcessSawResponse({ status: 200, responseText: "<DATA_DS>ORA-00942: bad table</DATA_DS>" }, ctx).kind === "error", "ORA error surfaced");
+  ok(t2sProcessSawResponse({ status: 401, responseText: "" }, ctx).kind === "error", "HTTP 401 → error");
+  ok(t2sProcessSawResponse({ networkError: true }, ctx).kind === "error", "networkError → error");
+}
+
+console.log("\n(18) HTML OUTPUT PARSING — rendered report table → rows (xpt fallback)");
+{
+  const html = '<html><body><table><tr><td>ignore</td></tr></table>' +
+    '<table class="data"><tr><th>PARTY_NAME</th><th>PARTY_ID</th></tr>' +
+    '<tr><td>Acme &amp; Sons</td><td>101</td></tr><tr><td>Globex</td><td>102</td></tr></table></body></html>';
+  const r = t2sBipRowsFromHtml(html);
+  ok(r.cols && r.cols.join(",") === "PARTY_NAME,PARTY_ID", "header row → columns");
+  ok(r.rows.length === 2 && r.rows[0][0] === "Acme & Sons", "data rows parsed, entities decoded, biggest table chosen");
+  // full pipe through the SOAP processor (HTML body in reportBytes)
+  const soapHtml = '<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"><soap:Body>' +
+    '<runReportResponse><runReportReturn><reportBytes>' +
+    Buffer.from('<html><table><tr><th>ONE</th></tr><tr><td>1</td></tr></table></html>', 'utf8').toString('base64') +
+    '</reportBytes></runReportReturn></runReportResponse></soap:Body></soap:Envelope>';
+  const p = t2sProcessBipResponse({ status: 200, responseText: soapHtml }, ctx);
+  ok(p.kind === "rows" && p.rows.length === 1 && p.rows[0][0] === "1" && p.prov.live === true, "HTML report output flows to rows with provenance");
+  ok(t2sBipRowsFromHtml("<html>no table, JS-rendered</html>").error, "no table → explicit error (never fabricates)");
+}
+
+console.log("\n(18b) NESTED RESULT COLUMN — OFJDBC-style serialized rowset is unwrapped");
+{
+  // Single RESULT column whose value is the real rowset as escaped XML
+  const nested = '<DATA_DS><G_1><RESULT>&lt;ROWSET&gt;&lt;ROW&gt;&lt;DUMMY&gt;X&lt;/DUMMY&gt;&lt;/ROW&gt;&lt;/ROWSET&gt;</RESULT></G_1></DATA_DS>';
+  const r = t2sBipRowsFromXml(nested);
+  ok(r.cols && r.cols.join(",") === "DUMMY", "inner column names recovered (DUMMY), not 'RESULT'");
+  ok(r.rows.length === 1 && r.rows[0][0] === "X", "inner value recovered cleanly (X), no XML fragments");
+  // multi-row, multi-col nested
+  const n2 = '<DATA_DS>' +
+    '<G_1><RESULT>&lt;ROW&gt;&lt;NAME&gt;Acme&lt;/NAME&gt;&lt;ID&gt;1&lt;/ID&gt;&lt;/ROW&gt;</RESULT></G_1>' +
+    '<G_1><RESULT>&lt;ROW&gt;&lt;NAME&gt;Globex&lt;/NAME&gt;&lt;ID&gt;2&lt;/ID&gt;&lt;/ROW&gt;</RESULT></G_1></DATA_DS>';
+  const r2 = t2sBipRowsFromXml(n2);
+  ok(r2.cols.join(",") === "NAME,ID" && r2.rows.length === 2 && r2.rows[1][0] === "Globex", "multiple nested ROW chunks combined and parsed");
+}
+
+console.log("\n(19) DIRECT REPORT URL — /xmlpserver/<path>.xdo?_xf=xml (SplashBI method)");
+{
+  const u = t2sBipDirectUrl("https://pod.fa.ocs.oraclecloud.com", "/Custom/Argano/T2S_SQL.xdo", "SELECT 1 AS ONE FROM DUAL");
+  ok(u.indexOf("/xmlpserver/Custom/Argano/T2S_SQL.xdo") > 0, "report path under /xmlpserver, Shared Folders root dropped, .xdo kept");
+  ok(u.indexOf("_xf=xml") > 0, "_xf=xml requests Data output");
+  ok(u.indexOf("_xpt=1") > 0 && u.indexOf("_xmode=4") > 0, "exports document only (not the viewer shell)");
+  ok(decodeURIComponent(u).indexOf("p_sql=SELECT 1 AS ONE FROM DUAL") > 0, "SQL carried in the p_sql data-model parameter");
+}
+
+console.log("\n(20) DIRECT URL RESPONSE — data rows vs login-HTML vs ORA vs 401");
+{
+  const data = '<?xml version="1.0"?><DATA_DS><G_1><ONE>1</ONE></G_1></DATA_DS>';
+  const p = t2sProcessBipDirectResponse({ status: 200, responseText: data }, ctx);
+  ok(p.kind === "rows" && p.rows.length === 1 && p.rows[0][0] === "1" && p.prov.live === true, "data XML → rows with provenance");
+  ok(rowsThatReachGrid(p).length === 1, "passes render boundary");
+  // ROWSET shape (orfujdbc-style) also parses
+  const rowset = '<ROWSET><ROW><PARTY_NAME>Acme</PARTY_NAME></ROW><ROW><PARTY_NAME>Globex</PARTY_NAME></ROW></ROWSET>';
+  ok(t2sProcessBipDirectResponse({ status: 200, responseText: rowset }, ctx).rows.length === 2, "ROWSET/ROW shape parses too");
+  const h = t2sProcessBipDirectResponse({ status: 200, responseText: "<!DOCTYPE html><html>login</html>" }, ctx);
+  ok(h.kind === "error" && /error\/HTML page/.test(h.message), "login HTML → explicit error, no rows");
+  // XHTML error page prefixed with <?xml ...?> must NOT be parsed into rows
+  const xhtmlErr = '<?xml version="1.0"?><html><body><table><tr><td>Error</td><td>Error Detail</td></tr>' +
+    '<tr><td>oracle.xdo.servlet.data.DataException</td><td>Invalid format requested</td></tr></table></body></html>';
+  const xe = t2sProcessBipDirectResponse({ status: 200, responseText: xhtmlErr }, ctx);
+  ok(xe.kind === "error" && /error\/HTML page/.test(xe.message), "XHTML error page (xml-prefixed) → error, never fake rows");
+  ok(rowsThatReachGrid(xe).length === 0, "error page yields 0 rows on the grid");
+  ok(t2sProcessBipDirectResponse({ status: 200, responseText: "<DATA_DS>ORA-00942: bad</DATA_DS>" }, ctx).kind === "error", "ORA surfaced");
+  ok(t2sProcessBipDirectResponse({ status: 401, responseText: "" }, ctx).kind === "error", "401 → error");
+  ok(t2sProcessBipDirectResponse({ networkError: true }, ctx).kind === "error", "networkError → error");
 }
 
 console.log("\n" + (failures ? failures + " GUARD FAILURE(S)" : "ALL BIP GUARDS PASS"));
