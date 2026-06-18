@@ -117,6 +117,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 .tbl-row.schema-row{font-weight:700;color:var(--t1)}
 .tbl-row.tbl-child{padding-left:26px;font-size:10.5px}
 .tbl-row.tbl-child:hover{background:var(--s3);color:var(--a1)}
+.cx-chips{display:flex;flex-wrap:wrap;gap:4px;padding:2px 10px 6px;flex-shrink:0}
+.cx-chip{background:var(--s3);border:1px solid var(--b1);border-radius:11px;color:var(--t2);font-size:9.5px;padding:2px 9px;cursor:pointer;white-space:nowrap}
+.cx-chip:hover{background:var(--a1);border-color:var(--a1);color:#fff}
 .schema-panel{background:var(--s2);border-top:1px solid var(--b1);display:none;flex-direction:column;max-height:200px;flex-shrink:0}
 .schema-panel.open{display:flex}
 .schema-hd{padding:5px 10px;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--b1);flex-shrink:0}
@@ -594,6 +597,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
         <button id="liveToggle" class="live-toggle" title="Live catalog — browse real schemas, tables &amp; columns from the database (needs BIP SQL engine)">⚡ Live</button>
       </div>
       <div class="tbl-search"><input type="text" id="tblSearch" placeholder="filter tables..."/></div>
+      <div class="cx-chips" id="liveChips" style="display:none"></div>
       <div class="tbl-list" id="tblList"></div>
     </div>
     <div class="schema-panel" id="schemaPanel">
@@ -926,7 +930,8 @@ function selMod(m){
   var ind=document.getElementById("modInd");
   ind.textContent=mod.icon+" "+m;ind.style.color=mod.color;ind.style.background=mod.color+"18";
   document.getElementById("tblSearch").value="";
-  closeSchema();buildTables(m);
+  closeSchema();
+  if(LIVE.on){renderLiveChips();liveLoadSchemas();} else buildTables(m);
 }
 
 function buildTables(m){
@@ -990,6 +995,27 @@ function insertCol(name){
 ═══════════════════════════════════════ */
 var LIVE={on:false,schemas:null,tables:{},cols:{},openOwner:null,searching:false};
 
+/* One-click family shortcuts per module — each runs a live data-dictionary search
+   (LIKE %term%) so results are real objects from the connected pod, not hardcoded.
+   Covers CX, Finance, HCM, SCM, ICM table/view families. */
+var LIVE_CHIPS={
+  "CX Sales":[["Customers","HZ"],["Opportunities","OPPOR"],["Leads","LEAD"],["Territories","TERRITOR"],["Service","SVC_"],["Activities","ACTIVIT"]],
+  "Finance":[["Invoices (AP)","AP_INVOICE"],["Receivables","AR_"],["GL","GL_"],["Suppliers","SUPPLIER"],["Payments","PAYMENT"],["Customers","HZ"]],
+  "HCM":[["Persons","PER_"],["Assignments","ASSIGNMENT"],["Payroll","PAY_"],["Departments","DEPARTMENT"],["Jobs","PER_JOB"],["Salaries","SALARY"]],
+  "SCM":[["Items","SYSTEM_ITEM"],["Inventory","INV_"],["Sales Orders","DOO_"],["Purchase Orders","PO_"],["Shipments","WSH"],["Suppliers","SUPPLIER"]],
+  "ICM":[["Comp Plans","COMP_PLAN"],["Participants","SRP_PARTICIPANT"],["Earnings","EARNING"],["Transactions","CN_TP_TRANS"],["Rate Tables","RATE_TABLE"],["Formulas","CN_FORMULA"]]
+};
+function renderLiveChips(){
+  var box=document.getElementById("liveChips");if(!box)return;
+  if(!LIVE.on){box.style.display="none";box.innerHTML="";return;}
+  var chips=LIVE_CHIPS[ST.mod]||[];
+  box.innerHTML=chips.map(function(c){return '<button class="cx-chip" data-term="'+t2sHtmlEsc(c[1])+'">'+t2sHtmlEsc(c[0])+'</button>';}).join("");
+  box.style.display=chips.length?"flex":"none";
+  box.querySelectorAll(".cx-chip").forEach(function(b){b.addEventListener("click",function(){
+    var t=b.getAttribute("data-term");document.getElementById("tblSearch").value=t;liveSearch(t);
+  });});
+}
+
 function t2sLiveAvailable(){return ST.conn&&ST.url&&ST.engine==="bip"&&ST.bip&&ST.bip.reportPath;}
 
 /* Run a dictionary query through the BIP engine; return {cols,rows}|{error}. */
@@ -1009,6 +1035,7 @@ function toggleLive(){
   document.getElementById("liveToggle").classList.toggle("on",LIVE.on);
   document.getElementById("tblSearch").placeholder=LIVE.on?"search live tables…":"filter tables...";
   document.getElementById("tblSearch").value="";
+  renderLiveChips();
   if(LIVE.on)liveLoadSchemas(); else buildTables(ST.mod);
 }
 
@@ -1045,8 +1072,8 @@ async function liveSearch(term){
   document.getElementById("tblBadge").textContent=r.rows.length;
   if(!r.rows.length){list.innerHTML='<div class="tbl-desc" style="padding:8px 10px">No tables match “'+t2sHtmlEsc(term)+'”.</div>';return;}
   r.rows.forEach(function(row){
-    var owner=row[0],t=row[1],el=document.createElement("div");
-    el.className="tbl-row";el.innerHTML='<span style="font-size:10px;color:var(--t3)">▤</span> '+t2sHtmlEsc(t)+'<span class="tbl-owner">'+t2sHtmlEsc(owner)+'</span>';
+    var owner=row[0],t=row[1],typ=row[2]||"TABLE",el=document.createElement("div");
+    el.className="tbl-row";el.innerHTML='<span style="font-size:10px;color:var(--t3)">'+(typ==="VIEW"?"◫":"▤")+'</span> '+t2sHtmlEsc(t)+'<span class="tbl-owner">'+t2sHtmlEsc(owner)+'</span>';
     el.addEventListener("click",function(){liveClickTable(owner,t);});
     list.appendChild(el);
   });
@@ -1064,12 +1091,14 @@ function renderLive(statusNote){
     list.appendChild(sr);
     if(LIVE.openOwner===s.owner){
       if(statusNote){var n=document.createElement("div");n.className="tbl-desc";n.style.paddingLeft="22px";n.textContent=statusNote;list.appendChild(n);}
-      (LIVE.tables[s.owner]||[]).forEach(function(t){
+      var kids=LIVE.tables[s.owner]||[];
+      kids.forEach(function(t){
         var tr=document.createElement("div");tr.className="tbl-row tbl-child";
         tr.innerHTML='<span style="font-size:9px;color:var(--t3)">'+(t.type==="VIEW"?"◫":"▤")+'</span> '+t2sHtmlEsc(t.name);
         tr.addEventListener("click",function(ev){ev.stopPropagation();liveClickTable(s.owner,t.name);});
         list.appendChild(tr);
       });
+      if(kids.length>=2000){var nt=document.createElement("div");nt.className="tbl-desc";nt.style.paddingLeft="22px";nt.textContent="Showing first 2000 — use the search box to find a specific table/view.";list.appendChild(nt);}
     }
   });
 }
@@ -2406,8 +2435,10 @@ function t2sMetaColumnsSQL(owner,table){
 }
 function t2sMetaSearchSQL(term){
   var x=t2sMetaTerm(term);
-  return "SELECT owner, table_name FROM all_tables WHERE table_name LIKE '%"+x+"%' "
-    +"ORDER BY owner, table_name FETCH FIRST 200 ROWS ONLY";
+  return "SELECT owner, object_name, object_type FROM ("
+    +"SELECT owner, table_name AS object_name, 'TABLE' AS object_type FROM all_tables WHERE table_name LIKE '%"+x+"%' "
+    +"UNION ALL SELECT owner, view_name, 'VIEW' FROM all_views WHERE view_name LIKE '%"+x+"%') "
+    +"ORDER BY object_name, owner FETCH FIRST 300 ROWS ONLY";
 }
 
 /* ===== end executor ===== */
@@ -3121,7 +3152,7 @@ document.addEventListener("DOMContentLoaded",function(){
     LIVE.on=false;LIVE.schemas=null;LIVE.tables={};LIVE.cols={};LIVE.openOwner=null;
     var lt=document.getElementById("liveToggle");if(lt)lt.classList.remove("on");
     document.getElementById("tblSearch").value="";document.getElementById("tblSearch").placeholder="filter tables...";
-    buildTables(ST.mod);
+    renderLiveChips();buildTables(ST.mod);
   });
 
   // Save

@@ -310,6 +310,7 @@ console.log("\n(21) LIVE SCHEMA EXPLORER — dictionary SQL is read-only & injec
   ok(t2sMetaTablesSQL("fusion").indexOf("owner='FUSION'") > 0, "tables query uppercases + quotes owner");
   ok(/all_tables/.test(t2sMetaTablesSQL("X")) && /all_views/.test(t2sMetaTablesSQL("X")), "tables query unions tables + views");
   ok(t2sMetaColumnsSQL("o","t").indexOf("all_tab_columns") > 0, "columns query hits all_tab_columns");
+  ok(/all_tables/i.test(t2sMetaSearchSQL("X")) && /all_views/i.test(t2sMetaSearchSQL("X")), "search covers BOTH tables and views (so _VL views are found)");
   // injection attempts are neutralised — no statement-breaking characters survive
   const evil = t2sMetaSearchSQL("x'; DROP TABLE foo;--");
   ok(evil.indexOf(";") < 0 && evil.indexOf("--") < 0 && evil.indexOf("'%X") >= 0, "search term strips ; quotes -- (becomes a harmless LIKE literal)");
