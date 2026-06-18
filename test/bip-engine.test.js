@@ -28,11 +28,13 @@ vm.runInContext(html.slice(s, e) +
   "\nthis.__api={t2sBipEnvelope,t2sBipParseSoap,t2sBipRowsFromXml,t2sProcessBipResponse,t2sBipB64Decode,t2sAssertRenderable," +
   "t2sBipRestPath,t2sBipRestPathCandidates,t2sBipRestBody,t2sBipParseRestMultipart,t2sProcessBipRestResponse," +
   "t2sBipReportName,t2sSawOpenUrl,t2sSawExtractToken,t2sSawRunUrl,t2sProcessSawResponse,t2sBipRowsFromHtml," +
-  "t2sBipDirectUrl,t2sProcessBipDirectResponse};", sandbox);
+  "t2sBipDirectUrl,t2sProcessBipDirectResponse," +
+  "t2sMetaSchemasSQL,t2sMetaTablesSQL,t2sMetaColumnsSQL,t2sMetaSearchSQL,t2sReadOnlySQL};", sandbox);
 const { t2sBipEnvelope, t2sBipParseSoap, t2sBipRowsFromXml, t2sProcessBipResponse, t2sBipB64Decode, t2sAssertRenderable,
         t2sBipRestPath, t2sBipRestPathCandidates, t2sBipRestBody, t2sBipParseRestMultipart, t2sProcessBipRestResponse,
         t2sBipReportName, t2sSawOpenUrl, t2sSawExtractToken, t2sSawRunUrl, t2sProcessSawResponse, t2sBipRowsFromHtml,
-        t2sBipDirectUrl, t2sProcessBipDirectResponse } = sandbox.__api;
+        t2sBipDirectUrl, t2sProcessBipDirectResponse,
+        t2sMetaSchemasSQL, t2sMetaTablesSQL, t2sMetaColumnsSQL, t2sMetaSearchSQL, t2sReadOnlySQL } = sandbox.__api;
 
 let failures = 0;
 const ok = (cond, msg) => { console.log((cond ? "  PASS  " : "  FAIL  ") + msg); if (!cond) failures++; };
@@ -300,6 +302,23 @@ console.log("\n(20) DIRECT URL RESPONSE — data rows vs login-HTML vs ORA vs 40
   ok(t2sProcessBipDirectResponse({ status: 200, responseText: "<DATA_DS>ORA-00942: bad</DATA_DS>" }, ctx).kind === "error", "ORA surfaced");
   ok(t2sProcessBipDirectResponse({ status: 401, responseText: "" }, ctx).kind === "error", "401 → error");
   ok(t2sProcessBipDirectResponse({ networkError: true }, ctx).kind === "error", "networkError → error");
+}
+
+console.log("\n(21) LIVE SCHEMA EXPLORER — dictionary SQL is read-only & injection-safe");
+{
+  ok(/^SELECT owner, COUNT\(\*\)/.test(t2sMetaSchemasSQL()), "schemas query lists owners");
+  ok(t2sMetaTablesSQL("fusion").indexOf("owner='FUSION'") > 0, "tables query uppercases + quotes owner");
+  ok(/all_tables/.test(t2sMetaTablesSQL("X")) && /all_views/.test(t2sMetaTablesSQL("X")), "tables query unions tables + views");
+  ok(t2sMetaColumnsSQL("o","t").indexOf("all_tab_columns") > 0, "columns query hits all_tab_columns");
+  // injection attempts are neutralised — no statement-breaking characters survive
+  const evil = t2sMetaSearchSQL("x'; DROP TABLE foo;--");
+  ok(evil.indexOf(";") < 0 && evil.indexOf("--") < 0 && evil.indexOf("'%X") >= 0, "search term strips ; quotes -- (becomes a harmless LIKE literal)");
+  ok(t2sReadOnlySQL(evil).ok, "sanitized search still passes the read-only gate (no DROP/DDL word-boundary)");
+  ok(t2sMetaTablesSQL("a' OR '1'='1").indexOf("''") > 0, "owner single-quotes are escaped (doubled)");
+  // every builder is still a read-only SELECT per the gate
+  [t2sMetaSchemasSQL(), t2sMetaTablesSQL("FUSION"), t2sMetaColumnsSQL("FUSION","CN_COMP_PLANS_ALL_VL"), t2sMetaSearchSQL("COMP")].forEach(function(q){
+    ok(t2sReadOnlySQL(q).ok, "passes read-only gate: " + q.slice(0,42) + "…");
+  });
 }
 
 console.log("\n" + (failures ? failures + " GUARD FAILURE(S)" : "ALL BIP GUARDS PASS"));

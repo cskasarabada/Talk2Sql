@@ -110,6 +110,13 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 .tbl-row:hover{background:var(--s3);color:var(--t1)}
 .tbl-row.active{background:var(--s3);color:var(--a1);border-left-color:var(--a1)}
 .tbl-desc{font-size:9px;color:var(--t3);padding:0 12px 5px 20px;line-height:1.5;font-style:italic}
+.live-toggle{margin-left:auto;background:var(--s3);border:1px solid var(--b1);border-radius:10px;color:var(--t3);font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 8px;cursor:pointer;text-transform:uppercase}
+.live-toggle:hover{color:var(--t1);border-color:var(--a1)}
+.live-toggle.on{background:var(--a1);border-color:var(--a1);color:#fff}
+.tbl-row .tbl-owner{margin-left:auto;font-size:9px;color:var(--t3);font-family:var(--ui);background:var(--s1);border-radius:8px;padding:1px 7px}
+.tbl-row.schema-row{font-weight:700;color:var(--t1)}
+.tbl-row.tbl-child{padding-left:26px;font-size:10.5px}
+.tbl-row.tbl-child:hover{background:var(--s3);color:var(--a1)}
 .schema-panel{background:var(--s2);border-top:1px solid var(--b1);display:none;flex-direction:column;max-height:200px;flex-shrink:0}
 .schema-panel.open{display:flex}
 .schema-hd{padding:5px 10px;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--b1);flex-shrink:0}
@@ -539,7 +546,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div id="top">
-  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v3.4.0</span></div>
+  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v3.5.0</span></div>
   <div class="sep"></div>
   <div class="conn-pill" id="connPill"><div class="dot" id="dot"></div><span id="connLbl">Click to connect</span></div>
   <button class="btn b-ghost" id="btnDisconn" style="font-size:10px;padding:3px 8px;display:none">✕</button>
@@ -583,7 +590,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
       <div class="mod-tabs" id="modTabs"></div>
     </div>
     <div class="tbl-area">
-      <div class="sb-hd">Tables <span class="sb-badge" id="tblBadge">0</span></div>
+      <div class="sb-hd">Tables <span class="sb-badge" id="tblBadge">0</span>
+        <button id="liveToggle" class="live-toggle" title="Live catalog — browse real schemas, tables &amp; columns from the database (needs BIP SQL engine)">⚡ Live</button>
+      </div>
       <div class="tbl-search"><input type="text" id="tblSearch" placeholder="filter tables..."/></div>
       <div class="tbl-list" id="tblList"></div>
     </div>
@@ -934,7 +943,17 @@ function buildTables(m){
     if(tbl){var desc=document.createElement("div");desc.className="tbl-desc";desc.textContent=tbl.desc;list.appendChild(desc);}
   });
 }
-function filterTables(){buildTables(ST.mod);}
+var _liveSearchT=null;
+function filterTables(){
+  if(LIVE.on){
+    var q=document.getElementById("tblSearch").value.trim();
+    if(_liveSearchT)clearTimeout(_liveSearchT);
+    if(q.length<2){liveLoadSchemas();return;}      // empty/short → schema list
+    _liveSearchT=setTimeout(function(){liveSearch(q);},350); // debounce live search
+    return;
+  }
+  buildTables(ST.mod);
+}
 
 function clickTable(tn){
   document.querySelectorAll(".tbl-row").forEach(r=>r.classList.remove("active"));
@@ -964,6 +983,120 @@ function insertCol(name){
   ed.value=ed.value.substring(0,s)+name+ed.value.substring(ed.selectionEnd);
   ed.selectionStart=ed.selectionEnd=s+name.length;ed.focus();updateLines();
   toast("Inserted "+name,"inf");
+}
+
+/* ═══════════════════════════════════════
+   LIVE SCHEMA EXPLORER (data dictionary via BIP)
+═══════════════════════════════════════ */
+var LIVE={on:false,schemas:null,tables:{},cols:{},openOwner:null,searching:false};
+
+function t2sLiveAvailable(){return ST.conn&&ST.url&&ST.engine==="bip"&&ST.bip&&ST.bip.reportPath;}
+
+/* Run a dictionary query through the BIP engine; return {cols,rows}|{error}. */
+async function t2sMetaQuery(sql){
+  if(!t2sLiveAvailable())return {error:"Live catalog needs the BIP SQL engine with a report path (Engine → BIP SQL, then ⚙)."};
+  try{
+    var p=await queryBIP(sql);
+    if(p.kind==="rows")return {cols:p.cols,rows:p.rows};
+    if(p.kind==="empty")return {cols:p.cols||[],rows:[]};
+    return {error:p.message||"Query failed"};
+  }catch(e){return {error:(e&&e.message)||String(e)};}
+}
+
+function toggleLive(){
+  if(!LIVE.on && !t2sLiveAvailable()){toast("Connect with the BIP SQL engine + report path to use Live catalog","wa");return;}
+  LIVE.on=!LIVE.on;
+  document.getElementById("liveToggle").classList.toggle("on",LIVE.on);
+  document.getElementById("tblSearch").placeholder=LIVE.on?"search live tables…":"filter tables...";
+  document.getElementById("tblSearch").value="";
+  if(LIVE.on)liveLoadSchemas(); else buildTables(ST.mod);
+}
+
+function liveBusy(msg){document.getElementById("tblList").innerHTML='<div class="tbl-desc" style="padding:8px 10px">'+t2sHtmlEsc(msg||"Loading…")+'</div>';}
+function liveErr(msg){document.getElementById("tblList").innerHTML='<div class="tbl-desc" style="padding:8px 10px;color:var(--err)">'+t2sHtmlEsc(msg)+'</div>';}
+
+async function liveLoadSchemas(){
+  liveBusy("Loading schemas…");
+  if(!LIVE.schemas){
+    var r=await t2sMetaQuery(t2sMetaSchemasSQL());
+    if(r.error){liveErr(r.error);return;}
+    LIVE.schemas=r.rows.map(function(row){return {owner:row[0],count:row[1]};});
+  }
+  renderLive();
+}
+
+async function liveOpenSchema(owner){
+  if(LIVE.openOwner===owner){LIVE.openOwner=null;renderLive();return;}
+  LIVE.openOwner=owner;
+  if(!LIVE.tables[owner]){
+    renderLive(owner+" · loading tables…");
+    var r=await t2sMetaQuery(t2sMetaTablesSQL(owner));
+    if(r.error){liveErr(r.error);return;}
+    LIVE.tables[owner]=r.rows.map(function(row){return {name:row[0],type:row[1]};});
+  }
+  renderLive();
+}
+
+async function liveSearch(term){
+  LIVE.searching=true;liveBusy("Searching “"+term+"”…");
+  var r=await t2sMetaQuery(t2sMetaSearchSQL(term));
+  if(r.error){liveErr(r.error);return;}
+  var list=document.getElementById("tblList");list.innerHTML="";
+  document.getElementById("tblBadge").textContent=r.rows.length;
+  if(!r.rows.length){list.innerHTML='<div class="tbl-desc" style="padding:8px 10px">No tables match “'+t2sHtmlEsc(term)+'”.</div>';return;}
+  r.rows.forEach(function(row){
+    var owner=row[0],t=row[1],el=document.createElement("div");
+    el.className="tbl-row";el.innerHTML='<span style="font-size:10px;color:var(--t3)">▤</span> '+t2sHtmlEsc(t)+'<span class="tbl-owner">'+t2sHtmlEsc(owner)+'</span>';
+    el.addEventListener("click",function(){liveClickTable(owner,t);});
+    list.appendChild(el);
+  });
+}
+
+function renderLive(statusNote){
+  var list=document.getElementById("tblList");list.innerHTML="";
+  if(!LIVE.schemas){return;}
+  document.getElementById("tblBadge").textContent=LIVE.schemas.length;
+  LIVE.schemas.forEach(function(s){
+    var sr=document.createElement("div");
+    sr.className="tbl-row schema-row"+(LIVE.openOwner===s.owner?" active":"");
+    sr.innerHTML='<span style="font-size:10px;color:var(--t3)">'+(LIVE.openOwner===s.owner?"▾":"▸")+'</span> '+t2sHtmlEsc(s.owner)+'<span class="tbl-owner">'+t2sHtmlEsc(String(s.count))+'</span>';
+    sr.addEventListener("click",function(){liveOpenSchema(s.owner);});
+    list.appendChild(sr);
+    if(LIVE.openOwner===s.owner){
+      if(statusNote){var n=document.createElement("div");n.className="tbl-desc";n.style.paddingLeft="22px";n.textContent=statusNote;list.appendChild(n);}
+      (LIVE.tables[s.owner]||[]).forEach(function(t){
+        var tr=document.createElement("div");tr.className="tbl-row tbl-child";
+        tr.innerHTML='<span style="font-size:9px;color:var(--t3)">'+(t.type==="VIEW"?"◫":"▤")+'</span> '+t2sHtmlEsc(t.name);
+        tr.addEventListener("click",function(ev){ev.stopPropagation();liveClickTable(s.owner,t.name);});
+        list.appendChild(tr);
+      });
+    }
+  });
+}
+
+async function liveClickTable(owner,table){
+  var lim=document.getElementById("rowLim").value;
+  document.getElementById("sqled").value="SELECT *\nFROM "+owner+"."+table+"\nFETCH FIRST "+lim+" ROWS ONLY";
+  updateLines();
+  // show live columns in the schema panel
+  var key=owner+"."+table;
+  document.getElementById("schemaTblNm").textContent=key;
+  var c=document.getElementById("schemaCols");c.innerHTML='<div class="col-row" style="color:var(--t3)">loading columns…</div>';
+  document.getElementById("schemaPanel").classList.add("open");
+  if(!LIVE.cols[key]){
+    var r=await t2sMetaQuery(t2sMetaColumnsSQL(owner,table));
+    if(r.error){c.innerHTML='<div class="col-row" style="color:var(--err)">'+t2sHtmlEsc(r.error)+'</div>';return;}
+    LIVE.cols[key]=r.rows;
+  }
+  c.innerHTML="";
+  LIVE.cols[key].forEach(function(row){
+    var nm=row[0],dt=row[1],len=row[2],nul=row[3];
+    var tp=dt+(len&&/CHAR|RAW/i.test(dt)?"("+len+")":"");
+    var el=document.createElement("div");el.className="col-row";
+    el.innerHTML='<div class="col-nm">'+t2sHtmlEsc(nm)+(nul==="N"?'<span class="badge b-pk">NN</span>':'')+'</div><div class="col-tp">'+t2sHtmlEsc(tp)+'</div><div class="col-ds"></div>';
+    el.addEventListener("click",function(){insertCol(nm);});
+    c.appendChild(el);
+  });
 }
 
 /* ═══════════════════════════════════════
@@ -2248,6 +2381,35 @@ function t2sProcessSawResponse(http,ctx){
   return {kind:"rows",cols:rs.cols,rows:rs.rows,note:ctx.note||"",prov:t2sProvenance(ctx,rs.rows.length)};
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   LIVE SCHEMA EXPLORER — data-dictionary query builders (pure, testable).
+   These produce read-only SELECTs against ALL_TABLES / ALL_VIEWS / ALL_TAB_COLUMNS
+   that run through the SAME BIP engine + guard as any query. Identifiers are
+   single-quote-escaped and uppercased; the read-only gate still applies upstream.
+   ────────────────────────────────────────────────────────────────────────── */
+function t2sMetaLit(s){return String(s==null?"":s).replace(/'/g,"''");}              // SQL string-literal escape
+function t2sMetaTerm(s){return t2sMetaLit(String(s==null?"":s).toUpperCase().replace(/[^A-Z0-9_%]/g,""));} // search term: identifier chars + % only
+function t2sMetaSchemasSQL(){
+  return "SELECT owner, COUNT(*) AS table_count FROM all_tables GROUP BY owner ORDER BY owner";
+}
+function t2sMetaTablesSQL(owner){
+  var o=t2sMetaLit(String(owner).toUpperCase());
+  return "SELECT object_name, object_type FROM ("
+    +"SELECT table_name AS object_name, 'TABLE' AS object_type FROM all_tables WHERE owner='"+o+"' "
+    +"UNION ALL SELECT view_name, 'VIEW' FROM all_views WHERE owner='"+o+"') "
+    +"ORDER BY object_name FETCH FIRST 2000 ROWS ONLY";
+}
+function t2sMetaColumnsSQL(owner,table){
+  var o=t2sMetaLit(String(owner).toUpperCase()),t=t2sMetaLit(String(table).toUpperCase());
+  return "SELECT column_name, data_type, data_length, nullable FROM all_tab_columns "
+    +"WHERE owner='"+o+"' AND table_name='"+t+"' ORDER BY column_id";
+}
+function t2sMetaSearchSQL(term){
+  var x=t2sMetaTerm(term);
+  return "SELECT owner, table_name FROM all_tables WHERE table_name LIKE '%"+x+"%' "
+    +"ORDER BY owner, table_name FETCH FIRST 200 ROWS ONLY";
+}
+
 /* ===== end executor ===== */
 
 
@@ -2955,6 +3117,11 @@ document.addEventListener("DOMContentLoaded",function(){
     localStorage.removeItem("fxconn");Object.assign(ST,{conn:false,url:"",user:"",pass:"",oauth:null});
     document.getElementById("dot").className="dot";document.getElementById("connLbl").textContent="Click to connect";
     document.getElementById("btnDisconn").style.display="none";toast("Disconnected","inf");
+    // reset live catalog state + UI
+    LIVE.on=false;LIVE.schemas=null;LIVE.tables={};LIVE.cols={};LIVE.openOwner=null;
+    var lt=document.getElementById("liveToggle");if(lt)lt.classList.remove("on");
+    document.getElementById("tblSearch").value="";document.getElementById("tblSearch").placeholder="filter tables...";
+    buildTables(ST.mod);
   });
 
   // Save
@@ -2980,6 +3147,7 @@ document.addEventListener("DOMContentLoaded",function(){
   document.getElementById("sbTog").addEventListener("click",toggleSb);
   document.getElementById("sbOpenBtn").addEventListener("click",toggleSb);
   document.getElementById("tblSearch").addEventListener("input",filterTables);
+  document.getElementById("liveToggle").addEventListener("click",toggleLive);
   document.getElementById("schemaClose").addEventListener("click",closeSchema);
 
   // Tabs
@@ -3306,7 +3474,7 @@ document.addEventListener("DOMContentLoaded",function(){
 
 #pws{height:calc(100vh - 82px);position:relative;overflow:hidden}
 </style>
-<div id="offline-note"><span>&#10003; Talk2Sql v3.4.0</span>&nbsp;&middot;&nbsp;<a href="https://github.com/cskasarabada/Talk2Sql" target="_blank" style="color:#4dabf7">github.com/cskasarabada/Talk2Sql</a></div>
+<div id="offline-note"><span>&#10003; Talk2Sql v3.5.0</span>&nbsp;&middot;&nbsp;<a href="https://github.com/cskasarabada/Talk2Sql" target="_blank" style="color:#4dabf7">github.com/cskasarabada/Talk2Sql</a></div>
 
 
 <!-- ══════════════ APP CONFIGURATIONS DRAWER v2.0.0 ══════════════ -->
@@ -3476,7 +3644,7 @@ document.addEventListener("DOMContentLoaded",function(){
   <!-- ADVANCED -->
   <div class="cfg-sec" id="sec-advanced">
     <h3>App Info</h3>
-    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v3.4.0</span></div>
+    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v3.5.0</span></div>
     <div class="cfg-row"><span class="cfg-lbl">Repo</span><a href="#" id="cfg-repo-link" style="font-size:11px;color:var(--a1);font-family:var(--mono)">cskasarabada/Talk2Sql</a></div>
     <div class="cfg-row"><span class="cfg-lbl">Electron mode</span><span id="cfg-electron-mode" style="font-size:11px;font-family:var(--mono);color:var(--t3)">Detecting...</span></div>
 
