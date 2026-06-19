@@ -117,7 +117,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 .tbl-row.schema-row{font-weight:700;color:var(--t1)}
 .tbl-row.tbl-child{padding-left:26px;font-size:10.5px}
 .tbl-row.tbl-child:hover{background:var(--s3);color:var(--a1)}
-.cx-chips{display:flex;flex-wrap:wrap;gap:4px;padding:2px 10px 6px;flex-shrink:0}
+.cx-chips{display:flex;flex-wrap:wrap;gap:4px;padding:2px 10px 6px;flex-shrink:0;max-height:108px;overflow-y:auto}
 .cx-chip{background:var(--s3);border:1px solid var(--b1);border-radius:11px;color:var(--t2);font-size:9.5px;padding:2px 9px;cursor:pointer;white-space:nowrap}
 .cx-chip:hover{background:var(--a1);border-color:var(--a1);color:#fff}
 .schema-panel{background:var(--s2);border-top:1px solid var(--b1);display:none;flex-direction:column;max-height:200px;flex-shrink:0}
@@ -998,21 +998,54 @@ var LIVE={on:false,schemas:null,tables:{},cols:{},openOwner:null,searching:false
 /* One-click family shortcuts per module — each runs a live data-dictionary search
    (LIKE %term%) so results are real objects from the connected pod, not hardcoded.
    Covers CX, Finance, HCM, SCM, ICM table/view families. */
+/* Each chip = [label, prefix, term]: prefix scopes to the module's table family
+   (so results stay in-domain), term narrows within it. Driven by live search. */
 var LIVE_CHIPS={
-  "CX Sales":[["Customers","HZ"],["Opportunities","OPPOR"],["Leads","LEAD"],["Territories","TERRITOR"],["Service","SVC_"],["Activities","ACTIVIT"]],
-  "Finance":[["Invoices (AP)","AP_INVOICE"],["Receivables","AR_"],["GL","GL_"],["Suppliers","SUPPLIER"],["Payments","PAYMENT"],["Customers","HZ"]],
-  "HCM":[["Persons","PER_"],["Assignments","ASSIGNMENT"],["Payroll","PAY_"],["Departments","DEPARTMENT"],["Jobs","PER_JOB"],["Salaries","SALARY"]],
-  "SCM":[["Items","SYSTEM_ITEM"],["Inventory","INV_"],["Sales Orders","DOO_"],["Purchase Orders","PO_"],["Shipments","WSH"],["Suppliers","SUPPLIER"]],
-  "ICM":[["Comp Plans","COMP_PLAN"],["Participants","SRP_PARTICIPANT"],["Earnings","EARNING"],["Transactions","CN_TP_TRANS"],["Rate Tables","RATE_TABLE"],["Formulas","CN_FORMULA"]]
+  "CX Sales":[
+    ["Customers (HZ)","HZ",""],["Opportunity Mgmt (MOO)","MOO",""],["Lead Mgmt (MKL)","MKL",""],["Sales (ZBS)","ZBS",""],
+    ["Sales Forecasting (ZFC)","ZFC",""],["Partner Mgmt (ZPM)","ZPM",""],["Territories (MOT)","MOT",""],
+    ["Promotions & Deal Mgmt (MOP)","MOP",""],["Activity Stream (ZSO)","ZSO",""],["Mobile Sales (ZMS)","ZMS",""],
+    ["Sales for Outlook (ZOE)","ZOE",""],["Sales for Office 365 (ZPS)","ZPS",""],["High Tech / Consumer Goods (AHT)","AHT",""],
+    ["Communications (ATC)","ATC",""],["Catalog / Promotions (ZSC)","ZSC",""],["Customer Data Hub (ZCH)","ZCH",""],
+    ["Customer Data Quality (ZCO)","ZCO",""],["Service Request Mgmt (SVC)","SVC",""],["Field Service (FFS)","FFS",""],
+    ["Subscriptions (OSS)","OSS",""],["Workforce Mgmt (MOW)","MOW",""],["Contracts (OKC)","OKC",""]
+  ],
+  "Finance":[
+    ["General Ledger (GL)","GL",""],["Payables (AP)","AP",""],["Receivables (AR)","AR",""],["AR Transactions (RA)","RA",""],
+    ["Cash Management (CE)","CE",""],["Subledger Acctg (XLA)","XLA",""],["Tax (ZX)","ZX",""],["Payments (IBY)","IBY",""],
+    ["Fixed Assets (FA)","FA",""],["Intercompany (FUN)","FUN",""],["Expenses (EXM)","EXM",""],["Budgetary Control (XCC)","XCC",""],
+    ["Collections (IEX)","IEX",""],["Revenue Mgmt (VRM)","VRM",""],["Lease Accounting (ORL)","ORL",""]
+  ],
+  "HCM":[
+    ["Global HR (PER)","PER",""],["Payroll (PAY)","PAY",""],["Benefits (BEN)","BEN",""],["Compensation (CMP)","CMP",""],
+    ["Recruiting (IRC)","IRC",""],["Talent / Profiles (HRT)","HRT",""],["Performance (HRA)","HRA",""],["Goals (HRG)","HRG",""],
+    ["Absences (ANC)","ANC",""],["Time & Labor (HXT)","HXT",""],["Learning (WLF)","WLF",""],["Fast Formula (FF)","FF",""],
+    ["HCM Common (HRC)","HRC",""]
+  ],
+  "SCM":[
+    ["Inventory (INV)","INV",""],["Inventory (MTL)","MTL",""],["Items / PIM (EGP)","EGP",""],["Order Orchestration (DOO)","DOO",""],
+    ["Order Entry (OE)","OE",""],["Pricing (QP)","QP",""],["Shipping (WSH)","WSH",""],["Receiving (RCV)","RCV",""],
+    ["Purchasing (PO)","PO",""],["Suppliers (POZ)","POZ",""],["Sourcing (PON)","PON",""],["Requisitions (POR)","POR",""],
+    ["Supplier Qualification (POQ)","POQ",""],["Manufacturing (WIE)","WIE",""],["Maintenance (MNT)","MNT",""],["Cost Mgmt (CST)","CST",""],
+    ["Supply Planning (MSC)","MSC",""],["SC Orchestration (DOS)","DOS",""],["Warehouse (WMS)","WMS",""],["Configurator (CZ)","CZ",""],
+    ["Projects (PJF)","PJF",""],["Project Costing (PJC)","PJC",""],["Project Billing (PJB)","PJB",""]
+  ],
+  "ICM":[
+    ["Comp Plans","CN","COMP_PLAN"],["Participants","CN","PARTICIPANT"],["Earnings","CN","EARNING"],["Transactions","CN","TRANS"],
+    ["Rate Tables","CN","RATE_TABLE"],["Formulas","CN","FORMULA"],["Quotas","CN","QUOTA"],["Credits","CN","CREDIT"],
+    ["Pay Groups","CN","PAY_GROUP"],["All CN_","CN",""]
+  ]
 };
 function renderLiveChips(){
   var box=document.getElementById("liveChips");if(!box)return;
   if(!LIVE.on){box.style.display="none";box.innerHTML="";return;}
   var chips=LIVE_CHIPS[ST.mod]||[];
-  box.innerHTML=chips.map(function(c){return '<button class="cx-chip" data-term="'+t2sHtmlEsc(c[1])+'">'+t2sHtmlEsc(c[0])+'</button>';}).join("");
+  box.innerHTML=chips.map(function(c){return '<button class="cx-chip" data-prefix="'+t2sHtmlEsc(c[1])+'" data-term="'+t2sHtmlEsc(c[2])+'">'+t2sHtmlEsc(c[0])+'</button>';}).join("");
   box.style.display=chips.length?"flex":"none";
   box.querySelectorAll(".cx-chip").forEach(function(b){b.addEventListener("click",function(){
-    var t=b.getAttribute("data-term");document.getElementById("tblSearch").value=t;liveSearch(t);
+    var p=b.getAttribute("data-prefix"),t=b.getAttribute("data-term");
+    document.getElementById("tblSearch").value=(p?p+"…":"")+(t||"");
+    liveSearch(t,p);
   });});
 }
 
@@ -1064,13 +1097,13 @@ async function liveOpenSchema(owner){
   renderLive();
 }
 
-async function liveSearch(term){
-  LIVE.searching=true;liveBusy("Searching “"+term+"”…");
-  var r=await t2sMetaQuery(t2sMetaSearchSQL(term));
+async function liveSearch(term,prefix){
+  LIVE.searching=true;liveBusy("Searching…");
+  var r=await t2sMetaQuery(t2sMetaSearchSQL(term,prefix));
   if(r.error){liveErr(r.error);return;}
   var list=document.getElementById("tblList");list.innerHTML="";
   document.getElementById("tblBadge").textContent=r.rows.length;
-  if(!r.rows.length){list.innerHTML='<div class="tbl-desc" style="padding:8px 10px">No tables match “'+t2sHtmlEsc(term)+'”.</div>';return;}
+  if(!r.rows.length){list.innerHTML='<div class="tbl-desc" style="padding:8px 10px">No matching tables or views'+(prefix?' in the '+t2sHtmlEsc(prefix)+'_ family':'')+'.</div>';return;}
   r.rows.forEach(function(row){
     var owner=row[0],t=row[1],typ=row[2]||"TABLE",el=document.createElement("div");
     el.className="tbl-row";el.innerHTML='<span style="font-size:10px;color:var(--t3)">'+(typ==="VIEW"?"◫":"▤")+'</span> '+t2sHtmlEsc(t)+'<span class="tbl-owner">'+t2sHtmlEsc(owner)+'</span>';
@@ -2433,11 +2466,20 @@ function t2sMetaColumnsSQL(owner,table){
   return "SELECT column_name, data_type, data_length, nullable FROM all_tab_columns "
     +"WHERE owner='"+o+"' AND table_name='"+t+"' ORDER BY column_id";
 }
-function t2sMetaSearchSQL(term){
-  var x=t2sMetaTerm(term);
+function t2sMetaSearchSQL(term,prefix){
+  var x=t2sMetaTerm(term),p=t2sMetaTerm(prefix);
+  function escU(s){return s.replace(/_/g,"\\_");}                 // treat underscores literally
+  // prefix is anchored to the family pattern PREFIX_% (e.g. CN_%) so it matches only
+  // that family — never something with the letters mid-name; term is a literal substring.
+  function w(col){
+    var a=[];
+    if(p)a.push(col+" LIKE '"+escU(p)+"\\_%' ESCAPE '\\'");
+    if(x)a.push(col+" LIKE '%"+escU(x)+"%' ESCAPE '\\'");
+    return a.length?" WHERE "+a.join(" AND "):"";
+  }
   return "SELECT owner, object_name, object_type FROM ("
-    +"SELECT owner, table_name AS object_name, 'TABLE' AS object_type FROM all_tables WHERE table_name LIKE '%"+x+"%' "
-    +"UNION ALL SELECT owner, view_name, 'VIEW' FROM all_views WHERE view_name LIKE '%"+x+"%') "
+    +"SELECT owner, table_name AS object_name, 'TABLE' AS object_type FROM all_tables"+w("table_name")
+    +" UNION ALL SELECT owner, view_name, 'VIEW' FROM all_views"+w("view_name")+") "
     +"ORDER BY object_name, owner FETCH FIRST 300 ROWS ONLY";
 }
 

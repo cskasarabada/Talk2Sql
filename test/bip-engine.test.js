@@ -311,6 +311,11 @@ console.log("\n(21) LIVE SCHEMA EXPLORER — dictionary SQL is read-only & injec
   ok(/all_tables/.test(t2sMetaTablesSQL("X")) && /all_views/.test(t2sMetaTablesSQL("X")), "tables query unions tables + views");
   ok(t2sMetaColumnsSQL("o","t").indexOf("all_tab_columns") > 0, "columns query hits all_tab_columns");
   ok(/all_tables/i.test(t2sMetaSearchSQL("X")) && /all_views/i.test(t2sMetaSearchSQL("X")), "search covers BOTH tables and views (so _VL views are found)");
+  // prefix scoping: ICM 'Earnings' chip = prefix CN + term EARNING → can't match LEARNING
+  const scoped = t2sMetaSearchSQL("EARNING","CN");
+  ok(scoped.indexOf("LIKE 'CN\\_%' ESCAPE") > 0, "prefix anchored to family pattern CN_% (not 'MCN', not mid-name)");
+  ok(scoped.indexOf("LIKE '%EARNING%' ESCAPE") > 0, "keyword applied within the family");
+  ok(t2sMetaSearchSQL("","HZ").indexOf("LIKE 'HZ\\_%' ESCAPE") > 0, "prefix-only chip lists the whole family (HZ_%)");
   // injection attempts are neutralised — no statement-breaking characters survive
   const evil = t2sMetaSearchSQL("x'; DROP TABLE foo;--");
   ok(evil.indexOf(";") < 0 && evil.indexOf("--") < 0 && evil.indexOf("'%X") >= 0, "search term strips ; quotes -- (becomes a harmless LIKE literal)");
