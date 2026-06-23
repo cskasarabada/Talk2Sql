@@ -549,7 +549,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div id="top">
-  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v3.5.0</span></div>
+  <div class="logo"><div class="logo-mark">FX</div>Talk2Sql<span style="font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;align-self:flex-end;margin-bottom:3px;margin-left:2px">v3.6.0</span></div>
   <div class="sep"></div>
   <div class="conn-pill" id="connPill"><div class="dot" id="dot"></div><span id="connLbl">Click to connect</span></div>
   <button class="btn b-ghost" id="btnDisconn" style="font-size:10px;padding:3px 8px;display:none">✕</button>
@@ -578,6 +578,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
   <div class="pb p2" data-p="2" onclick="switchP(2)"><span>📚</span><span>Built-in SQL</span><span class="pn">2</span></div>
   <div class="pb p3" data-p="3" onclick="switchP(3)"><span>🛡️</span><span>Data Sentinels</span><span class="pn">3</span></div>
   <div class="pb p4" data-p="4" onclick="switchP(4)"><span>⚙️</span><span>Config Export</span><span class="pn">4</span></div>
+  <div class="pb p5" data-p="5" onclick="switchP(5)"><span>🌱</span><span>Greenfield</span><span class="pn">5</span></div>
 </div>
 <!-- WORKSPACE -->
 <div id="pws" style="position:relative;flex:1;overflow:hidden;height:calc(100vh - 82px)">
@@ -751,6 +752,11 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);font-size:13px;d
     </div>
   </div>
 </div><!-- /pp4 -->
+
+<!-- PILLAR 5: BUILD (from raw) -->
+<div id="pp5" class="pp" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;flex-direction:column;">
+  <div id="build-scroll" style="flex:1;overflow:auto;min-height:0"></div>
+</div><!-- /pp5 -->
 
 <!-- ══════════ ICM DASHBOARD PANEL ══════════ -->
   <div id="icm-dashboard">
@@ -3547,7 +3553,7 @@ document.addEventListener("DOMContentLoaded",function(){
 
 #pws{height:calc(100vh - 82px);position:relative;overflow:hidden}
 </style>
-<div id="offline-note"><span>&#10003; Talk2Sql v3.5.0</span>&nbsp;&middot;&nbsp;<a href="https://github.com/cskasarabada/Talk2Sql" target="_blank" style="color:#4dabf7">github.com/cskasarabada/Talk2Sql</a></div>
+<div id="offline-note"><span>&#10003; Talk2Sql v3.6.0</span>&nbsp;&middot;&nbsp;<a href="https://github.com/cskasarabada/Talk2Sql" target="_blank" style="color:#4dabf7">github.com/cskasarabada/Talk2Sql</a></div>
 
 
 <!-- ══════════════ APP CONFIGURATIONS DRAWER v2.0.0 ══════════════ -->
@@ -3717,7 +3723,7 @@ document.addEventListener("DOMContentLoaded",function(){
   <!-- ADVANCED -->
   <div class="cfg-sec" id="sec-advanced">
     <h3>App Info</h3>
-    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v3.5.0</span></div>
+    <div class="cfg-row"><span class="cfg-lbl">Version</span><span style="font-family:var(--mono);font-size:11px;color:var(--a1)">v3.6.0</span></div>
     <div class="cfg-row"><span class="cfg-lbl">Repo</span><a href="#" id="cfg-repo-link" style="font-size:11px;color:var(--a1);font-family:var(--mono)">cskasarabada/Talk2Sql</a></div>
     <div class="cfg-row"><span class="cfg-lbl">Electron mode</span><span id="cfg-electron-mode" style="font-size:11px;font-family:var(--mono);color:var(--t3)">Detecting...</span></div>
 
@@ -4108,7 +4114,7 @@ function fixPwsHeight(){
   var h = window.innerHeight - topH - navH;
   pws.style.cssText = 'position:relative;overflow:hidden;height:'+h+'px;flex:1';
   /* also fix each pp panel size */
-  for(var i=1;i<=4;i++){
+  for(var i=1;i<=5;i++){
     var pp=document.getElementById('pp'+i);
     if(pp && pp.style.display!=='none'){
       pp.style.top='0';pp.style.left='0';pp.style.right='0';pp.style.bottom='0';
@@ -4129,7 +4135,7 @@ function switchP(n){
   if(btn) btn.classList.add('on');
 
   /* Show/hide panels via direct style — no CSS class dependency */
-  for(var i=1; i<=4; i++){
+  for(var i=1; i<=5; i++){
     var p = document.getElementById('pp'+i);
     if(!p) continue;
     if(i===n){
@@ -4155,6 +4161,7 @@ function switchP(n){
   if(n===2) setTimeout(renderLib, 50);
   if(n===3) setTimeout(renderSent, 50);
   if(n===4) setTimeout(function(){ if(typeof renderCfgPillar==='function') renderCfgPillar(); }, 60);
+  if(n===5) setTimeout(function(){ if(typeof renderBuild==='function') renderBuild(); }, 60);
 }
 
 /* ─── SQL LIBRARY ──────────────────────────────────────────────────── */
@@ -6244,6 +6251,11 @@ var CFG_GUIDE = 'guide';  // Setup & Maintenance — show guidance only
 /* ── Full Oracle Fusion Config Taxonomy ── */
 var CFG_TAXONOMY = {
 
+  /* NOTE: The Foundation — Base Setup taxonomy was relocated to the dedicated
+     Pillar 5 "Build" experience (see BUILD_JOURNEY below). It is intentionally
+     NOT part of Config Export. */
+
+
   /* ━━ ORDER MANAGEMENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   om: {
     label:'Order Management', color:'#69db7c', icon:'🛒',
@@ -7081,6 +7093,346 @@ Object.keys(CFG_TAXONOMY).forEach(function(modKey){
   });
   CFG_MODS[modKey].items=liveItems;
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BUILD_JOURNEY — Pillar 5 "Build from Raw"
+   Self-contained data for the new-pod implementation experience. NOT part of
+   Config Export. Three phases:
+     • discovery   — the architect questionnaire (relocated from the doc)
+     • foundation  — the 5 dependency-ordered base-setup sections (relocated
+                     verbatim from the old CFG_TAXONOMY.foundation entry)
+     • modules     — ordered business-module build lifecycles that come AFTER
+                     foundation, each referencing an existing CFG_TAXONOMY key.
+   ══════════════════════════════════════════════════════════════════════════ */
+var BUILD_JOURNEY = {
+
+  /* ── PHASE 1 — DISCOVERY QUESTIONNAIRE ── */
+  discovery: {
+    label:'Discovery', icon:'📝',
+    intro:'Ask these up front. The answers determine build order, how many of each object to create, and which modules can start when.',
+    groups:[
+      {id:'disc_scope', label:'Scope (which pillars/modules)', icon:'🎯', questions:[
+        'Which Oracle pillars are in scope — ERP, SCM, HCM, CX, Projects, ICM?',
+        'Within each pillar, which modules at go-live vs. later phases?',
+        'Net-new implementation, re-implementation, or add-on to existing live modules?'
+      ]},
+      {id:'disc_ent', label:'Enterprise', icon:'🌐', questions:[
+        'How many legal entities, and in which countries?',
+        'Which currencies, and the primary (functional) currency per ledger?',
+        'What fiscal / accounting calendar (period type, fiscal year start, # of periods, adjusting periods)?',
+        'Chart of Accounts design — how many segments, which qualifiers (natural account, cost center, balancing), segment value sources?',
+        'How many ledgers — single primary, or primary + secondary/reporting?',
+        'How many business units and divisions, and how do they map to legal entities and the ledger?',
+        'Shared vs. segregated setup data → drives the Reference Data Set (SetID) design.'
+      ]},
+      {id:'disc_sec', label:'Security model', icon:'🛡', questions:[
+        'Single sign-on / federation (SAML)? Provisioning source for users?',
+        'Role strategy — seeded job roles, or custom copies?',
+        'Data-access model — which users see which BUs/ledgers (data roles)?',
+        'Segregation-of-duties / audit requirements?'
+      ]},
+      {id:'disc_golive', label:'Go-live date & phasing', icon:'📅', questions:[
+        'Target go-live(s) and any phased rollout (by module, by region, by legal entity)?',
+        'Freeze/blackout windows for data conversion and cutover?'
+      ]},
+      {id:'disc_conv', label:'Data conversion scope', icon:'🔁', questions:[
+        'Which masters convert (customers, suppliers, items, employees, GL balances, open transactions)?',
+        'Source systems and data-quality state?',
+        'One-time load (FBDI/HDL) vs. ongoing integration?'
+      ]},
+      {id:'disc_int', label:'Integrations', icon:'🔌', questions:[
+        'Inbound/outbound interfaces (bank, tax engine, payroll, CRM, e-commerce, EDI)?',
+        'Real-time (REST/SOAP) vs. batch (FBDI/BICC)?',
+        'Which integration owns which object (system of record)?'
+      ]}
+    ]
+  },
+
+  /* ── PHASE 2 — FOUNDATION (BASE APPLICATION SETUP) ──
+     The universal first steps EVERY Fusion implementation must complete on a
+     freshly provisioned pod, BEFORE any business module. Dependency-ordered:
+     each section assumes the section(s) above it already exist. */
+  foundation: {
+    label:'Foundation — Base Setup', color:'#51cf66', icon:'🏗',
+    sections:[
+      {
+        id:'fnd_s1', label:'1. Enterprise Structures',
+        desc:'The organizational skeleton — geographies, currencies, and the legal/management entities that own every transaction. Nothing module-specific works until this exists.',
+        items:[
+          {id:'fnd_geo',   type:CFG_GUIDE, label:'Geographies',                 icon:'🌍',
+           desc:'Country/state/city hierarchies and address validation — the first thing loaded, because Legal Addresses, Locations and tax all resolve against them.',
+           guide:'Setup & Maintenance → Enterprise Profile → Manage Geographies → import country geography hierarchy'},
+          {id:'fnd_cur',   type:CFG_LIVE,  label:'Currencies',                  icon:'💱', ep:'/fscmRestApi/resources/latest/currencies', params:'limit=300',
+           desc:'Enabled ISO currencies and conversion rate types — required before a ledger can be assigned a primary currency.'},
+          {id:'fnd_rds',   type:CFG_GUIDE, label:'Reference Data Sets (SetIDs)', icon:'🗂',
+           desc:'Partitioned sets that let multiple BUs share or segregate setup data (payment terms, lookups) — defined before Business Units, which are each stamped with a default SetID.',
+           guide:'Setup & Maintenance → Enterprise Profile → Manage Reference Data Sets → define SetIDs and set-determinant assignments'},
+          {id:'fnd_ent',   type:CFG_GUIDE, label:'Enterprise',                  icon:'🌐',
+           desc:'The single top node of the instance — anchors all downstream HCM and financial structures; created once per pod.',
+           guide:'Setup & Maintenance → Enterprise Profile → Manage Enterprise HCM Information → define Enterprise name and identifier'},
+          {id:'fnd_ladr',  type:CFG_GUIDE, label:'Legal Addresses',             icon:'📮',
+           desc:'Verified statutory addresses (resolved against Geographies) that Legal Entities and Reporting Units register against — must precede Legal Entity creation.',
+           guide:'Setup & Maintenance → Legal Structures → Manage Legal Addresses'},
+          {id:'fnd_le',    type:CFG_LIVE,  label:'Legal Entities',              icon:'⚖', ep:'/fscmRestApi/resources/latest/legalEntitiesLOV', params:'limit=200',
+           desc:'Registered companies that own transactions and sign contracts — depend on Legal Addresses; later assigned to a ledger.'},
+          {id:'fnd_lru',   type:CFG_GUIDE, label:'Legal Reporting Units',       icon:'🏛',
+           desc:'Tax/statutory registration sub-units of a Legal Entity — created after the Legal Entity, used for tax and payroll reporting.',
+           guide:'Setup & Maintenance → Legal Structures → Manage Legal Reporting Unit'},
+          {id:'fnd_bu',    type:CFG_LIVE,  label:'Business Units',              icon:'🏢', ep:'/fscmRestApi/resources/latest/finBusinessUnitsLOV', params:'limit=200',
+           desc:'Operational units that own AP/AR/PO/OM transactions — depend on a Legal Entity, a Ledger and a default Reference Data Set, so they come after those exist.'},
+          {id:'fnd_div',   type:CFG_GUIDE, label:'Divisions',                   icon:'🏗',
+           desc:'Management/reporting roll-up above Business Units (line of business) — defined once the enterprise and BUs are framed.',
+           guide:'Setup & Maintenance → Enterprise Profile → Manage Divisions'},
+          {id:'fnd_dept',  type:CFG_LIVE,  label:'Departments',                 icon:'🏬', ep:'/hcmRestApi/resources/latest/departments', params:'limit=300',
+           desc:'Cost-center-bearing org units workers belong to — depend on the Enterprise and (for costing) the COA; precede hiring.'},
+          {id:'fnd_loc',   type:CFG_LIVE,  label:'Locations',                   icon:'📍', ep:'/hcmRestApi/resources/latest/locations', params:'limit=300',
+           desc:'Physical work/ship/legal sites built on validated Geographies — referenced by Legal Entities, Departments and inventory orgs.'}
+        ]
+      },
+      {
+        id:'fnd_s2', label:'2. Financial Foundation',
+        desc:'The ledger and its building blocks. A ledger cannot be created until its Chart of Accounts, Calendar and Currency all exist — the classic 3 C\'s dependency.',
+        items:[
+          {id:'fnd_vs',    type:CFG_GUIDE, label:'Value Sets',                  icon:'🔢',
+           desc:'The list of valid values for each COA segment (e.g. natural account, cost center) — built first, because the COA Structure references them.',
+           guide:'Setup & Maintenance → Financial Reporting Structures → Manage Chart of Accounts Value Sets'},
+          {id:'fnd_coas',  type:CFG_GUIDE, label:'COA Structure',               icon:'🧱',
+           desc:'Defines the segments (and which Value Set each uses), segment order and qualifiers — depends on Value Sets; defined before its instance.',
+           guide:'Setup & Maintenance → Financial Reporting Structures → Manage Chart of Accounts Structures'},
+          {id:'fnd_coasi', type:CFG_GUIDE, label:'COA Structure Instance',      icon:'🏛',
+           desc:'The deployed, usable version of the COA Structure with active segment values — must be deployed before a ledger can reference it.',
+           guide:'Setup & Maintenance → Financial Reporting Structures → Manage Chart of Accounts Structure Instances → Deploy'},
+          {id:'fnd_cal',   type:CFG_LIVE,  label:'Accounting Calendars',        icon:'📅', ep:'/fscmRestApi/resources/latest/accountingCalendars', params:'limit=50',
+           desc:'Fiscal periods (period type, start/end, adjusting periods) the ledger posts into — one of the three prerequisites for a ledger.'},
+          {id:'fnd_led',   type:CFG_LIVE,  label:'Primary Ledger',              icon:'📒', ep:'/fscmRestApi/resources/latest/ledgers', params:'limit=50',
+           desc:'The core accounting book — created only after its COA Instance + Accounting Calendar + Currency exist; everything financial posts here.'},
+          {id:'fnd_le_led',type:CFG_GUIDE, label:'Legal Entity ↔ Ledger Assignment', icon:'🔗',
+           desc:'Attaches each Legal Entity to the primary ledger and completes the ledger options — required before the ledger can be used for transactions.',
+           guide:'Setup & Maintenance → General Ledger → Assign Legal Entities → Specify Ledger Options'},
+          {id:'fnd_bu_led',type:CFG_GUIDE, label:'BU ↔ Ledger / Reference Data Assignment', icon:'🧩',
+           desc:'Binds each Business Unit to its ledger, default legal entity and reference data sets — the final wiring that makes a BU transactable.',
+           guide:'Setup & Maintenance → Enterprise Profile → Manage Business Unit → Assign Business Functions and reference data sets'}
+        ]
+      },
+      {
+        id:'fnd_s3', label:'3. Security & Users',
+        desc:'Who can do what. Roles and provisioning are layered on once the enterprise/BUs exist, because data roles are scoped to those structures.',
+        items:[
+          {id:'fnd_usr',   type:CFG_LIVE,  label:'Users',                       icon:'👤', ep:'/hcmRestApi/resources/latest/userAccounts', params:'limit=200',
+           desc:'User accounts (often created with workers) that must exist before any role can be provisioned to a person.'},
+          {id:'fnd_jrole', type:CFG_GUIDE, label:'Job & Abstract Roles',        icon:'🎭',
+           desc:'Top-level roles representing a job (e.g. Accounts Payable Manager) or a non-job capacity (Employee) — the entry point users are assigned.',
+           guide:'Security Console → Roles → Create / Copy Job and Abstract Roles'},
+          {id:'fnd_drole', type:CFG_GUIDE, label:'Duty & Data Roles',           icon:'🛡',
+           desc:'Duty roles bundle privileges into a job; data roles add the data scope (BU, ledger) — built on the enterprise structures from section 1.',
+           guide:'Security Console → Roles → manage Duty Roles and generate Data Roles'},
+          {id:'fnd_dprov', type:CFG_GUIDE, label:'Data Role Provisioning',      icon:'📦',
+           desc:'The act of assigning data-scoped roles to users so they can see only their BU/ledger data — depends on Data Roles and Users existing.',
+           guide:'Security Console → Users → Edit User → Add Role; or Manage Data Access for Users'},
+          {id:'fnd_prules',type:CFG_GUIDE, label:'Role Provisioning Rules',     icon:'⚙',
+           desc:'Automatic role mappings that grant roles based on worker attributes (assignment, legal employer) — set up after roles and HR data exist.',
+           guide:'Setup & Maintenance → Users and Security → Manage Role Provisioning Rules'},
+          {id:'fnd_dsp',   type:CFG_GUIDE, label:'Data Security Policies',      icon:'🔒',
+           desc:'Fine-grained row-level rules (which BUs/ledgers a role can access) attached to data roles — the deepest layer, defined last.',
+           guide:'Security Console → Administration / Manage Database Resources → Data Security Policies'}
+        ]
+      },
+      {
+        id:'fnd_s4', label:'4. Common Reference',
+        desc:'Cross-application reference objects every module reuses — lookups, profiles, trees and flexfields. Set once at the foundation so modules inherit them.',
+        items:[
+          {id:'fnd_lkp',   type:CFG_GUIDE, label:'Lookups',                     icon:'📋',
+           desc:'Standard/common/set-enabled code lists reused across modules — defined early so module setup can reference shared codes.',
+           guide:'Setup & Maintenance → Application Extensions → Manage Standard / Common / Set-Enabled Lookups'},
+          {id:'fnd_prof',  type:CFG_GUIDE, label:'Profile Options',             icon:'🎚',
+           desc:'System/site/user behavior switches (defaults, currency display, security) — set at foundation because modules read them at runtime.',
+           guide:'Setup & Maintenance → Application Extensions → Manage Profile Options / Administrator Profile Values'},
+          {id:'fnd_tree',  type:CFG_GUIDE, label:'Trees',                       icon:'🌳',
+           desc:'Hierarchies (account, department, geography) used for rollups and security — built on the structures and value sets they organize.',
+           guide:'Setup & Maintenance → Enterprise Profile → Manage Trees and Tree Versions → Audit and Flatten'},
+          {id:'fnd_docseq',type:CFG_GUIDE, label:'Document Sequences',          icon:'🔢',
+           desc:'Gapless/sequential numbering for legal documents (invoices, journals) — configured before transactions are entered.',
+           guide:'Setup & Maintenance → Financials → Manage Document Sequences and Sequence Categories'},
+          {id:'fnd_dff',   type:CFG_GUIDE, label:'Descriptive Flexfields (DFF)', icon:'🧬',
+           desc:'Customer-defined extra attributes on standard objects — defined and deployed at foundation so modules capture custom data from day one.',
+           guide:'Setup & Maintenance → Application Extensions → Manage Descriptive Flexfields → Deploy'},
+          {id:'fnd_eff',   type:CFG_GUIDE, label:'Extensible Flexfields (EFF)', icon:'🧩',
+           desc:'Multi-row/multi-context extensions for objects needing richer customization — defined after DFFs as the heavier extension mechanism.',
+           guide:'Setup & Maintenance → Application Extensions → Manage Extensible Flexfields → Deploy'}
+        ]
+      },
+      {
+        id:'fnd_s5', label:'5. Workflow, Approvals & Scheduling',
+        desc:'The automation layer — approvals, notifications, scheduled jobs and auditing. Configured last because rules reference the roles, BUs and objects defined above.',
+        items:[
+          {id:'fnd_amx',   type:CFG_GUIDE, label:'BPM / AMX Approval Rules',    icon:'✅',
+           desc:'Approval Management (BPM Worklist) rules routing transactions to approvers — depend on roles/users and the supervisor hierarchy existing.',
+           guide:'Setup & Maintenance → Application Extensions → Manage Task Configurations (BPM Worklist) → define approval rules'},
+          {id:'fnd_notif', type:CFG_GUIDE, label:'Notifications',               icon:'🔔',
+           desc:'Email/bell notification setup and templates for workflow tasks — configured alongside approval rules they accompany.',
+           guide:'Setup & Maintenance → Application Extensions → Manage Notifications / BPM Worklist Notification Preferences'},
+          {id:'fnd_ess',   type:CFG_GUIDE, label:'Enterprise Scheduler (ESS) Jobs', icon:'⏰',
+           desc:'Scheduled background processes (imports, posting, valuation) and their job definitions — set up once modules and data exist to process.',
+           guide:'Setup & Maintenance → Application Extensions → Manage Enterprise Scheduler Job Definitions and Job Sets'},
+          {id:'fnd_audit', type:CFG_GUIDE, label:'Audit Setup',                 icon:'📝',
+           desc:'Which business objects/attributes are audited for change tracking — enabled at foundation so history is captured from go-live.',
+           guide:'Setup & Maintenance → Application Extensions → Manage Audit Policies → enable objects and attributes'}
+        ]
+      }
+    ]
+  },
+
+  /* ── PHASE 3 — BUSINESS MODULES (after Foundation) ──
+     Dependency sequence: Financials → SCM/Procurement/OM → CX/HCM → ICM.
+     Each references an existing CFG_TAXONOMY key so its full build lifecycle
+     is browsable in the Config Export pillar. */
+  modules:[
+    {order:1, key:'fin',     label:'Financials (GL → AP/AR)', icon:'💰',
+     dep:'Depends on Foundation (Ledger, BU, COA). GL first as the accounting backbone; then sub-ledgers AP (suppliers) and AR (customers) post to it.'},
+    {order:2, key:'scm',     label:'SCM / Procurement', icon:'📦',
+     dep:'Depends on Foundation + Financials (BU/ledger). Inventory orgs and items must exist before Purchasing can buy them.'},
+    {order:3, key:'om',      label:'Order Management', icon:'🛒',
+     dep:'Depends on Foundation + Inventory/Items (Item Validation Org, UOM). Sells what SCM stocks; invoices flow back to AR.'},
+    {order:4, key:'cxsales', label:'CX Sales', icon:'🤝',
+     dep:'Depends on Foundation + customer/resource model. Integrates back to Financials for quote-to-cash.'},
+    {order:5, key:'hcm',     label:'HCM', icon:'👥',
+     dep:'Depends on Foundation enterprise structure + jobs/grades. Supplies the worker population other modules (incl. ICM) rely on.'},
+    {order:6, key:'icm',     label:'Incentive Compensation (ICM)', icon:'🎯',
+     dep:'Depends on Foundation + HCM participants (salespeople) + a transaction source (orders/invoices from OM or AR). Goes last — downstream of people and revenue.'}
+  ]
+};
+
+/* ── Read-only SQL verification templates for "Check on pod" (from the doc).
+   Maps a Foundation LIVE item id → a safe parameter-free SELECT that answers
+   "is this part of the Foundation set up yet?". Items without a template fall
+   back to just showing the REST endpoint. ── */
+var BUILD_VERIFY_SQL = {
+  fnd_cur:  'SELECT CURRENCY_CODE, NAME, ENABLED_FLAG\nFROM FND_CURRENCIES\nFETCH FIRST 50 ROWS ONLY',
+  fnd_le:   'SELECT NAME, LEGAL_ENTITY_IDENTIFIER\nFROM XLE_ENTITY_PROFILES\nFETCH FIRST 50 ROWS ONLY',
+  fnd_bu:   'SELECT NAME, SET_ID\nFROM FUN_ALL_BUSINESS_UNITS_V\nFETCH FIRST 50 ROWS ONLY',
+  fnd_dept: 'SELECT NAME, ORGANIZATION_ID\nFROM HR_ALL_ORGANIZATION_UNITS\nFETCH FIRST 50 ROWS ONLY',
+  fnd_loc:  'SELECT LOCATION_CODE, COUNTRY\nFROM HR_LOCATIONS_ALL\nFETCH FIRST 50 ROWS ONLY',
+  fnd_cal:  'SELECT PERIOD_SET_NAME, PERIOD_TYPE\nFROM GL_PERIOD_SETS\nFETCH FIRST 50 ROWS ONLY',
+  fnd_led:  'SELECT NAME, CURRENCY_CODE, PERIOD_SET_NAME\nFROM GL_LEDGERS\nFETCH FIRST 50 ROWS ONLY',
+  fnd_usr:  'SELECT USERNAME, ACTIVE_FLAG\nFROM PER_USERS\nFETCH FIRST 50 ROWS ONLY'
+};
+
+/* "Check on pod" — load a read-only verification SELECT into the DIY SQL editor
+   and switch to Pillar 1. If no SQL template exists for the item, surface the
+   REST endpoint as a comment so the architect knows where to look. */
+function buildCheckPod(itemId, ep){
+  var sql = BUILD_VERIFY_SQL[itemId];
+  if(!sql){
+    sql = '-- No SQL verification template for this object.\n'
+        + '-- Verify via REST endpoint: ' + (ep||'(none)') + '\n'
+        + '-- (Use Config Export / Probe URLs to query it live.)';
+  }
+  switchP(1);
+  setTimeout(function(){
+    var ed=document.getElementById('sqled');
+    if(ed){ ed.value=sql; ed.dispatchEvent(new Event('input')); }
+    if(typeof toast==='function') toast('Verification SQL loaded in editor','inf');
+  }, 150);
+}
+
+/* Jump to a business module's full build lifecycle in the Config Export pillar. */
+function buildOpenModule(key){
+  switchP(4);
+  setTimeout(function(){ if(typeof cfgSetMod==='function') cfgSetMod(key); }, 120);
+}
+
+/* Toggle a collapsible group in the Build pillar. */
+function buildToggle(id){
+  var b=document.getElementById(id);
+  var c=document.getElementById(id+'_c');
+  if(!b) return;
+  var open=b.style.display!=='none';
+  b.style.display=open?'none':'block';
+  if(c) c.textContent=open?'▸':'▾';
+}
+
+/* ── renderBuild() — Pillar 5: "Greenfield" (new Fusion implementation) ── */
+function renderBuild(){
+  var root=document.getElementById('build-scroll');
+  if(!root||typeof BUILD_JOURNEY==='undefined') return;
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var h='';
+
+  /* Header */
+  h+='<div style="padding:18px 20px 10px">'
+   + '<div style="font-size:17px;font-weight:800;color:var(--t1);margin-bottom:4px">🌱 Greenfield — New Fusion Implementation</div>'
+   + '<div style="font-size:11px;color:var(--t3);line-height:1.7">Stand up a freshly provisioned pod, in order: <strong style="color:var(--t2)">Pod Provisioned → Foundation (Base Setup) → Business Modules</strong>. Nothing module-specific works until the Foundation exists. This view is read-only.</div>'
+   + '</div>';
+
+  /* PHASE 1 — DISCOVERY */
+  var d=BUILD_JOURNEY.discovery;
+  h+='<div style="padding:8px 20px 4px"><div style="font-size:13px;font-weight:800;color:var(--t1)">'+esc(d.icon)+' Phase 1 — Discovery</div>'
+   + '<div style="font-size:10px;color:var(--t3);margin:3px 0 10px;line-height:1.6">'+esc(d.intro)+'</div></div>';
+  h+='<div style="padding:0 20px 6px">';
+  d.groups.forEach(function(g){
+    var bid='disc_'+g.id;
+    h+='<div class="tbl-row" style="display:block;padding:0;margin-bottom:8px;border:1px solid var(--b1);border-radius:8px;overflow:hidden;background:var(--bg2)">'
+     + '<div onclick="buildToggle(\''+bid+'\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 12px;font-size:11px;font-weight:700;color:var(--t1)">'
+     + '<span id="'+bid+'_c" style="color:var(--t3);width:10px">▾</span>'
+     + '<span>'+esc(g.icon)+'</span><span>'+esc(g.label)+'</span>'
+     + '<span style="margin-left:auto;font-size:9px;color:var(--t3);font-weight:600">'+g.questions.length+' questions</span></div>'
+     + '<div id="'+bid+'" style="display:block;padding:2px 14px 12px 32px">';
+    g.questions.forEach(function(q){
+      h+='<div style="display:flex;gap:8px;align-items:flex-start;font-size:10.5px;color:var(--t2);line-height:1.6;padding:3px 0"><span style="color:var(--t3)">☐</span><span>'+esc(q)+'</span></div>';
+    });
+    h+='</div></div>';
+  });
+  h+='</div>';
+
+  /* PHASE 2 — FOUNDATION */
+  var f=BUILD_JOURNEY.foundation;
+  h+='<div style="padding:14px 20px 4px"><div style="font-size:13px;font-weight:800;color:'+esc(f.color)+'">'+esc(f.icon)+' Phase 2 — Foundation (Base Application Setup)</div>'
+   + '<div style="font-size:10px;color:var(--t3);margin:3px 0 4px;line-height:1.6">The dependency-ordered base setup EVERY implementation does on a raw pod. '
+   + '<span style="background:'+esc(f.color)+'22;color:'+esc(f.color)+';font-weight:700;border-radius:4px;padding:1px 6px">Do this first.</span></div></div>';
+  h+='<div style="padding:0 20px 6px">';
+  f.sections.forEach(function(sec){
+    var sid='fnd_sec_'+sec.id;
+    h+='<div style="border:1px solid var(--b1);border-radius:8px;overflow:hidden;margin-bottom:8px;background:var(--bg2)">'
+     + '<div onclick="buildToggle(\''+sid+'\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 12px;font-size:11px;font-weight:700;color:var(--t1)">'
+     + '<span id="'+sid+'_c" style="color:var(--t3);width:10px">▾</span><span>'+esc(sec.label)+'</span>'
+     + '<span style="margin-left:auto;font-size:9px;color:var(--t3);font-weight:600">'+sec.items.length+' objects</span></div>'
+     + '<div id="'+sid+'" style="display:block;padding:0 0 6px">'
+     + '<div style="font-size:9.5px;color:var(--t3);line-height:1.6;padding:0 14px 8px 32px">'+esc(sec.desc)+'</div>';
+    sec.items.forEach(function(it){
+      var isLive=(it.type===CFG_LIVE);
+      h+='<div style="padding:7px 14px 8px 32px;border-top:1px solid var(--b1)33">'
+       + '<div style="display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;color:var(--t1)">'
+       + '<span>'+esc(it.icon)+'</span><span>'+esc(it.label)+'</span>'
+       + (isLive?'<span class="ci-badge" title="Live REST extract" style="background:#51cf6622;color:#51cf66;font-size:8px;border-radius:4px;padding:0 4px">⚡ LIVE</span>':'<span style="font-size:8px;color:var(--t3);background:var(--b1);border-radius:4px;padding:0 4px">GUIDE</span>')
+       + (isLive?'<button class="btn b-ghost" style="margin-left:auto;font-size:9px;padding:2px 8px" onclick="buildCheckPod(\''+it.id+'\',\''+esc(it.ep||'')+'\')">🔎 Check on pod</button>':'')
+       + '</div>'
+       + '<div style="font-size:9.5px;color:var(--t3);line-height:1.55;margin-top:3px">'+esc(it.desc)+'</div>'
+       + (it.guide?'<div style="font-size:9px;color:var(--t2);line-height:1.5;margin-top:3px"><span style="color:var(--t3)">📍 </span>'+esc(it.guide)+'</div>':'')
+       + (isLive&&it.ep?'<div style="font-size:9px;color:#51cf66;line-height:1.5;margin-top:2px;font-family:monospace">'+esc(it.ep)+'</div>':'')
+       + '</div>';
+    });
+    h+='</div></div>';
+  });
+  h+='</div>';
+
+  /* PHASE 3 — BUSINESS MODULES */
+  h+='<div style="padding:14px 20px 4px"><div style="font-size:13px;font-weight:800;color:var(--t1)">🧩 Phase 3 — Business Modules</div>'
+   + '<div style="font-size:10px;color:var(--t3);margin:3px 0 10px;line-height:1.6">After Foundation is complete. Sequence: Financials → SCM/Procurement/OM → CX/HCM → ICM. Each row opens that module\'s full build lifecycle in Config Export.</div></div>';
+  h+='<div style="padding:0 20px 24px">';
+  (BUILD_JOURNEY.modules||[]).forEach(function(m){
+    h+='<div class="tbl-row" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--b1);border-radius:8px;background:var(--bg2)">'
+     + '<div style="font-size:11px;font-weight:800;color:var(--t3);min-width:18px">'+m.order+'</div>'
+     + '<div style="font-size:15px;line-height:1">'+esc(m.icon)+'</div>'
+     + '<div style="flex:1;min-width:0">'
+     + '<div style="font-size:11px;font-weight:700;color:var(--t1)">'+esc(m.label)+'</div>'
+     + '<div style="font-size:9.5px;color:var(--t3);line-height:1.55;margin-top:2px">'+esc(m.dep)+'</div></div>'
+     + '<button class="btn b-ghost" style="font-size:9px;padding:3px 9px;white-space:nowrap" onclick="buildOpenModule(\''+esc(m.key)+'\')">Open lifecycle →</button>'
+     + '</div>';
+  });
+  h+='</div>';
+
+  root.innerHTML=h;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    CONFIG-AS-SOURCE-OF-TRUTH BRIDGE
