@@ -6893,6 +6893,173 @@ var CFG_TAXONOMY = {
         ]
       }
     ]
+  },
+
+  /* ━━ CX SALES — E2E BUILD LIFECYCLE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  /* Dependency-ordered end-to-end build of the Oracle CX Sales suite, modeled on the
+     Order Management (om) lifecycle. Each section depends on the ones before it, which is
+     why they are sequenced Foundation → Customer Model → Catalog → Territories → Sales
+     Process → Forecasting → Partner/Channel → Promotions → Service. Read-only: CFG_LIVE
+     items map to confirmed REST resources; setup/config objects that are not REST-extractable
+     are CFG_GUIDE with the Setup & Maintenance navigation path. */
+  cxsales: {
+    label:'CX Sales', color:'#4dabf7', icon:'🤝',
+    sections:[
+      {
+        id:'cxs_s1', label:'1. Foundation & Reference Data',
+        desc:'Cross-application reference data and the sales resource skeleton — must exist before any customer, product, or territory can be created.',
+        items:[
+          {id:'cx_geographies', type:CFG_GUIDE, label:'Geographies & Address Validation', icon:'🌍',
+           desc:'Country structures, states, cities, and postal ranges that drive address validation and territory geography dimensions — the first thing loaded on a new pod.',
+           guide:'Setup & Maintenance → Sales offering → Manage Geographies → Import Country Structure and enable Geography/Address validation'},
+          {id:'cx_currencies', type:CFG_LIVE, label:'Currencies', icon:'💱', ep:'/fscmRestApi/resources/latest/currenciesLOV', params:'limit=300',
+           desc:'Enabled ISO currencies and conversion rate types used by opportunities, forecasts, and quotes — shared FSCM reference data.'},
+          {id:'cx_calendars', type:CFG_GUIDE, label:'Enterprise & Accounting Calendars', icon:'📅',
+           desc:'Period definitions that scope forecasting horizons and sales reporting buckets; defined once and reused across the suite.',
+           guide:'Setup & Maintenance → Sales offering → Manage Calendars / Manage Accounting Calendars'},
+          {id:'cx_lookups', type:CFG_GUIDE, label:'Sales Lookups & Profile Options', icon:'🔧',
+           desc:'Standard and extensible lookups (sales stages, lead status, account types) plus administrator profile options that govern global CX behavior.',
+           guide:'Setup & Maintenance → Sales offering → Manage Standard Lookups / Manage Administrator Profile Values'},
+          {id:'cx_resorgs', type:CFG_GUIDE, label:'Resource Organizations & Hierarchy', icon:'🧭',
+           desc:'Internal sales-team roll-up that mirrors the management chain; resources and quotas hang off this hierarchy, so it precedes user setup.',
+           guide:'Setup & Maintenance → Sales offering → Manage Internal Resource Organizations → Build Hierarchy'},
+          {id:'cx_roles', type:CFG_LIVE, label:'Resource Roles', icon:'🎭', ep:'/crmRestApi/resources/latest/roles', params:'limit=200',
+           desc:'CRM resource role definitions (Sales Manager, Account Executive, Channel Manager) assigned to resources for assignment and security.'},
+          {id:'cx_resources', type:CFG_LIVE, label:'Sales Users / Resources', icon:'👤', ep:'/crmRestApi/resources/latest/resources', params:'limit=300',
+           desc:'Provisioned salesforce members linked to resource orgs and roles — the people who own accounts, opportunities, and territories.'}
+        ]
+      },
+      {
+        id:'cxs_s2', label:'2. Customer Model (TCA)',
+        desc:'Trading Community Architecture entities that represent who you sell to — built after foundation reference data so address validation and resources are available for ownership.',
+        items:[
+          {id:'cx_tca_setup', type:CFG_GUIDE, label:'TCA Relationship & Party Setup', icon:'🏛',
+           desc:'Relationship types, party usages, and Organization vs. Person models that define the shape of the customer master before any party is loaded.',
+           guide:'Setup & Maintenance → Customer Data Management → Manage Relationship Types / Manage Party Usage'},
+          {id:'cx_accounts', type:CFG_LIVE, label:'Accounts (Sales Accounts)', icon:'🏢', ep:'/crmRestApi/resources/latest/accounts', params:'limit=300',
+           desc:'Customer master records — organization name, type, status, classification, and the primary sell-to entity for opportunities.'},
+          {id:'cx_contacts', type:CFG_LIVE, label:'Contacts', icon:'📇', ep:'/crmRestApi/resources/latest/contacts', params:'limit=300',
+           desc:'People associated with accounts — the buyers, influencers, and stakeholders linked to opportunities and activities.'},
+          {id:'cx_households', type:CFG_LIVE, label:'Households', icon:'🏠', ep:'/crmRestApi/resources/latest/households', params:'limit=200',
+           desc:'Groupings of related contacts/parties (B2C and family/buying-unit modeling) maintained in the TCA registry.'},
+          {id:'cx_addr_geo', type:CFG_GUIDE, label:'Address & Geography Validation Rules', icon:'📍',
+           desc:'Validation level and geography-mapping rules applied to account/contact addresses so records resolve cleanly to territory geography dimensions.',
+           guide:'Setup & Maintenance → Customer Data Management → Manage Address Cleansing / Geography Validation'},
+          {id:'cx_acct_hier', type:CFG_GUIDE, label:'Account Hierarchies', icon:'🌳',
+           desc:'Parent-child customer roll-ups (corporate-to-subsidiary) used for rolled-up reporting, credit, and territory coverage of global accounts.',
+           guide:'Setup & Maintenance → Customer Data Management → Manage Hierarchies → Define Account Hierarchy'},
+          {id:'cx_dedup', type:CFG_GUIDE, label:'Data Quality & Dedup (Customer Data Hub)', icon:'🧹',
+           desc:'Matching configurations, duplicate identification, and merge rules that keep the customer master clean — run before mass party loads.',
+           guide:'Setup & Maintenance → Customer Data Management → Manage Matching Configurations / Duplicate Resolution'}
+        ]
+      },
+      {
+        id:'cxs_s3', label:'3. Sales Catalog',
+        desc:'What you sell and who you sell against — required before opportunities can carry revenue lines or territories can use product dimensions.',
+        items:[
+          {id:'cx_products', type:CFG_LIVE, label:'Products', icon:'📦', ep:'/crmRestApi/resources/latest/products', params:'limit=300',
+           desc:'Sellable products surfaced to the salesforce; revenue lines on opportunities and quotes reference these items.'},
+          {id:'cx_prodgroups', type:CFG_LIVE, label:'Product Groups', icon:'🗂', ep:'/crmRestApi/resources/latest/productGroups', params:'limit=200',
+           desc:'Hierarchical groupings of products that organize the sales catalog and feed product dimensions in territory and forecasting setup.'},
+          {id:'cx_catalog', type:CFG_GUIDE, label:'Sales Catalog Configuration', icon:'📚',
+           desc:'Catalog tree, eligibility, and usage settings that control how product groups are exposed for selection in opportunities and leads.',
+           guide:'Setup & Maintenance → Sales offering → Manage Sales Catalog → Configure Catalog Hierarchy and Usage'},
+          {id:'cx_competitors', type:CFG_LIVE, label:'Competitors', icon:'⚔', ep:'/crmRestApi/resources/latest/competitors', params:'limit=200',
+           desc:'Competitor registry referenced on opportunities for win/loss tracking and competitive analysis.'}
+        ]
+      },
+      {
+        id:'cxs_s4', label:'4. Territories',
+        desc:'Coverage rules that route accounts, leads, and opportunities to the right sales teams — depend on geography, products, and the customer model defined above.',
+        items:[
+          {id:'cx_terr_dims', type:CFG_GUIDE, label:'Territory Dimensions', icon:'📐',
+           desc:'The attributes (geography, product, industry, account size, named-account) territories are sliced on — chosen before any territory is drawn.',
+           guide:'Setup & Maintenance → Sales offering → Enable Dimensions and Metrics → Select Territory Dimensions'},
+          {id:'cx_territories', type:CFG_LIVE, label:'Sales Territories', icon:'🗺', ep:'/crmRestApi/resources/latest/salesTerritories', params:'limit=300',
+           desc:'Active territory definitions — owner, coverage boundaries, and hierarchy that drive automated assignment.'},
+          {id:'cx_terr_prop', type:CFG_GUIDE, label:'Territory Proposals & Activation', icon:'📝',
+           desc:'Working drafts of territory changes reviewed and activated through the proposal workflow before they affect live assignment.',
+           guide:'Sales → Territories → Manage Territory Proposals → Edit, Validate, and Activate'},
+          {id:'cx_terr_assign', type:CFG_GUIDE, label:'Territory-Based Assignment', icon:'🎯',
+           desc:'Assignment engine settings that match accounts/opportunities to territories using the enabled dimensions on create and update.',
+           guide:'Setup & Maintenance → Sales offering → Manage Assignment Objects → Enable Territory Assignment'}
+        ]
+      },
+      {
+        id:'cxs_s5', label:'5. Sales Process',
+        desc:'The day-to-day selling lifecycle — leads, opportunities, and activities — built once customers, catalog, and territories can support assignment and revenue.',
+        items:[
+          {id:'cx_methods', type:CFG_GUIDE, label:'Sales Methods & Stages', icon:'🪜',
+           desc:'Configurable sales process maps (stage names, win probabilities, required steps) that opportunities progress through.',
+           guide:'Setup & Maintenance → Sales offering → Manage Sales Methods and Sales Stages'},
+          {id:'cx_leads', type:CFG_LIVE, label:'Leads', icon:'🌱', ep:'/crmRestApi/resources/latest/leads', params:'limit=300',
+           desc:'Unqualified-to-qualified demand records with rank, status, and assignment — the top of the sales funnel before conversion to opportunity.'},
+          {id:'cx_lead_qual', type:CFG_GUIDE, label:'Lead Qualification & Scoring', icon:'📊',
+           desc:'Qualification templates and scoring rules that rank leads and decide when they convert to opportunities.',
+           guide:'Setup & Maintenance → Sales offering → Manage Lead Qualification Templates / Lead Scoring Rules'},
+          {id:'cx_opportunities', type:CFG_LIVE, label:'Opportunities', icon:'💼', ep:'/crmRestApi/resources/latest/opportunities', params:'limit=300',
+           desc:'Active pipeline — amount, close date, stage, win probability, and revenue lines that drive forecasting.'},
+          {id:'cx_activities', type:CFG_LIVE, label:'Activities (Tasks & Appointments)', icon:'📅', ep:'/crmRestApi/resources/latest/activities', params:'limit=300',
+           desc:'Tasks, calls, and appointments logged against accounts, leads, and opportunities to track engagement.'},
+          {id:'cx_assignmgr', type:CFG_GUIDE, label:'Assignment Manager Rules', icon:'⚙',
+           desc:'Rule sets that auto-assign leads and opportunities to resources/teams using territory and attribute criteria.',
+           guide:'Setup & Maintenance → Sales offering → Manage Assignment Manager → Define Rule Sets and Candidates'}
+        ]
+      },
+      {
+        id:'cxs_s6', label:'6. Forecasting',
+        desc:'Roll-up of opportunity pipeline into committed numbers — depends on a populated pipeline, territories, and the sales-method probabilities above.',
+        items:[
+          {id:'cx_fcst_setup', type:CFG_GUIDE, label:'Forecast Setup & Criteria', icon:'📈',
+           desc:'Forecast periods, frequency, submission windows, and the criteria that decide which opportunities roll into the forecast.',
+           guide:'Setup & Maintenance → Sales offering → Configure Forecasting → Define Forecast Options and Criteria'},
+          {id:'cx_fcst_items', type:CFG_LIVE, label:'Forecast Items', icon:'🧾', ep:'/crmRestApi/resources/latest/forecastItems', params:'limit=300',
+           desc:'Snapshotted opportunity revenue lines captured into each forecast period for territory and manager roll-ups.'},
+          {id:'cx_fcst_adj', type:CFG_GUIDE, label:'Territory Forecast, Freeze & Adjust', icon:'🧊',
+           desc:'Manager adjustments, judgment, and the period freeze that locks the committed number along the territory hierarchy.',
+           guide:'Sales → Forecasts → Manage Forecast → Adjust, Submit, and Freeze by Territory'}
+        ]
+      },
+      {
+        id:'cxs_s7', label:'7. Partner & Channel',
+        desc:'Indirect selling through partners — layered on after direct sales so partners can be granted deal and program access.',
+        items:[
+          {id:'cx_partners', type:CFG_LIVE, label:'Partners', icon:'🤝', ep:'/crmRestApi/resources/latest/partners', params:'limit=300',
+           desc:'Channel partner organizations enrolled for indirect selling, with type, tier, and status.'},
+          {id:'cx_prtprograms', type:CFG_GUIDE, label:'Partner Programs', icon:'🏅',
+           desc:'Benefit and enrollment programs (tiers, requirements, entitlements) that govern partner participation.',
+           guide:'Setup & Maintenance → Partner Relationship Management → Manage Partner Programs and Enrollments'},
+          {id:'cx_dealreg', type:CFG_LIVE, label:'Deal Registrations', icon:'📑', ep:'/crmRestApi/resources/latest/dealRegistrations', params:'limit=300',
+           desc:'Partner-submitted deals registered for protection and approval, linking partners to opportunities.'}
+        ]
+      },
+      {
+        id:'cxs_s8', label:'8. Promotions & Deal Management',
+        desc:'Incentives and special-pricing constructs applied to direct and channel deals — configured once accounts, products, and partners exist.',
+        items:[
+          {id:'cx_promotions', type:CFG_GUIDE, label:'Promotions', icon:'🎟',
+           desc:'Promotional offers and eligibility rules attached to products and customer segments to influence deals.',
+           guide:'Setup & Maintenance → Sales offering → Manage Promotions → Define Offers and Eligibility'},
+          {id:'cx_dealmgmt', type:CFG_GUIDE, label:'Deal Management & Special Pricing', icon:'💸',
+           desc:'Special-pricing requests and deal approval workflow used to negotiate and authorize non-standard pricing on larger deals.',
+           guide:'Setup & Maintenance → Sales offering → Manage Deal Management → Special Pricing and Approval Rules'}
+        ]
+      },
+      {
+        id:'cxs_s9', label:'9. Service & Field Service (CX Service)',
+        desc:'Post-sale service requests and dispatch — included where CX Service shares the same customer and resource model; built after the customer master is stable.',
+        items:[
+          {id:'cx_srs', type:CFG_LIVE, label:'Service Requests', icon:'🎫', ep:'/crmRestApi/resources/latest/serviceRequests', params:'limit=300',
+           desc:'Customer-reported issues with status, severity, queue, and resolution tracking against accounts and contacts.'},
+          {id:'cx_svc_setup', type:CFG_GUIDE, label:'Service Channels, Queues & SLAs', icon:'📞',
+           desc:'Communication channels, routing queues, and milestone/SLA clocks that govern how service requests are received and resolved.',
+           guide:'Setup & Maintenance → Service offering → Manage Communication Channels / Queues / Milestone Configurations'},
+          {id:'cx_field', type:CFG_GUIDE, label:'Field Service Dispatch', icon:'🚐',
+           desc:'Work-order generation and technician dispatch rules for on-site service, integrated from service requests.',
+           guide:'Setup & Maintenance → Field Service → Manage Work Order Areas, Dispatch Rules, and Routing'}
+        ]
+      }
+    ]
   }
 };
 
