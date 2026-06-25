@@ -2,6 +2,58 @@
 
 All notable changes to Talk2Sql are documented here.
 
+## [3.18.0] — 2026-06-23 · "Setup-Only Areas in Config Export"
+
+### Added
+- **Setup-only areas now included in per-area config exports.** Configuration that lives in Setup & Maintenance (not SQL-extractable) — led by **Geographies & Master Address Data** — is now part of each area's Config Batch: **28 setup-only entries** across Customer (6), Finance (12), SCM (10), each with its **📋 Setup-only area** badge and the exact **Setup & Maintenance →** navigation guide.
+- They render distinctly (badge + guide, no Run button, but a checkbox so you can include/exclude), are emitted as **commented SETUP-ONLY blocks** in the generated batch script, and are listed in the **FSM export manifest** with a `Type` column (Extract vs Setup-only) + the guide — so the manifest is the complete picture of an area's configuration. Header counts now read "N extractable + M setup-only."
+
+### Safety
+- Setup-only objects carry no SQL and can never be Run — they're documentation/guidance. Read-only throughout; guard untouched.
+
+---
+
+## [3.17.0] — 2026-06-23 · "Validation Report"
+
+### Added
+- **Validation report.** After running ✓ Validate Configs, generate a clean, shareable **report** of the findings — a customer deliverable. **📄 Generate report (HTML)** produces a self-contained, printable (→PDF) document; **⬇ Markdown** gives a .md version. When two or more areas have been validated, a **Combined report (all areas)** is offered.
+- Report contents: header (pod/instance, date, area), an **executive summary** with pass/warn/fail/error counts and a plain verdict + a status banner, a **findings table** ordered fails-first (check · category · severity · count · remediation), and a **passed-checks appendix** (the sign-off list of what was verified). Footer notes it's read-only and that an ERROR means a table not present on the pod, not a config failure.
+
+### Safety
+- Built entirely from the already-fetched validation results — no new queries, no network, read-only. Downloaded HTML is self-contained.
+
+---
+
+## [3.16.0] — 2026-06-23 · "Config Validation"
+
+Not just "is it set up" — "did they set it up *correctly*." A ✓ Validate Configs button per area.
+
+### Added
+- **Config Validation engine — 66 rules** across Finance (30), Supply Chain (21), and Customer/TCA (15), each tagged **completeness · correctness · best-practice**. Examples: ledger missing COA/calendar/currency; BU without default LE; tax regime with no rates; COA value set with no values; inventory org without parameters; price list with no lines; supplier without site; customer account with no site; account site with no bill-to/ship-to use; duplicate parties; geography structure without nodes / orphan hierarchy nodes.
+- **✓ Validate Configs button** in each area's Config Batch view. Runs every rule read-only against the pod; each rule returns the **offending rows** (zero rows = PASS), classed **FAIL** (completeness/correctness) or **WARN** (best-practice).
+- **Validation report** — a PASS / WARN / FAIL summary with a plain-English verdict ("Finance config: 4 issues to fix, 2 best-practice warnings"), findings ordered fails-first, each with the rule, count, **remediation** (where to fix it in Setup & Maintenance), and a **🔍 View rows** link to inspect the offending records.
+
+### Safety
+- Read-only throughout — validation only *finds* problems (the rule SQL returns exceptions), never writes. Findings render in the Config Batch panel, never on the SQL grid; the anti-fabrication guard is untouched.
+
+---
+
+## [3.15.0] — 2026-06-23 · "Config-Only + Area Batch"
+
+Configuration, not transactions. Detection and the new per-area batch extract only setup/master data — never invoices, orders, receipts, or payments.
+
+### Fixed
+- **Detection is now configuration-only.** ~24 detect queries that were counting *transactions* (AP/AR invoices, payments, journals, POs, requisitions, orders, shipments, work orders, ICM comp transactions) now check the corresponding *configuration* object instead (payment terms, receipt methods, journal sources, document styles, order orchestration, work definitions, ICM formulas/rules…). "Detected" now means **set up**, never **transacted**. Audit confirms **0 transactional tables** remain in any detection query.
+
+### Added
+- **`CONFIG_AREAS`** — configuration-only object catalogs for **Finance (23)**, **Supply Chain (17)**, and **Customer/TCA (11)**: ledgers, COA, calendars, currencies, tax, banks, payment terms/methods, receipt methods, FA books, item/inventory setup, pricing, suppliers, OM orchestration, sourcing, cost profiles, work definitions, parties, customer accounts/sites/profiles, geographies — all read-only config SELECTs, no transactional tables.
+- **📦 Config Batch (by area).** Pick Finance / SCM / Customer → a checklist of that area's config objects → **Generate batch script** (one stacked read-only extract), **Open in editor**, **Download .sql**, or **Download FSM export manifest** (the Oracle-native batch path: Manage Configuration Packages / Export Setup Data). Run a single object or the whole area.
+
+### Note
+- The domain **loop SQL** stays transactional **by design** — that's the explicit "loop with data" view, the one specified exception.
+
+---
+
 ## [3.14.0] — 2026-06-23 · "Ariadne Config Builder (Pass 1)"
 
 Ariadne starts building configuration, not just guiding it. Pilot: **Foundation (Geographies)** — buildable from base details with no upstream. (Downstream/calculation modules like ICM need their full dependency chain + plan details first, so they're modeled for later.)
