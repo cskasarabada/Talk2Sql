@@ -18,8 +18,8 @@ const path = require("path");
 const vm = require("vm");
 
 const html = fs.readFileSync(path.join(__dirname, "..", "renderer", "index.html"), "utf8");
-const START = "/* ===== SQL→REST client-side executor";
-const END = "/* ===== end executor ===== */";
+const START = "/* ===== ariadne@";
+const END = "/* ===== end ariadne ===== */";
 const s = html.indexOf(START), e = html.indexOf(END);
 if (s < 0 || e < 0) { console.error("Could not locate the embedded executor block"); process.exit(2); }
 const sandbox = {};

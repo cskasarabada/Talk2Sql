@@ -17,6 +17,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   oauthConnect: (cfg) => ipcRenderer.invoke('oauth-connect', cfg),
   oauthFetch: (url, opts) => ipcRenderer.invoke('oauth-fetch', Object.assign({ url }, opts || {})),
   oauthClear: (opts) => ipcRenderer.invoke('oauth-clear', opts || {}),
+  // Claude (Anthropic) API key + Ariadne reasoning. The key is stored encrypted in
+  // the OS keychain and lives in the main process ONLY — it never crosses back here.
+  // The renderer only saves/clears/queries-status, and asks for advice ({ok,text|error}).
+  aiKeySave: (key) => ipcRenderer.invoke('ai-key-save', key),
+  aiKeyStatus: () => ipcRenderer.invoke('ai-key-status'),
+  aiKeyClear: () => ipcRenderer.invoke('ai-key-clear'),
+  ariadneAdvise: (payload) => ipcRenderer.invoke('ariadne-advise', payload),
   onMenuEvent: (cb) => {
     ['menu-run','menu-save','menu-new-tab','menu-format','menu-explain',
      'menu-connect','menu-export-excel','menu-export-csv'].forEach(e => {

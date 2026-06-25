@@ -133,6 +133,79 @@ function oauthSecretLoad(key) {
   } catch (e) { return null; }
 }
 
+/* ── Claude (Anthropic) API key — secure storage + reasoning layer ─────────────
+   The Ariadne architect advisor can answer with real LLM reasoning, grounded in
+   the app's deterministic rules engine. The API key is encrypted at rest via
+   Electron safeStorage (macOS Keychain / Windows DPAPI) and lives in the MAIN
+   process ONLY — it is NEVER exposed to the renderer. The renderer only ever
+   receives {ok, text|error}; the key itself never crosses IPC. */
+const AI_KEY_FILE = path.join(app.getPath('userData'), 'talk2sql-ai-key.json');
+function aiKeyRead() { try { return JSON.parse(fs.readFileSync(AI_KEY_FILE, 'utf8')); } catch (e) { return {}; } }
+function aiKeyWrite(o) { try { fs.writeFileSync(AI_KEY_FILE, JSON.stringify(o)); return true; } catch (e) { return false; } }
+function aiKeySave(secret) {
+  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'OS keychain encryption is unavailable on this machine — cannot store the API key safely' };
+  const all = aiKeyRead();
+  all['anthropic'] = safeStorage.encryptString(secret).toString('base64');
+  return aiKeyWrite(all) ? { ok: true } : { ok: false, error: 'Could not persist the encrypted API key' };
+}
+function aiKeyLoad() {
+  try {
+    const b64 = aiKeyRead()['anthropic'];
+    if (!b64) return null;
+    return safeStorage.decryptString(Buffer.from(b64, 'base64'));
+  } catch (e) { return null; }
+}
+function aiKeyClear() {
+  try {
+    const all = aiKeyRead();
+    delete all['anthropic'];
+    if (Object.keys(all).length) { aiKeyWrite(all); }
+    else { try { fs.unlinkSync(AI_KEY_FILE); } catch (e) {} }
+    return true;
+  } catch (e) { return false; }
+}
+
+// Save the key (validated; encrypted; main-process only). Never echoed back.
+ipcMain.handle('ai-key-save', (e, key) => {
+  const k = String(key || '').trim();
+  if (!k || k.indexOf('sk-') !== 0) return { ok: false, error: 'That does not look like an Anthropic API key' };
+  return aiKeySave(k);
+});
+// Status only — NEVER returns the key itself.
+ipcMain.handle('ai-key-status', () => ({ hasKey: !!aiKeyLoad() }));
+// Forget the stored key.
+ipcMain.handle('ai-key-clear', () => { aiKeyClear(); return { ok: true }; });
+
+// Ariadne → Claude. The key is loaded in main and attached as x-api-key here; only
+// the {ok, text|error} result crosses IPC back to the renderer. The renderer renders
+// this ONLY inside the advisor panel as labeled AI guidance — never as live pod data.
+ipcMain.handle('ariadne-advise', async (e, payload) => {
+  payload = payload || {};
+  const key = aiKeyLoad();
+  if (!key) return { ok: false, error: 'no-key' };
+  const body = JSON.stringify({
+    model: payload.model || 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    system: payload.system || '',
+    messages: [{ role: 'user', content: String(payload.user || '') }]
+  });
+  const res = await netRequest('POST', 'https://api.anthropic.com/v1/messages', {
+    'x-api-key': key,
+    'anthropic-version': '2023-06-01',
+    'content-type': 'application/json'
+  }, body);
+  if (res.networkError) return { ok: false, error: 'Network error reaching api.anthropic.com' };
+  try {
+    const j = JSON.parse(res.responseText || '{}');
+    if (res.status >= 200 && res.status < 300 && Array.isArray(j.content)) {
+      return { ok: true, text: j.content.map(c => c.text || '').join('') };
+    }
+    return { ok: false, error: (j.error && j.error.message) || ('HTTP ' + res.status) };
+  } catch (err) {
+    return { ok: false, error: 'HTTP ' + res.status };
+  }
+});
+
 const oauthManager = createTokenManager({
   httpPost: (url, headers, body) => netRequest('POST', url, headers, body),
   httpGet:  (url, headers) => netRequest('GET', url, headers, null),

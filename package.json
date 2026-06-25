@@ -1,7 +1,7 @@
 {
   "name": "talk2sql",
-  "version": "3.6.0",
-  "description": "Talk2Sql — Oracle Fusion Desktop Explorer + ICM Intelligence Hub + App Configurations",
+  "version": "3.14.0",
+  "description": "Talk2Sql — Oracle Fusion Desktop Explorer + ICM Intelligence Hub + Ariadne (AI config builder: questionnaire → generate FBDI/REST/FSM artifacts, architect brain, scope-driven roadmap, loop SQL)",
   "main": "main.js",
   "author": {
     "name": "Chandra Kasarabada"

@@ -78,3 +78,16 @@ REST API (`/fscmRestApi`) → 401 · BIP REST API (`/services/rest/v1`) → 404 
 - Read‑only by nature (BI layer permits no writes); Talk2Sql also gates to SELECT/WITH only.
 - **Rotate the service‑account password** and store it in a keychain.
 - Results carry a live‑execution provenance stamp; the anti‑fabrication guard means real data or an explicit error — never invented rows.
+
+---
+
+## 6. Related: the Ariadne pillar 🧵 (after you're connected)
+
+Once SQL runs against the pod, the **Ariadne** pillar turns Talk2Sql into an agentic, dependency-gated **end-to-end implementation builder** — *your thread through the Fusion labyrinth.* **Probe → Learn → Build.**
+
+- Encodes a **46-task dependency graph** across 11 pillars (Foundation → Customer Data Cleansing → ERP/SCM/HCM → CX → Subscriptions/Marketing/PRM → ICM), phases 1–6.
+- Every task is gated **Ready / Blocked / Done** by its prerequisites. Mark one Done and everything downstream recomputes live; a blocked task tells you exactly what it needs first.
+- Use the SSO/BIP connection from this playbook to **detect & validate** real pod state, then drive the build in dependency order.
+- Key cross-pillar rule it enforces: **CX Products & Catalog ← SCM Item Master (PIM)**, and the whole CX stack stays Blocked until **Foundation + clean TCA customer data** are Done.
+
+See the dependency map in `docs/ariadne-dependency-graph.mermaid` and the full narrative in `docs/IMPLEMENTATION-JOURNEY.md`.

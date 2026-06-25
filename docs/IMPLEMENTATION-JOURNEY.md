@@ -5,6 +5,13 @@ customer whose pod was just provisioned. It mirrors the build-lifecycle taxonomy
 used inside Talk2Sql (the **Foundation — Base Setup** config area), so the doc and
 the app tell the same story.
 
+> **In the app, this lives in the Ariadne pillar** 🧵 (*"Your Thread Through the
+> Fusion Labyrinth"*). Ariadne encodes a 46-task dependency graph across 11 pillars
+> and gates every task **Ready / Blocked / Done** by its prerequisites — Probe → Learn
+> → Build. The key cross-pillar rule this guide enforces: **CX Products & Catalog
+> depends on SCM Item Master (PIM)**, and the whole CX stack stays Blocked until
+> Foundation + clean TCA customer data are Done.
+
 ---
 
 ## 1. Overview — the phased path

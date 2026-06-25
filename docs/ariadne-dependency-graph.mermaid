@@ -1,0 +1,174 @@
+%% Ariadne — 46-task Fusion implementation dependency graph (Talk2Sql v3.7.0)
+%% Read left to right: an arrow A --> B means "B needs A first."
+flowchart LR
+
+  subgraph P1["Phase 1 · Foundation (Common)"]
+    geo["Geographies (TCA)"]
+    ent["Enterprise definition"]
+    cur["Currencies & rates"]
+    coa["Chart of Accounts"]
+    cal["Accounting calendar"]
+    led["Primary Ledger (+SLA)"]
+    le["Legal Entities"]
+    bu["Business Units"]
+    setid["Reference Data Sets"]
+    loc["Locations"]
+    sec["Security: roles/users"]
+  end
+
+  subgraph P2["Phase 2 · Master Data"]
+    data_clean["Cust Data Cleansing & TCA load"]
+    cust["Customer master (Accts & Sites)"]
+    fin_gl["General Ledger"]
+    fin_tax["Tax"]
+    scm_sup["Supplier model"]
+    scm_inv["Inventory orgs & Item Master (PIM)"]
+    hcm_ws["Workforce structures"]
+  end
+
+  subgraph P3["Phase 3 · Core Transactional"]
+    fin_cm["Cash Mgmt & Banks"]
+    fin_ap["Payables (AP)"]
+    fin_ar["Receivables (AR)"]
+    fin_fa["Fixed Assets"]
+    scm_price["Pricing"]
+    scm_proc["Purchasing & SSP"]
+    hcm_core["Core HR"]
+    cx_res["CX: Resources & hierarchy"]
+    cx_prod["CX: Products & Catalog"]
+  end
+
+  subgraph P4["Phase 4 · Operational"]
+    fin_exp["Expenses"]
+    scm_om["Order Mgmt + GOP"]
+    scm_cost["Cost Mgmt"]
+    scm_mfg["Manufacturing"]
+    hcm_abs["Absence Mgmt"]
+    hcm_pay["Payroll"]
+    hcm_cmp["Comp & Benefits"]
+    cx_terr["CX: Territories"]
+    cx_sales["CX: Leads/Opps/Forecasting"]
+    cx_svc["Fusion Service (SRs)"]
+  end
+
+  subgraph P5["Phase 5 · Advanced & Channel"]
+    mnt_maint["Maintenance"]
+    mnt_qual["Quality (Inspection)"]
+    cx_cpq["CPQ"]
+    sub_sub["Subscription Mgmt"]
+    mktg_elo["Marketing & Eloqua"]
+    prm_prm["Partner Relationship Mgmt"]
+    icm_part["ICM: Participants & roles"]
+  end
+
+  subgraph P6["Phase 6 · Compensation"]
+    icm_plan["ICM: Plans, Quota & Crediting"]
+    icm_txn["ICM: Transactions, Calc & Payment"]
+  end
+
+  %% Phase 1 internal
+  geo --> ent --> cur
+  cur --> coa
+  cur --> cal
+  coa --> led
+  cal --> led
+  led --> le --> bu --> setid
+  ent --> loc
+  geo --> loc
+  ent --> sec
+
+  %% Phase 2
+  geo --> data_clean --> cust
+  bu --> cust
+  led --> fin_gl
+  sec --> fin_gl
+  le --> fin_tax
+  geo --> fin_tax
+  bu --> scm_sup
+  sec --> scm_sup
+  bu --> scm_inv
+  le --> scm_inv
+  bu --> hcm_ws
+  loc --> hcm_ws
+
+  %% Phase 3
+  fin_gl --> fin_cm
+  fin_gl --> fin_ap
+  fin_tax --> fin_ap
+  scm_sup --> fin_ap
+  fin_cm --> fin_ap
+  fin_gl --> fin_ar
+  fin_tax --> fin_ar
+  cust --> fin_ar
+  fin_gl --> fin_fa
+  scm_inv --> scm_price
+  scm_sup --> scm_proc
+  scm_inv --> scm_proc
+  hcm_ws --> hcm_core
+  sec --> hcm_core
+  sec --> cx_res
+  cust --> cx_res
+  scm_inv ==>|PIM| cx_prod
+
+  %% Phase 4
+  fin_ap --> fin_exp
+  hcm_core --> fin_exp
+  scm_inv --> scm_om
+  scm_price --> scm_om
+  cust --> scm_om
+  fin_ar --> scm_om
+  scm_inv --> scm_cost
+  fin_gl --> scm_cost
+  scm_inv --> scm_mfg
+  hcm_core --> hcm_abs
+  hcm_core --> hcm_pay
+  hcm_core --> hcm_cmp
+  cx_res --> cx_terr
+  cust --> cx_terr
+  cx_prod --> cx_sales
+  cx_terr --> cx_sales
+  cust --> cx_svc
+  cx_prod --> cx_svc
+
+  %% Phase 5
+  scm_inv --> mnt_maint
+  scm_mfg --> mnt_maint
+  scm_inv --> mnt_qual
+  cx_sales --> cx_cpq
+  scm_price --> cx_cpq
+  cust --> sub_sub
+  scm_price --> sub_sub
+  fin_ar --> sub_sub
+  data_clean --> mktg_elo
+  cx_sales --> mktg_elo
+  cx_sales --> prm_prm
+  cust --> prm_prm
+  cx_res --> icm_part
+  hcm_ws --> icm_part
+
+  %% Phase 6
+  icm_part --> icm_plan
+  cx_terr --> icm_plan
+  icm_plan --> icm_txn
+  scm_om --> icm_txn
+  fin_ar --> icm_txn
+
+  classDef found fill:#e9ecef,stroke:#868e96,color:#212529;
+  classDef cust fill:#fff3bf,stroke:#f08c00,color:#5c3c00;
+  classDef erp fill:#d0ebff,stroke:#1971c2,color:#0b3d66;
+  classDef scm fill:#d3f9d8,stroke:#2f9e44,color:#0b4220;
+  classDef hcm fill:#f3d9fa,stroke:#9c36b5,color:#4a1259;
+  classDef cx fill:#ffd8a8,stroke:#e8590c,color:#612a05;
+  classDef chan fill:#ffe3e3,stroke:#e03131,color:#641212;
+  classDef icm fill:#c5f6fa,stroke:#0c8599,color:#063b44;
+
+  class geo,ent,cur,coa,cal,led,le,bu,setid,loc,sec found;
+  class data_clean,cust cust;
+  class fin_gl,fin_tax,fin_cm,fin_ap,fin_ar,fin_fa,fin_exp erp;
+  class scm_sup,scm_inv,scm_price,scm_proc,scm_om,scm_cost,scm_mfg,mnt_maint,mnt_qual scm;
+  class hcm_ws,hcm_core,hcm_abs,hcm_pay,hcm_cmp hcm;
+  class cx_res,cx_prod,cx_terr,cx_sales,cx_svc,cx_cpq cx;
+  class sub_sub,mktg_elo,prm_prm chan;
+  class icm_part,icm_plan,icm_txn icm;
+
+  linkStyle 41 stroke:#e8590c,stroke-width:3px;
