@@ -6,6 +6,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveProfiles: (json) => { try { return ipcRenderer.sendSync('profiles-save', json); } catch (e) { return false; } },
   loadSettings: () => { try { return ipcRenderer.sendSync('settings-load'); } catch (e) { return ''; } },
   saveSettings: (json) => { try { return ipcRenderer.sendSync('settings-save', json); } catch (e) { return false; } },
+  // Durable KV store — localStorage survives file:// relaunch via this mirror.
+  kvLoad: () => { try { return ipcRenderer.sendSync('kv-load'); } catch (e) { return ''; } },
+  kvSave: (json) => { try { return ipcRenderer.sendSync('kv-save', json); } catch (e) { return false; } },
+  // Schema Catalog durable file (too big for localStorage). Load sync, save async.
+  schemaCatFileLoad: () => { try { return ipcRenderer.sendSync('schema-cat-load'); } catch (e) { return ''; } },
+  schemaCatFileSave: (json) => { try { return ipcRenderer.invoke('schema-cat-save', json); } catch (e) { return Promise.resolve({ ok: false }); } },
   // SSO (federated) auth — optional. The Basic-auth path never calls these.
   ssoLogin: (baseUrl) => ipcRenderer.invoke('sso-login', baseUrl),
   ssoFetch: (url) => ipcRenderer.invoke('sso-fetch', { url }),

@@ -312,7 +312,12 @@ ipcMain.handle('save-file', async (event, { filename, data, type }) => {
     defaultPath: path.join(app.getPath('downloads'), filename),
     filters: type === 'excel' ? [{name:'Excel',extensions:['xlsx']}]
            : type === 'csv'   ? [{name:'CSV',extensions:['csv']}]
-                               : [{name:'JSON',extensions:['json']}]
+           : type === 'html'  ? [{name:'HTML',extensions:['html','htm']}]
+           : type === 'md'    ? [{name:'Markdown',extensions:['md']}]
+           : type === 'sql'   ? [{name:'SQL',extensions:['sql']}]
+           : type === 'txt'   ? [{name:'Text',extensions:['txt']}]
+           : type === 'json'  ? [{name:'JSON',extensions:['json']}]
+           : [{name:'All Files',extensions:['*']}]
   });
   if (!result.canceled) {
     fs.writeFileSync(result.filePath, Buffer.from(data));
@@ -345,6 +350,31 @@ ipcMain.on('settings-load', (event) => {
 ipcMain.on('settings-save', (event, json) => {
   try { fs.writeFileSync(SETTINGS_FILE, json || '{}'); event.returnValue = true; }
   catch (e) { event.returnValue = false; }
+});
+
+// Durable key-value store — localStorage is wiped on file:// relaunch in Electron,
+// so app state (saved queries, schema catalog, BI dashboards, discovery/scope, etc.)
+// is mirrored to a userData JSON file and rehydrated into localStorage on launch.
+const KV_FILE = path.join(app.getPath('userData'), 'talk2sql-kv.json');
+ipcMain.on('kv-load', (event) => {
+  try { event.returnValue = fs.existsSync(KV_FILE) ? fs.readFileSync(KV_FILE, 'utf8') : ''; }
+  catch (e) { event.returnValue = ''; }
+});
+ipcMain.on('kv-save', (event, json) => {
+  try { fs.writeFileSync(KV_FILE, json || '{}'); event.returnValue = true; }
+  catch (e) { event.returnValue = false; }
+});
+
+// Schema Catalog — its own durable file (the harvested base SQL core can be 20MB+,
+// far past the localStorage quota). Load is sync (one-time, on launch); save is async.
+const SCHEMA_CAT_FILE = path.join(app.getPath('userData'), 'talk2sql-schema-catalog.json');
+ipcMain.on('schema-cat-load', (event) => {
+  try { event.returnValue = fs.existsSync(SCHEMA_CAT_FILE) ? fs.readFileSync(SCHEMA_CAT_FILE, 'utf8') : ''; }
+  catch (e) { event.returnValue = ''; }
+});
+ipcMain.handle('schema-cat-save', async (event, json) => {
+  try { fs.writeFileSync(SCHEMA_CAT_FILE, json || '{}'); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e) }; }
 });
 
 ipcMain.handle('toggle-maximize', () => {

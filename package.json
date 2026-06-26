@@ -1,7 +1,7 @@
 {
   "name": "talk2sql",
-  "version": "3.18.0",
-  "description": "Talk2Sql — Oracle Fusion Desktop Explorer + ICM Intelligence Hub + Ariadne (config exports incl. setup-only areas, validation + report, config builder, architect brain)",
+  "version": "3.34.2",
+  "description": "Talk2Sql — Oracle Fusion Desktop Explorer + ICM Hub + Ariadne + Base SQL Core + BI (catalog-driven report builder & dashboards on the learned schema)",
   "main": "main.js",
   "author": {
     "name": "Chandra Kasarabada"

@@ -2,6 +2,307 @@
 
 All notable changes to Talk2Sql are documented here.
 
+## [3.34.2] — 2026-06-26 · "Repair fetches real columns on demand"
+
+### Fixed
+- **Repair still guessing (e.g. `PS.SUPPLIER_ID` invalid).** When the agent's corrected query introduced a table whose columns weren't in the harvested catalog, Claude had nothing to ground on and guessed again. The repair now **fetches the real column list for every table in the query on demand** (`schemaHarvestTableCols`) before asking Claude, so it always corrects to a column that actually exists.
+
+## [3.34.1] — 2026-06-26 · "BI runs auto-retry network blips"
+
+### Fixed
+- **"Network error — could not reach … (BIP service)" in BI.** The BI run path and dashboard tiles called `queryBIP` directly with no retry, so a transient connectivity blip failed hard. They now go through `queryBIPResilient` (up to 3 tries with backoff on network/timeout only — real ORA errors still stop immediately), the same resilience config extraction already had.
+
+## [3.34.0] — 2026-06-26 · "Smarter self-repair (exact columns, 2 passes)"
+
+### Why these errors happen
+The English→SQL agent has Claude write the query from a *slice* of the catalog. When the real column isn't in that slice, or a Fusion column differs from the EBS name Claude expects (`VENDOR_ID`→`SUPPLIER_ID`, `SET_OF_BOOKS_ID`→`LEDGER_ID`), it guesses and the guess fails as `ORA-00904`.
+
+### Changed
+- **Repair now feeds Claude the EXACT, complete column list of the tables the failing SQL referenced** (parsed from the query via `biTablesInSql`), so it corrects to a real column instead of guessing again. The repair prompt also names common Fusion-vs-EBS column swaps.
+- **Up to 2 repair passes** (was 1) for both the Result area and dashboard tiles — most misses clear on pass 1, stubborn ones on pass 2; tiles persist the corrected SQL.
+- **First-pass grounding widened** — 45 columns/table (was 28) and a larger context budget — so fewer queries miss in the first place.
+
+## [3.33.2] — 2026-06-26 · "Readable primary buttons"
+
+### Fixed
+- **"Build dashboard" / "Build report" button text was dark/invisible** in some themes — the white text color was being overridden. Both primary buttons now set `color:#fff;background:var(--a1)` inline so the label is always readable on the blue button.
+
+## [3.33.1] — 2026-06-26 · "BI layout + readable inputs"
+
+### Fixed
+- **Prebuilt-dashboard cards were cramped/clipped.** The Ask-in-English and Prebuilt-Dashboards cards now render **full width above** the manual builder grid (they were squeezed into the 340px builder column). Report chips are a full-width, left-aligned, wrapping list so long names like "Commission earnings by participant" no longer get cut off.
+- **Invisible text in the Ask box / key field.** The textarea and key input now set explicit `color`/`background` so text is readable in every theme.
+- **Horizontal overflow** in the BI pane is clipped (`overflow-x:hidden`), so the layout can't shift sideways and hide content.
+
+### Changed
+- Auto-repair prompt now explains each ORA code, and for `ORA-01031` tells Claude the base table isn't granted to the reporting user → switch to a readable `_VL`/`_V` view of the same entity.
+
+## [3.33.0] — 2026-06-26 · "Self-repairing BI queries"
+
+### Added
+- **One-shot auto-repair for generated SQL.** When an Ask-in-English report or a dashboard tile fails with `ORA-00904` (bad column), `ORA-00942` (missing table), or `ORA-01031` (owner-prefixed object the report user can't read), Ariadne feeds the failing SQL + error back to Claude, grounded in your catalog, gets a corrected single read-only SELECT, and re-runs automatically. For tiles the corrected SQL is persisted, so it stays fixed.
+- **Defensive `FUSION.` strip at run time** in both `biRun` and `biTileRun`, so older tiles or hand-edited SQL carrying an owner prefix no longer throw `ORA-01031`.
+
+### Note
+- Repair is limited to one attempt per run to avoid loops; if it still fails, the error shows as before so you can rephrase.
+
+## [3.32.3] — 2026-06-26 · "Stop re-asking for the Claude key"
+
+### Fixed
+- **"Connect Anthropic key" every time / Build dashboard blocked.** The key was saved (encrypted in the OS keychain), but the connected flag was only re-read when visiting the Ariadne pillar — so the BI tab always thought no key was present. Now `renderBI` rehydrates the flag on entry, and the Ask-in-English build, the prebuilt-pack build, and the resolver each check the keychain **live** (`ariadneAiStatusAsync`) before asking — so a saved key is honored across reloads and you're not prompted again.
+
+## [3.32.2] — 2026-06-26 · "BI pane scrolls"
+
+### Fixed
+- **BI / Dashboards tab couldn't scroll** — the long Prebuilt-Dashboards pack list spilled past the viewport with no way down. The BI pane now uses the same inner flex-scroll wrapper (`#bi-scroll`) as the Build pane, so all content scrolls reliably.
+
+## [3.32.1] — 2026-06-26 · "Dashboard font + Run/scroll + seeded reports"
+
+### Fixed
+- **"Run again" did nothing / couldn't scroll to the result.** On the Dashboard view the Result area was stacked below the cards and off-screen. It now sits directly under the Ask-in-English card, and `biNlRun` auto-scrolls the result into view after running (and warns if there's no SQL yet).
+- **Dashboard fonts too big.** Tile content (charts, KPI numbers, data tables, bar labels) is now sized for the small tiles instead of the full builder — compact CSS scoped to `.bidash-tile`, and the dashboard title trimmed.
+
+### Added
+- **⭐ Seeded Oracle Reports (ICM)** pack in Prebuilt Dashboards — Commission Statement, participant plan assignments, plan/formula/rate detail, unpaid/held earnings, and quota-vs-attainment — reconstructed against your live catalog.
+
+## [3.32.0] — 2026-06-26 · "Prebuilt Dashboards (Pass A)"
+
+### Added
+- **📚 Prebuilt Dashboards** in the BI section (both Report Builder and Dashboard views). Curated, themed report packs — **Commissions (ICM), Receivables, General Ledger, Customers (TCA), Order Management, Procurement** — each a set of ready-made reports. **▶ Build dashboard** resolves every report in the pack through the English→SQL agent (grounded in your live catalog, so columns are pod-correct), then pins each as a dashboard tile. Or click a single report chip to build just that one.
+- **`biNlResolve()`** — the English→SQL core extracted into a reusable resolver (catalog retrieval → Claude → read-only gate → `fusion.` strip → catalog heal), shared by the Ask-in-English card and the packs.
+
+### Notes
+- Needs the Schema Catalog learned and a Claude key connected. Reports that don't fit a given pod are skipped; only successful ones are pinned (toast shows "N of M added").
+- This is **Pass A** of the seeded-catalog work. **Pass B** (live OTBI / BI Publisher Presentation Catalog browser — listing and importing the pod's actual seeded analyses/dashboards) is a separate transport build, lined up next.
+
+## [3.31.3] — 2026-06-26 · "Fix ORA-01031 (drop FUSION. prefix)"
+
+### Fixed
+- **`ORA-01031: insufficient privileges` on ICM Plan Details and NL reports.** The BIP report's DB user reads Fusion objects through synonyms, not direct grants on the `FUSION` schema — so an explicit `fusion.` owner prefix is rejected. Stripped the prefix from both Plan Details queries (all-plans + per-plan) so they use bare table names like the working extracts. The English→SQL agent now also instructs Claude not to schema-qualify, and strips any `fusion.` prefix defensively before running.
+
+## [3.31.2] — 2026-06-26 · "Connect Claude from the BI card"
+
+### Added
+- **🔑 Connect Claude inline.** When no key is connected, the Ask-in-English card now shows a key field + Connect button right there — paste your `sk-ant-…` key without hunting for the Ariadne panel. Stored encrypted in the OS keychain (same secure store), never kept in the page. After connecting, press ✨ Build report again.
+
+## [3.31.1] — 2026-06-26 · "Ask in English on the Dashboard too"
+
+### Changed
+- **🧠 Ask in English now appears on the Dashboard view**, not just Report Builder. It has its own inline Result area there, so from the Dashboard tab you can describe a report, see it run, and ➕ Add to dashboard as a tile without switching to the builder.
+
+## [3.31.0] — 2026-06-26 · "Ask in English → report (agentic BI)"
+
+### Added
+- **🧠 Ask in English** at the top of the BI Report Builder. Describe a report in plain language — no table or column names needed. Ariadne (1) retrieves candidate tables + columns from your **Schema Catalog** by matching your words against table names and a business-term hint map (commission, plan, participant, customer, invoice, order, …), (2) asks Claude for **one read-only SELECT grounded only in that catalog subset** (never invents names), (3) validates it through the read-only guard and heals table names against the catalog, (4) shows the SQL and a "**Ariadne chose:**" rationale on the side, and (5) **auto-runs** the report and charts it. You can Run again, open in the editor, or **➕ Add to dashboard**.
+- **Raw-SQL dashboard tiles.** Dashboard tiles can now carry a raw SQL string (from the NL agent), not just a structured builder query; `biTileRun` uses `tile.sql` when present.
+
+### Notes
+- Needs the **Schema Catalog** learned and a **Claude API key** connected (🧠 panel). Without a key, the panel still lists the candidate tables it found so you can use the manual builder. Everything stays read-only.
+
+## [3.30.1] — 2026-06-26 · "ICM workbook + plan picker fixes"
+
+### Fixed
+- **Configuration Workbook failed only for ICM.** Two ICM-specific causes: (1) the Plan Details `SQL_Select` / rendered-expression cells can exceed Excel's 32,767-char limit, making `XLSX.write` throw and abort the whole file — every cell is now capped at 32,000 chars; (2) sheet names with `★`/`·` broke sheet refs/hyperlinks — sheet names are now ASCII-safe. Each section sheet is also built in its own try/catch so one bad section can't abort the workbook.
+- **Comp Plan deep-dive "Load plans" → `ORA-00904: NAME`.** The picker queried `NAME`; the column is `COMP_PLAN_NAME`. Fixed the SELECT and the column lookup.
+
+## [3.30.0] — 2026-06-26 · "Real Comp Plan Details SQL"
+
+### Changed
+- **ICM Plan Details now uses Chandra's authored SQL.** Replaced the guessed join with the proven "Compensation Plan Components — Full Detail" query from the ICM Hub. Correct Fusion path: `cn_comp_plan_components_all` (bridge) → `cn_plan_components_all_vl` → `cn_plan_component_formulas_all` → `cn_formulas_all_vl`, with the **rate table reached through the formula** (`cn_formula_rate_tables_all` → `cn_rate_tables_all_vl`), plus credit category (`cn_formula_ecats_all`) and Input/Output expressions (`cn_expressions_all_vl`, incl. `rendered_expression_disp` and `SQL_Select`). This fixes the earlier `ORA-00904: PCRD` — the rate link never went through a rate-dims table.
+  - **All-plans flagship**: full component detail across every plan (Formula Type, Performance Measure, In/Out expressions, Credit Category, Rate Table).
+  - **Per-plan deep-dive**: the participant-assignment variant (`CN_SRP_ASSIGNMENTS_V`) scoped by `comp_plan_id` — plan components joined to assigned participants (id, role, dates). Hardcoded plan-name/participant filters removed; scoped by the picked plan.
+
+## [3.29.2] — 2026-06-26 · "Workbook export + Plan Details fixes"
+
+### Fixed
+- **📘 Configuration Workbook (Excel) click did nothing.** `XLSX.writeFile` relies on a browser download that Electron's `file://` origin silently drops. The workbook now writes its bytes through the app's `saveFile` IPC (real Save dialog), with a `writeFile` fallback for non-Electron contexts.
+- **Plan Details `ORA-00904: PCRD`.** The rate-table link table (`CN_PLAN_COMP_RATE_DIMS`) doesn't resolve on every pod, leaving its alias dangling. Both the all-plans and per-plan Plan Details joins are simplified to the rock-solid **Plan → Components** path; rate tables / dimensions still extract as their own objects.
+
+## [3.29.1] — 2026-06-26 · "ICM per-plan deep-dive"
+
+### Added
+- **🎯 Comp Plan deep-dive** in the ICM Config Snapshot result. **Load plans** → pick one comp plan → **Export plan bundle** runs everything scoped to that single plan: Plan Details (denormalized), Plan Header, Plan-Component Assignments, Plan Components, and Rate Table / Dimension associations — all `WHERE COMP_PLAN_ID = <id>` (id sanitized to digits). The bundle flows through the same pipeline, so **📘 Workbook** and **📄 BR100** export it with a plan-specific title. The all-plans flat view (3.29.0) stays as the default.
+
+### Internal
+- Generic `cfgRunScopedExport(mod, titleOverride, objs)` runner + `titleOverride` carried into the result store, error log, BR100, and Workbook titles.
+
+## [3.29.0] — 2026-06-26 · "ICM Comp Plan Details"
+
+### Added
+- **★ Compensation Plan Details** leads the ICM Configuration export. A denormalized view — one row per **Plan × Plan Component × Rate Table** (`CN_COMP_PLANS_ALL_VL` → `CN_COMP_PLAN_COMPONENTS` → `CN_PLAN_COMPONENTS_VL` → `CN_PLAN_COMP_RATE_DIMS` → `CN_RATE_TABLES_ALL_VL`) — so the export shows a comp plan and everything associated with it, not just flat tables. The 18 per-entity extracts (components, measures, rate tables/dims/tiers, formulas, rules, roles, pay groups, participants, quotas, plan-component assignments, earning types) remain beneath it as the backing detail.
+
+### Changed
+- ICM export relabeled **"Incentive Compensation — Comp Plan & Associated Config."**
+
+### Note
+- The Plan Details join uses standard Fusion ICM keys; per-object error isolation means if a column/table differs on a given pod, the rest still extract and the **Error Log** pinpoints the one to harden (same workflow that cleared SCM/OM).
+
+## [3.28.1] — 2026-06-26 · "TCA = configuration, not customer data"
+
+### Changed
+- **Customer (TCA) now extracts configuration, not the customer master.** The TCA card was pulling master/transaction data — Parties, Customer Accounts, Party Sites, Account Sites, Site Uses, Customer/Org Profiles, Contact Points, Account Relationships, Geographies. Those are records, not setup. The customer area is now config-only: **Customer Profile Classes, Profile Class Amounts, Account Relationship Types, Trading Community Source Systems, Classification Categories, Classification Codes, Reference Data Sets** (live SQL), plus setup-only references for **Party Usage Rules, Customer Account Numbering, Geography & Address Validation, Address Formats / Geography Structure, and Data Quality / Duplicate Identification**. So the BR100 / Workbook for TCA documents how customers are *structured*, not the customers themselves.
+
+## [3.28.0] — 2026-06-26 · "Configuration Workbook (Excel)"
+
+### Added
+- **📘 Configuration Workbook (Excel).** After a Config Snapshot (SQL) run, the result actions now offer a true multi-sheet `.xlsx` workbook instead of only the BR100 HTML. Structure: a **Start Here** cover sheet (instance, extracted date, summary counts, how-to), a clickable **Contents** sheet (every configuration with its table, status, row count — the name links straight to its section sheet), then **one sheet per configuration section**, each with header rows (table, records, extracted) and the as-built data, plus a "← Back to Contents" link. Sheet names are auto-numbered and Excel-legal (≤31 chars, deduped). BR100 (HTML) remains available alongside it.
+
+## [3.27.1] — 2026-06-26 · "Hub cards always show their run"
+
+### Fixed
+- **Clicking a non-OM Hub card looked like nothing happened.** When the Legacy module browser (REST) was expanded, its panel pushed the SQL snapshot result area far below the fold, so launching another module's configs ran off-screen — making it seem like only OM worked. Clicking any Config Hub card now collapses the legacy panel and scrolls the result area into view, so every card (OM · HCM · SCM · Fin · CX · ICM · Customer/TCA) visibly runs its config snapshot.
+
+## [3.27.0] — 2026-06-26 · "Resilient + catalog-gated + TCA"
+
+### Added
+- **TCA / Customer in the Configuration Hub.** Added a **Customer (TCA)** card alongside the 6 modules — runs the customer area's SQL config export → BR100 like any module.
+- **Catalog-gated extraction.** Before running each extract, the table is checked against your harvested catalog: if it exists, run; if a close real variant exists, auto-resolve and run that (🔁 resolved-to note); if it genuinely doesn't exist on the pod, mark it **⊘ not on pod** (skipped, not an error). This turns `ORA-00942` table-not-exist (e.g. `DOO_ASSIGNMENT_RULES_B`, `CN_RULE_HIERARCHIES_ALL_VL`) into clean "not present" rows. Summary now reads "N extracted · M empty · K not on pod · J error."
+- **Auto-retry on network blips + 🔄 Retry errors.** Transient BIP failures (network/timeout — not ORA/HTTP) auto-retry up to 3× with backoff, so a dropped request doesn't leave a hole. A **🔄 Retry errors** button on the Error Log re-runs only the failed objects.
+
+### Note
+- Genuine SQL errors (ORA-#####) and HTTP errors are never auto-retried — only transient connection failures.
+
+---
+
+## [3.26.3] — 2026-06-26 · "Extracts ignore stale overrides"
+
+### Fixed
+- **The last extract errors were stale overrides shadowing the new `SELECT *`.** The extract runners consulted the override store first, so the old bad-column SQL (from earlier Apply-fixes / Rebuild) still ran for the objects that had overrides. The Config Snapshot (SQL) and Extract All runners now use the `SELECT *` source directly and don't consult overrides — so every extract runs clean regardless of any saved overrides. (Overrides remain in effect for Validation, where real columns matter.)
+
+---
+
+## [3.26.2] — 2026-06-26 · "Extracts use SELECT * (no more column errors)"
+
+### Fixed
+- **Config extracts can no longer throw ORA-00904.** Every extract object in CONFIG_AREAS (66) and CONFIG_MODULE_EXPORT (71) — 137 total — now uses `SELECT * FROM <table> FETCH FIRST 200 ROWS ONLY`. With no column names in the SQL, there's nothing to get wrong, so Config Snapshot (SQL) / Extract All / BR100 run clean on the first try with no Learn-Schema / Rebuild / overrides needed. (Also removed an embedded `= "Y"` double-quote bug.) The catalog/rebuild/override machinery remains for producing curated column subsets when you want them, but extracts work out of the box.
+- Validation rules still use real column logic (can't be SELECT *) — those are hardened separately via Verify → Apply fixes / Rebuild against the catalog.
+
+---
+
+## [3.26.1] — 2026-06-26 · "Rebuild reaches all paths"
+
+### Fixed
+- **Catalog fixes weren't applying to Config Snapshot (SQL).** Finance/SCM objects live in CONFIG_AREAS but Config Snapshot runs them under a `mod:` key while fixes were stored under `area:` — so overrides were ignored on that screen. `cfgSqlFor` now resolves equivalent keys (`mod:fin↔area:finance`, `mod:scm↔area:scm`), and rebuilds are stored under both, so fixes apply everywhere.
+- **Rebuild now fetches the columns it needs.** The broad harvest didn't reach every config table, so Rebuild skipped them. It now **fetches each config table's real columns on demand** (read-only data-dictionary query) before rebuilding, so every extract is regenerated from real columns — clearing the `ORA-00904` column errors (SET_OF_BOOKS_ID, ITEM_STATUS, UOM_CLASS, …) across all modules.
+
+---
+
+## [3.26.0] — 2026-06-26 · "Catalog rebuild + Error Log"
+
+### Added
+- **🔧 Rebuild extracts from catalog.** Regenerates every config-extract SELECT to use only columns that actually exist on your pod (from the harvested catalog), as overrides. Fixes the `ORA-00904` column errors (e.g. EBS-ism `SET_OF_BOOKS_ID`) that Apply-fixes couldn't rename — across all module extracts at once. Tables not in the catalog are skipped.
+- **Remove custom objects.** A control to prune Alto-Shaam (or any pod's) **custom objects** from the catalog by name prefix (e.g. `XXAS_`), with an opt-in "drop anything not on a standard Fusion prefix" heuristic. Persisted.
+- **⛔ Consolidated Error Log.** Every Config Snapshot (SQL) / Extract All / Validate run now shows one Error Log at the top — every errored object on one line (`label [table] → ORA-00904 invalid identifier: SET_OF_BOOKS_ID`), with **📋 Copy all** and **⬇ Download log**. No more clicking each error.
+
+### Safety
+- All read-only — rebuilds and the log only transform/read; custom-object removal prunes the local catalog only; nothing is written to the pod.
+
+---
+
+## [3.25.1] — 2026-06-26 · "Durable schema catalog"
+
+### Fixed
+- **The harvested schema catalog wasn't persisting.** A real-pod harvest (Alto-Shaam: 26.8k tables, 8.1k views, 245.8k columns) is ~20MB+ — far past the localStorage ~5MB quota, so it was silently dropped and lost on restart. The catalog now saves to its own durable userData file (`talk2sql-schema-catalog.json`, no size limit), loaded on launch. localStorage stays as a best-effort cache. *(main.js + preload change — needs a full restart.)*
+- Recovery for an already-harvested (in-memory) catalog: **⬇ Export** it, restart on this build, **⬆ Import** the JSON — it then writes to the durable file and persists. Future harvests persist automatically.
+
+---
+
+## [3.25.0] — 2026-06-25 · "Auto-fix + Config Hub"
+
+### Added
+- **🛠 Apply fixes (catalog auto-fix).** After Learn Schema → 🔎 Verify, one click turns every confident finding into a persistent SQL correction (table **and** column names resolved to your pod's real ones) stored as overrides the config/validation/export runners use — so the whole rule set across all modules is fixed at once, not one pod-run at a time. "🩹 N overrides active" with Clear and ⬇ Export (portable to the next pod). Read-only; never edits the source SQL, never writes to the pod.
+- **⚙️ Configuration Hub (Config Export consolidation).** Config Export (tab 4) now opens to a clean hub: 6 module launch cards (OM/HCM/SCM/Financials/CX/ICM, with their SQL config-object counts) → click to select the module and run its **SQL config export → BR100** (the path that works on federated pods), plus **✓ Validate (Batch)**. The old by-module REST browser is preserved behind a collapsible "Legacy module browser (REST)," collapsed by default.
+
+---
+
+## [3.24.1] — 2026-06-25 · "Durable storage (history fix)"
+
+### Fixed
+- **Saved data was lost on restart.** Electron wipes localStorage on file:// relaunch, so the **saved-query history** (and the schema catalog, BI dashboards, discovery answers, scope, Ariadne progress) didn't survive a restart. Added a durable KV store: localStorage is mirrored to a `talk2sql-kv.json` in userData and rehydrated on launch — every app-prefixed key now persists across restarts, like profiles/settings already did. *(main.js + preload change — needs a full restart to take effect.)*
+- Note: history already wiped by earlier restarts can't be recovered (it was never stored durably); from this build forward, everything persists.
+
+---
+
+## [3.24.0] — 2026-06-25 · "BI Builder + Dashboards"
+
+The base SQL core now drives BI — a new 📊 pillar to build reports and dashboards on the learned schema.
+
+### Added
+- **📊 BI / Dashboards pillar (tab 6).** A catalog-driven **report builder**: search the learned tables/views, pick **dimensions** and **measures** (COUNT/SUM/AVG/MIN/MAX), add filters, group/order/limit, and an optional **join** (auto-suggested on shared `_ID` columns). It generates a read-only SELECT (auto-healed against the catalog), runs it via BIP, and renders a **data table + chart**.
+- **Charts** — vanilla inline SVG, no libraries: **Bar · Line · Pie · KPI · Table**, switchable without re-querying. Theme-aware, light/dark safe.
+- **Dashboards** — save reports as **tiles** in a responsive grid (sm/md/lg sizes); each tile re-runs its query on the pod and renders its chart. **🔄 Refresh all**, per-tile refresh, chart-type quick-switch (from cache), open-in-builder, remove, editable dashboard name, and **⬇ Export** (dashboard JSON). Persists locally.
+
+### Safety
+- Read-only — every report/tile runs SELECTs through the existing guard; charts render real query results only; nothing is written. No external libraries/CDN (offline-safe).
+
+---
+
+## [3.23.0] — 2026-06-25 · "Base SQL Core (Schema Catalog)"
+
+Stop guessing Fusion table names — learn them from the pod and self-heal every query against the truth.
+
+### Added
+- **Schema Catalog ("base SQL core").** A new 🧠 Schema Catalog panel learns the pod's real schema from its data dictionary: **🧠 Learn Schema** harvests the table/view inventory broadly (all Fusion app prefixes) plus columns by prefix (paginated, cancellable, incrementally saved) via the read-only BIP engine. Persisted in localStorage and **exportable/importable as `schema_catalog.json`** — a reusable, pod-specific base SQL core. A lookup box resolves any table → real name + columns.
+- **Resolver** — `schemaResolveTable` / `schemaResolveColumn` with fuzzy matching (strips/swaps `_B/_VL/_TL/_ALL/_F`, edit-distance within a prefix family) so `VENDOR_NAME`→`SUPPLIER_NAME`, `INV_UNITS_OF_MEASURE_TL`→`_B`, etc.
+- **Self-healing SQL.** With the catalog harvested, generated config/validation/export queries are auto-corrected (table names resolved to the real ones) before they run — an "🩹 auto-healed" chip shows what changed. Toggleable; a safe no-op until you've learned the schema.
+- **🔎 Verify config SQL vs catalog** — scans all CONFIG_AREAS / CONFIG_MODULE_EXPORT / CONFIG_VALIDATION SQL and reports every table/column not in the catalog with the suggested real name (downloadable), so the whole rule set can be hardened at once instead of one pod-run at a time.
+
+### Next
+- BI report & dashboard builder on top of the catalog (Phase 2).
+
+### Safety
+- Read-only throughout — the catalog is built from data-dictionary SELECTs; healing transforms query text only; nothing is written; the anti-fabrication guard is untouched.
+
+---
+
+## [3.22.0] — 2026-06-25 · "Per-Module SQL Snapshot"
+
+Audit a module → export ALL its config features → BR100, on the federated pod.
+
+### Added
+- **CONFIG_MODULE_EXPORT** — full config feature sets in SQL for **HCM (19), Order Management (14), CX (19), ICM (19)** = 71 config-only objects. Finance and SCM reuse their existing CONFIG_AREAS SQL sets. So all six Config Export modules have a complete SQL config export.
+- **📸 Config Snapshot (SQL)** in the Config Export toolbar now runs the **current module's full config feature set via SQL/BIP** (works on SSO/SAML-federated pods), shows per-object results, and generates a per-module **BR100 setup document** (cover, TOC, a data table per feature, sign-off).
+
+### Changed
+- The Config Snapshot button was **repointed from REST to SQL/BIP**. The old REST snapshot (`item.ep` endpoints) returns nothing on federated pods like Alto-Shaam (REST 404s) and mixed in a transactional item; the SQL path is config-only and works on the pod.
+
+### Note
+- As with SCM, each module's SQL set may need one pod-run to correct release-specific table/column names — anything that errors shows in the BR100 (not a failure), and gets fixed with the ground-truth error.
+
+---
+
+## [3.21.0] — 2026-06-25 · "Batch BR100"
+
+### Added
+- **📄 BR100 Report (batch).** After Extract All, generate one self-contained **BR100 setup document** for the whole area — cover (BR100 logo, area, instance, date, totals), table of contents, a BR100 section + data table per object, setup-only objects shown with their Setup & Maintenance path, errored objects showing the SQL, and a Prepared/Reviewed/Approved sign-off. Same Oracle BR.100 format as the single-item Config Snapshot, but covering every configured object in the area at once. Self-contained HTML (print-to-PDF).
+
+---
+
+## [3.20.0] — 2026-06-25 · "Extract-All Report + Pod Fixes"
+
+### Added
+- **⚡ Extract All → Configuration Extract Report.** One click per area runs every extractable object in the manifest against the pod and compiles an as-built **Configuration Extract Report** (self-contained HTML + Markdown): header (pod/instance, date, area), summary, table of contents, a data table per object (capped, with row counts), setup-only objects documented with their Setup & Maintenance guide, errors flagged per object. The "document the config" deliverable alongside the validation report.
+
+### Fixed
+- **Report download extension bug.** The file-save handler defaulted everything except Excel/CSV to a **JSON** filter, so HTML reports saved as `report.html.json`. Now HTML/Markdown/SQL/CSV/JSON each save with the correct extension. *(main.js change — requires a full app restart, not just Force Reload.)*
+- **SCM validation rules corrected against the live pod.** All 14 rules that errored (ORA-00942 / ORA-00904 from EBS-isms and wrong columns — `ORG_ORGANIZATION_DEFINITIONS`, `EGP_SYSTEM_ITEMS_B.MASTER_ORGANIZATION_ID`/`ITEM_CLASS_ID`, `INV_UNITS_OF_MEASURE_TL.BASE_UOM_FLAG`, `POZ_SUPPLIERS.VENDOR_NAME`, `INV_ORG_PARAMETERS.WIP_ENABLED_FLAG`, etc.) now use Fusion Cloud names confirmed by the rules that passed. The two real findings (no buyers; sourcing rules without assignment) validated correctly. Two extract objects (Item Master, Suppliers) aligned to drop the invalid columns.
+
+---
+
+## [3.19.0] — 2026-06-23 · "Everything Extractable"
+
+The architect job: document every configured item, then validate it. So nearly every config object is now extractable.
+
+### Changed
+- **Setup-only → extractable.** 15 setup-only entries that were only showing Setup & Maintenance guidance now **extract real config via SQL** (calendars, COA value sets, cross-validation rules, data access sets, SLA methods, tax, AP/AR options, PPP, cash mgmt, FA controls; item statuses, shipping/carriers, cost books; source systems, account relationship types). The Setup & Maintenance path is kept as a reference. Result: **66 extractable + 2 setup-only** per the three areas (only Data Quality/Dedup and per-country Geography Validation stay setup-only — no clean config table). 11 duplicate entries were merged.
+- Every extractable object can now be run, batched, documented (downloaded), and **validated**.
+
+### Fixed
+- **Config Batch area buttons did nothing on click** — the batch rendered into a container below the fold. Navigation now scrolls the result into view.
+- **Config Export ↔ Config Batch bridge** — a **📦 Batch & Validate →** button in Config Export (tab 4) jumps to the matching area's Config Batch (Financials→Finance, SCM→SCM, CX→Customer).
+
+---
+
 ## [3.18.0] — 2026-06-23 · "Setup-Only Areas in Config Export"
 
 ### Added
